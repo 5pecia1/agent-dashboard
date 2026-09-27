@@ -7,6 +7,8 @@ import platform
 import subprocess
 import tomllib
 
+from flutter_dependencies import prepare_flutter_project
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -29,6 +31,7 @@ def main():
         target = choose_target(state['targets'], platform.system(), args.target)
     except (ValueError, FileNotFoundError) as error:
         parser.exit(1, f'{error}\nRun mise run bootstrap first.\n')
+    prepare_flutter_project(ROOT / 'flutter_app')
     if target == 'web':
         toolchain = tomllib.loads((ROOT / '.mise.toml').read_text(encoding="utf-8"))['env']['FRB_WEB_TOOLCHAIN']
         subprocess.run(['flutter_rust_bridge_codegen', 'build-web', '--dart-root', 'flutter_app', '--rust-root', '../app-frb', '--release', '--wasm-pack-rustup-toolchain', toolchain], cwd=ROOT, check=True)

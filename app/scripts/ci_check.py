@@ -32,7 +32,7 @@ def main():
     browser_python = os.environ['WEB_CHECK_PYTHON']
     # The image contains the toolchain. Resolve packages without regenerating
     # committed bindings before verify checks whether those bindings are current.
-    run(['mise', 'exec', '--', 'flutter', 'pub', 'get'], APP / 'flutter_app', 'pub-get')
+    run(['mise', 'run', 'deps'], APP, 'pub-get')
     run(['mise', 'run', 'verify'], APP, 'verify')
     run(['mise', 'run', 'build:web'], APP, 'build-web')
     bundle = APP / 'flutter_app/build/web'

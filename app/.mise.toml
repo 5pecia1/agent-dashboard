@@ -21,6 +21,10 @@ rust = "1.98.1"
 description = "Initialize this copied seed, then resolve packages and generate FRB bindings"
 run = "python3 scripts/bootstrap.py"
 
+[tasks.deps]
+description = "Prepare native package directories and resolve Flutter dependencies"
+run = "python3 scripts/flutter_dependencies.py"
+
 [tasks.build]
 description = "Build the selected host desktop, or a web-only app"
 run = "python3 scripts/build.py"

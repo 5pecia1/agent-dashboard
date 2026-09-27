@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import tempfile
 
+from flutter_dependencies import prepare_flutter_project
+
 OUTPUTS = ('app-frb/src/frb_generated.rs', 'flutter_app/lib/src/rust')
 REQUIRED_FRB = ('app-frb/src/frb_generated.rs', 'flutter_app/lib/src/rust/frb_generated.dart')
 IGNORED = {'.git', '.fvm', '.dart_tool', 'target', 'build', '.plugin_symlinks', 'ephemeral', '__pycache__'}
@@ -58,6 +60,7 @@ def main():
                 shutil.rmtree(path)
             elif path.exists():
                 path.unlink()
+        prepare_flutter_project(scratch / 'flutter_app')
         env = dict(os.environ, CARGO_TARGET_DIR=str(scratch / 'target'))
         command = args.command
         if command[:1] == ['--']:

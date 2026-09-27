@@ -12,6 +12,8 @@ import sys
 import tempfile
 import tomllib
 
+from flutter_dependencies import prepare_flutter_project
+
 STATE = '.device-app.json'
 MANIFEST = 'scripts/seed-files.json'
 FEATURE_PACKAGES = {'window-control': 'window_manager', 'global-hotkey': 'hotkey_manager', 'model-codegen': None}
@@ -234,6 +236,7 @@ def initialize(project, name, org, prepare_only=False, targets=None, license_pol
         run(['rustup', 'toolchain', 'install', toolchain['FRB_WEB_TOOLCHAIN'], '--profile', 'minimal', '--component', 'rust-src', '--target', 'wasm32-unknown-unknown'], project)
     if not baked_image:
         run(['dart', 'pub', 'global', 'activate', 'license_checker', toolchain['DART_LICENSE_CHECKER_VERSION']], project)
+    prepare_flutter_project(project / 'flutter_app')
     run(['flutter', 'pub', 'get'], project / 'flutter_app')
     run(['flutter_rust_bridge_codegen', 'generate'], project)
     if 'model-codegen' in identity.get('features', []):

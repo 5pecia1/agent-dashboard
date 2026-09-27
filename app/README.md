@@ -8,13 +8,13 @@ On macOS, install Xcode and [mise](https://mise.jdx.dev), then run from this dir
 mise install
 mise run tools:rust
 mise run tools:licenses
-(cd flutter_app && mise exec -- flutter pub get)
+mise run deps
 mise run check
 mise run verify
 mise run build
 ```
 
-The tool versions are pinned in `.mise.toml`. The normal build selects the native desktop target. A web build also needs the pinned nightly Rust toolchain:
+The tool versions are pinned in `.mise.toml`. `deps` also prepares the macOS Swift Package Manager cache required on a fresh checkout. The normal build selects the native desktop target. A web build also needs the pinned nightly Rust toolchain:
 
 ```sh
 mise run tools:web

@@ -2,7 +2,17 @@
 
 Agent Dashboard collects coding-agent activity so you can see which sessions need your attention. It includes a web/macOS dashboard, agent hooks, and a Cloudflare Workers + D1 server that can also be embedded in another Worker.
 
-This is source-available software. Read [LICENSE](LICENSE) for the permitted uses and restrictions and [NOTICE](NOTICE) for third-party notices. Public package and release publication is still being prepared; the commands below build from this checkout.
+This is source-available software. Read [LICENSE](LICENSE) for the permitted uses and restrictions and [NOTICE](NOTICE) for third-party notices. The first alpha server package is available from [GitHub Releases](https://github.com/5pecia1/agent-dashboard/releases). The npm registry workflow is prepared; until its trusted-publisher connection is configured, install the fixed Release archive directly with npm.
+
+## Install the server package
+
+For an existing Hono Worker, install the tested alpha archive:
+
+```sh
+npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.1/5pecia1-agent-dashboard-server-0.1.0-alpha.1.tgz
+```
+
+Commit the generated lockfile. Release assets include SHA256 and the independent installation/upgrade checks. [The server guide](server/README.md) shows the imports, D1 binding, and explicit migration step. For a new Worker, use the template below.
 
 ## Start with the server
 
