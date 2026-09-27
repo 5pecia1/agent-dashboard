@@ -48,7 +48,7 @@ run = ["cargo fmt --all -- --check", "cargo clippy --workspace --all-targets -- 
 
 [tasks.verify]
 depends = ["check", "frb:codegen:check", "dart:codegen:check"]
-run = ["python3 scripts/toolchain.py check", "cd flutter_app && flutter analyze", "cd flutter_app && flutter test", "python3 scripts/quality_check.py theme", "python3 scripts/i18n_check.py check", "python3 scripts/quality_check.py boundary", "python3 scripts/quality_check.py constants", "python3 scripts/license_check.py", "python3 scripts/version_check.py"]
+run = ["python3 -m unittest discover -s scripts/tests", "python3 scripts/toolchain.py check", "cd flutter_app && flutter analyze", "cd flutter_app && flutter test", "python3 scripts/quality_check.py theme", "python3 scripts/i18n_check.py check", "python3 scripts/quality_check.py boundary", "python3 scripts/quality_check.py constants", "python3 scripts/license_check.py", "python3 scripts/version_check.py"]
 
 [tasks."frb:codegen"]
 run = "flutter_rust_bridge_codegen generate"

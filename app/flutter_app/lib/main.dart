@@ -9,6 +9,7 @@ import 'package:my_dashboard/src/rust/api.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/notification_click_inbox.dart';
 import 'package:my_dashboard/src/state/http_provider.dart';
+import 'package:my_dashboard/src/state/usage_integrations.dart';
 
 typedef DashboardBootOverrides =
     List<Override> Function(DashboardConfigValues config);
@@ -30,7 +31,7 @@ Future<void> runDashboard({
   await initializeSelectedFeatures(
     onNotificationTap: notificationClickInbox.add,
   );
-  final greeting = greet(name: 'my_dashboard');
+  final greeting = greet(name: 'Agent Dashboard');
 
   // T-wire: `dashboardConfigValuesProvider`/`dashboardApiConfigProvider`
   // (`dashboard_api.dart`)/`httpSendProvider`는 override 없이 읽으면
@@ -63,6 +64,7 @@ Future<void> runDashboard({
         dashboardConfigValuesProvider.overrideWithValue(configValues),
         ?apiConfigOverride,
         httpSendProviderOverride,
+        ...usageDashboardOverrides(configValues),
         ...?extensions?.call(configValues),
       ],
       child: SolApp(greeting: greeting),

@@ -1,0 +1,318 @@
+name: Release Agent Dashboard
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing app tag (dispatch from the same tag to retry)
+        type: string
+        required: true
+      allow_rollback:
+        description: Allow an older stable version to replace production
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: product-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.repository == '5pecia1/agent-dashboard'
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+      prerelease: ${{ steps.source.outputs.prerelease }}
+      pages_branch: ${{ steps.source.outputs.pages_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Check the tag, source branch, and app version
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          python3 app/scripts/version_check.py --tag "$RELEASE_TAG"
+          python3 - <<'PY'
+          import os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?', tag):
+              raise SystemExit('Use an app version tag such as v0.1.1 or v0.2.0-alpha.1')
+          prerelease = '-' in tag
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          branch = 'release-' + tag.replace('.', '-') if prerelease else 'main'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={tag}\ncommit={commit}\nprerelease={str(prerelease).lower()}\npages_branch={branch}\n')
+          PY
+  web:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: app
+      - run: mise run tools:rust
+      - run: mise run tools:licenses
+      - run: mise run tools:web
+      - run: mise run deps
+      - run: mise run check
+      - run: mise run verify
+      - run: python3 -m unittest discover -s scripts/tests -p test_release_product.py
+      - run: mise run build:web
+      - name: Check the built app in Chromium
+        run: |
+          python3 -m venv "$RUNNER_TEMP/web-browser"
+          "$RUNNER_TEMP/web-browser/bin/pip" install playwright==1.55.0
+          "$RUNNER_TEMP/web-browser/bin/python" -m playwright install --with-deps chromium
+          python3 scripts/serve_web.py --port 8765 > "$RUNNER_TEMP/web-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for _ in {1..30}; do
+            if curl --silent --fail http://127.0.0.1:8765/ > /dev/null; then break; fi
+            sleep 1
+          done
+          "$RUNNER_TEMP/web-browser/bin/python" scripts/web_push_smoke.py http://127.0.0.1:8765 --output "$RUNNER_TEMP/web-smoke"
+      - name: Package the verified web build
+        env:
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: python3 scripts/release_product.py package --platform web --source flutter_app/build/web --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/product-web"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-web
+          retention-days: 1
+          path: ${{ runner.temp }}/product-web/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-failure-evidence
+          retention-days: 1
+          path: |
+            ${{ runner.temp }}/web-smoke/
+            ${{ runner.temp }}/web-server.log
+          if-no-files-found: ignore
+  macos:
+    needs: source
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: app
+      - run: mise run tools:rust
+      - run: mise run tools:licenses
+      - run: xcodebuild -version
+      - name: Register CocoaPods CDN
+        run: pod repo add-cdn trunk https://cdn.cocoapods.org/
+      - run: mise run deps
+      - run: mise run check
+      - run: mise run verify
+      - run: python3 -m unittest discover -s scripts/tests -p test_release_product.py
+      - run: mise run build
+      - name: Package the unsigned macOS app
+        env:
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: python3 scripts/release_product.py package --platform macos --source flutter_app/build/macos/Build/Products/Release/my_dashboard.app --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --arch "$(uname -m)" --output "$RUNNER_TEMP/product-macos"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-macos
+          retention-days: 1
+          path: ${{ runner.temp }}/product-macos/*
+          if-no-files-found: error
+  publish:
+    needs: [source, web, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: product-*
+          path: artifacts
+      - name: Assemble the verified release
+        env:
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: python3 app/scripts/release_product.py combine --input artifacts --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output release
+      - name: Publish immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+          PRERELEASE: ${{ needs.source.outputs.prerelease }}
+        run: |
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            mkdir existing
+            gh release download "$RELEASE_TAG" --dir existing
+            (cd existing && sha256sum --check SHA256SUMS)
+            python3 - <<'PY'
+          import json, os
+          release = json.load(open('existing/release.json'))
+          if release['tag'] != os.environ['RELEASE_TAG'] or release['source_commit'] != os.environ['SOURCE_COMMIT']:
+              raise SystemExit('Existing release belongs to another source; never replace published assets')
+          PY
+          else
+            args=()
+            if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+            cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          Web and macOS builds of Agent Dashboard. See `release.json` for the source commit and artifact hashes, and `SHA256SUMS` to verify downloads.
+
+          The macOS archive is not Developer ID signed or notarized. It is intended for testing; macOS Gatekeeper can prevent it from opening.
+
+          Cloudflare Pages deployment is the next job in this workflow. Stable versions update production; prereleases publish a preview.
+          EOF
+            gh release create "$RELEASE_TAG" --verify-tag "${args[@]}" --title "Agent Dashboard $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md" release/*
+          fi
+  deploy:
+    needs: [source, publish]
+    runs-on: ubuntu-24.04
+    environment: cloudflare-pages
+    concurrency:
+      group: cloudflare-pages
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      CLOUDFLARE_PAGES_URL: ${{ vars.CLOUDFLARE_PAGES_URL }}
+    steps:
+      - name: Require Cloudflare deployment configuration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo '::error::Set CLOUDFLARE_API_TOKEN in the cloudflare-pages GitHub environment; see docs/deployment.md'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo '::error::Set CLOUDFLARE_ACCOUNT_ID in the cloudflare-pages environment'; exit 1; }
+          test -n "$CLOUDFLARE_PAGES_PROJECT" || { echo '::error::Set CLOUDFLARE_PAGES_PROJECT in the cloudflare-pages environment'; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          url = urllib.parse.urlsplit(os.environ['CLOUDFLARE_PAGES_URL'])
+          if url.scheme != 'https' or not url.hostname or url.username or url.password or url.path not in ('', '/') or url.query or url.fragment:
+              raise SystemExit('Set CLOUDFLARE_PAGES_URL to the actual HTTPS production origin shown by Pages; the domain may differ from the project name')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm --prefix server ci
+      - name: Download and verify the published web archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          mkdir published
+          gh release download "$RELEASE_TAG" --pattern '*-web.tar.gz' --pattern SHA256SUMS --dir published
+          (cd published && sha256sum --check --ignore-missing SHA256SUMS)
+          archive="published/agent-dashboard-$RELEASE_TAG-web.tar.gz"
+          digest="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+          python3 app/scripts/release_product.py verify-web --archive "$archive" --sha256 "$digest" --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/pages-web"
+      - name: Prevent an older release from replacing production
+        if: needs.source.outputs.prerelease == 'false'
+        env:
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          ALLOW_ROLLBACK: ${{ inputs.allow_rollback || false }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, time, urllib.parse, urllib.request
+          account = urllib.parse.quote(os.environ['CLOUDFLARE_ACCOUNT_ID'], safe='')
+          project = urllib.parse.quote(os.environ['CLOUDFLARE_PAGES_PROJECT'], safe='')
+          endpoint = f'https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects/{project}/deployments'
+          deployed = False
+          for page in range(1, 51):
+              request = urllib.request.Request(endpoint + f'?env=production&per_page=100&page={page}', headers={'Authorization': 'Bearer ' + os.environ['CLOUDFLARE_API_TOKEN']})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  data = json.load(response)
+              if data.get('success') is not True or not isinstance(data.get('result'), list):
+                  raise SystemExit('Cannot verify Cloudflare production deployment history')
+              if any(item.get('environment') == 'production' and item.get('latest_stage', {}).get('status') == 'success' for item in data['result']):
+                  deployed = True
+                  break
+              if not data['result']:
+                  break
+              pages = data.get('result_info', {}).get('total_pages')
+              if pages is not None and page >= pages:
+                  break
+          else:
+              raise SystemExit('Production history exceeded the lookup limit; inspect the project before deploying')
+          if not deployed:
+              raise SystemExit(0)
+          origin = os.environ['CLOUDFLARE_PAGES_URL'].rstrip('/')
+          with urllib.request.urlopen(origin + '/release-manifest.json?check=' + str(time.time_ns()), timeout=30) as response:
+              manifest = json.load(response)
+          current = manifest.get('tag', '')
+          if (manifest.get('schema') != 1 or manifest.get('product') != 'Agent Dashboard' or
+                  manifest.get('platform') != 'web' or not re.fullmatch(r'v\d+\.\d+\.\d+', current) or
+                  manifest.get('version') != current[1:] or not re.fullmatch(r'[0-9a-f]{40}', manifest.get('source_commit', ''))):
+              raise SystemExit('Production metadata is invalid; inspect the existing deployment before replacing it')
+          number = lambda tag: tuple(map(int, tag[1:].split('.')))
+          if number(current) > number(os.environ['RELEASE_TAG']) and os.environ['ALLOW_ROLLBACK'] != 'true':
+              raise SystemExit(f'Production is already {current}; an older release needs an explicit allow_rollback dispatch')
+          PY
+      - name: Deploy the published artifact to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+          PAGES_BRANCH: ${{ needs.source.outputs.pages_branch }}
+        run: server/node_modules/.bin/wrangler pages deploy "$RUNNER_TEMP/pages-web" --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$PAGES_BRANCH" --commit-hash "$SOURCE_COMMIT" --commit-message "Agent Dashboard $RELEASE_TAG"
+      - name: Confirm production serves this release
+        if: needs.source.outputs.prerelease == 'false'
+        env:
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          origin = os.environ['CLOUDFLARE_PAGES_URL'].rstrip('/')
+          for attempt in range(24):
+              try:
+                  url = origin + '/release-manifest.json?commit=' + os.environ['SOURCE_COMMIT']
+                  with urllib.request.urlopen(url, timeout=20) as response:
+                      data = json.load(response)
+                  if data['tag'] == os.environ['RELEASE_TAG'] and data['source_commit'] == os.environ['SOURCE_COMMIT']:
+                      with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                          summary.write(f"Deployed [{data['tag']}]({origin}) from `{data['source_commit']}`.\n")
+                      break
+              except (OSError, ValueError, KeyError):
+                  pass
+              time.sleep(5)
+          else:
+              raise SystemExit('Production did not serve the expected release manifest; inspect the Pages deployment')
+          PY

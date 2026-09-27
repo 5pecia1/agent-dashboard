@@ -40,6 +40,7 @@ import 'package:my_dashboard/src/data/sync_reducer.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/rust/api/i18n.dart' show LocaleDto;
 import 'package:my_dashboard/src/state/config_provider.dart';
+import 'package:my_dashboard/src/state/usage_integrations.dart';
 import 'package:my_dashboard/src/state/notify_provider.dart';
 import 'package:my_dashboard/src/state/dashboard_provider.dart' show isSessionStaleFnProvider, stateLabelKeyFnProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart';
@@ -242,6 +243,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...usageDashboardOverrides(DashboardConfigValues.empty),
             i18nTranslateOverride.overrideWithValue(_goldenTranslate),
             i18nTranslateArgsOverride.overrideWithValue(_goldenTranslateArgs),
             stateLabelKeyFnProvider.overrideWithValue((s) => 'label.${s.name}'),

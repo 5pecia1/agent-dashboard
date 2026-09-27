@@ -1,4 +1,4 @@
-/// Optional composition points. The public application supplies no extensions.
+/// Composition points used by the app's optional, user-configured integrations.
 library;
 
 import 'package:flutter/widgets.dart';

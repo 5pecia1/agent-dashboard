@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local static server with the isolation headers required by FRB WASM threads."""
+"""Local static server that also exercises the app with cross-origin isolation headers."""
 import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer

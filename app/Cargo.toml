@@ -13,7 +13,7 @@ lto = "thin"
 # 워크스페이스 멤버 버전의 단일 소스. 각 멤버는 자신의 [package] 블록에서
 # `version.workspace = true`로 옵트인한다. 릴리즈할 때는 여기 값만 올리고,
 # 멤버 Cargo.toml 파일들을 개별적으로 고치지 않는다.
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license-file = "LICENSE"
 

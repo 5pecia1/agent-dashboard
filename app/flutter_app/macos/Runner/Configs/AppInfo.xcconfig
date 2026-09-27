@@ -6,6 +6,7 @@
 
 // The application's name. By default this is also the title of the Flutter window.
 PRODUCT_NAME = my_dashboard
+PRODUCT_DISPLAY_NAME = Agent Dashboard
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = io.github.5pecia1.mydashboard

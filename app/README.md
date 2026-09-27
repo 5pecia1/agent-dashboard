@@ -21,4 +21,4 @@ mise run tools:web
 mise run build:web
 ```
 
-Open the app and configure your server origin and client token. Start with the web deployment at the origin root; subpath hosting is not part of the current server contract.
+Open the app and configure your server origin and client token. Host the web build at the origin root and preserve its `_headers` file. [The deployment guide](../docs/deployment.md) shows Cloudflare Pages setup and the app release workflow, which publishes web/macOS archives and deploys the published web archive when an app version is tagged.

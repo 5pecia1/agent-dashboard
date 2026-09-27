@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=My Dashboard
+Name=Agent Dashboard
 Comment=Coding agent activity dashboard
 Exec=my_dashboard %u
 Icon=my_dashboard

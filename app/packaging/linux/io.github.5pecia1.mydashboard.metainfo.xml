@@ -2,11 +2,11 @@
 <component type="desktop-application">
   <id>io.github.5pecia1.mydashboard</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MIT OR Apache-2.0</project_license>
-  <name>My Dashboard</name>
+  <project_license>LicenseRef-Sustainable-Use-1.0</project_license>
+  <name>Agent Dashboard</name>
   <summary>Coding agent activity dashboard</summary>
   <description>
-    <p>My Dashboard is the sol-platform device-app template: a Flutter UI over a Rust core (flutter_rust_bridge), packaged for desktop and web from one source tree.</p>
+    <p>Agent Dashboard shows coding-agent sessions and account usage, with notifications for sessions that need attention.</p>
   </description>
   <launchable type="desktop-id">my_dashboard.desktop</launchable>
   <categories>

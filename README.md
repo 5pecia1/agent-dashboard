@@ -31,7 +31,7 @@ Use a separate ingest token for agent hooks and client token for the dashboard. 
 
 ## Connect the app and hooks
 
-Build the app with [the app guide](app/README.md), then enter your own server origin and client token in its setup screen. The app starts without an embedded server token.
+Build the app with [the app guide](app/README.md), then enter your own server origin and client token in its setup screen. The app starts without an embedded server token. [The deployment guide](docs/deployment.md) covers Cloudflare Pages hosting and versioned web/macOS releases.
 
 Download your server's `setup.sh`, inspect it, and run it locally:
 
@@ -42,6 +42,10 @@ bash setup.sh
 ```
 
 Use the ingest token when asked. [The hook guide](hooks/README.md) explains the integration and data handling. Push notifications are optional; server polling works without Firebase credentials.
+
+## Usage integrations
+
+TeamClaude and Devin usage panels are included in the web and macOS apps. Configure your own endpoint and key in Settings; an unconfigured integration makes no requests. [Usage integration setup](docs/integrations.md) explains browser HTTPS/CORS requirements and local credential storage.
 
 ## Development and upgrades
 
