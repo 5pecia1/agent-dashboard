@@ -1,10 +1,10 @@
 # Agent Dashboard server
 
-Cloudflare Workers와 D1에서 실행하는 에이전트 상태 서버입니다. Hono 앱에 마운트하거나 [단독 Worker 예제](https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker)를 생성할 수 있습니다. API prefix는 `/dashboard`를 사용합니다.
+This package provides an agent-status server for Cloudflare Workers and D1. Mount it in a Hono app or generate a [standalone Worker starter](https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker). The API prefix is `/dashboard`.
 
-## 릴리스로 설치하기
+## Install a release
 
-새 Worker는 Node.js 22 이상과 npm을 설치한 뒤 다음 명령으로 시작합니다. 소스 빌드는 필요하지 않습니다.
+For a new Worker, install Node.js 22 or newer and npm, then run the following commands. No source build is required.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
@@ -13,17 +13,17 @@ cd agent-dashboard-server
 npm ci
 ```
 
-현재 서버는 alpha 릴리스만 있으므로 `--prerelease`를 사용합니다. 버전을 지정하려면 `--version 0.1.0-alpha.2`를 사용합니다. 설치기는 SHA256을 확인한 starter를 새 폴더에 풀며 기존 프로젝트를 덮어쓰지 않습니다. 생성된 `README.md`를 따라 Cloudflare 로그인, D1 생성, `INGEST_TOKEN`·`CLIENT_TOKEN` 설정, 배포를 진행합니다. 상세 절차는 [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server)에 있습니다.
+The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.2`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
 
-기존 Hono Worker에는 검증한 패키지 archive를 정확한 버전으로 설치합니다.
+For an existing Hono Worker, install an exact version of the verified package archive:
 
 ```sh
 npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.2/5pecia1-agent-dashboard-server-0.1.0-alpha.2.tgz
 ```
 
-생성된 lockfile을 커밋합니다. [릴리스](https://github.com/5pecia1/agent-dashboard/releases)에는 SHA256과 패키지 설치·업그레이드 검증 결과가 포함됩니다. npm registry 발행은 아직 사용하지 않으며 GitHub Release 파일을 설치합니다.
+Commit the generated lockfile. [Releases](https://github.com/5pecia1/agent-dashboard/releases) include SHA256 checksums and package installation and upgrade verification results. The package is not yet published to the npm registry; install the GitHub Release archive.
 
-## 기존 Worker에 연결하기
+## Connect an existing Worker
 
 ```ts
 import { Hono } from 'hono';
@@ -47,17 +47,17 @@ export default {
 };
 ```
 
-`DB`는 D1 바인딩입니다. `INGEST_TOKEN`은 수집과 `GET /dashboard/auth/ingest-check`만 허용합니다. `CLIENT_TOKEN`은 조회·읽음·수동 확인·삭제·설정을 허용합니다. 두 값은 별도로 생성하고 Worker secret으로 설정합니다. 호환용 `AUTH_TOKEN`은 두 역할을 모두 허용하므로 신규 설치에서는 사용하지 않습니다. `ALLOWED_ORIGINS`는 웹 앱의 origin을 쉼표로 구분합니다.
+`DB` is the D1 binding. `INGEST_TOKEN` permits ingestion and `GET /dashboard/auth/ingest-check` only. `CLIENT_TOKEN` permits queries, read tracking, manual acknowledgment, deletion, and settings changes. Generate the two values separately and store them as Worker secrets. The compatibility token `AUTH_TOKEN` permits both roles; do not use it for new installations. `ALLOWED_ORIGINS` is a comma-separated list of web app origins.
 
-기본값은 메시지와 hook 원문을 저장하지 않습니다. `DASHBOARD_STORE_MESSAGE=1`을 명시하면 이전의 상세 보존 동작을 사용합니다. hook에서도 `MY_DASHBOARD_INCLUDE_CONTENT=1`을 선택해야 원문이 전송됩니다. 기본 보존 대상은 상태 재생에 필요한 source, session/event 식별자, project, host, 시각, generic 상태, hook revision, Devin 상관 식별자입니다. project와 host는 식별·창 연결에 사용하므로 기본값에서도 남습니다. 정규화된 메타데이터가 UTF-8 16KiB를 넘으면 요청 전체를 400으로 거절해 재생 정보가 잘리지 않도록 합니다. 상세 수집은 원문 4096바이트와 메시지 300자 상한을 유지합니다.
+By default, the server does not store messages or raw hook input. Set `DASHBOARD_STORE_MESSAGE=1` to enable detailed retention. Hooks must also enable `MY_DASHBOARD_INCLUDE_CONTENT=1` to send the original content. Default retention keeps the metadata needed to replay state: source, session and event identifiers, project, host, timestamps, generic state, hook revision, and Devin correlation identifiers. Project and host remain available by default because they identify sessions and connect them to windows. If normalized metadata exceeds 16 KiB in UTF-8, the entire request is rejected with 400 rather than truncating replay data. Detailed collection retains the limits of 4,096 bytes for raw input and 300 characters for messages.
 
-FCM은 선택 기능입니다. `FCM_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `FIREBASE_APPLE_CONFIG`, `FCM_WEB_VAPID_KEY`, `DASHBOARD_APP_ORIGIN`을 필요한 채널에 맞게 설정합니다. 미설정 시 상태 수집·조회는 계속 동작합니다. stalled 기준과 보존 일수는 `DashboardEnv`의 `DASHBOARD_STALL_MS`, `DASHBOARD_RETAIN_*_DAYS`로 조정합니다.
+FCM is optional. Configure `FCM_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `FIREBASE_APPLE_CONFIG`, `FCM_WEB_VAPID_KEY`, and `DASHBOARD_APP_ORIGIN` for the channels you use. State ingestion and queries continue to work without them. Adjust the stalled threshold and retention periods through `DASHBOARD_STALL_MS` and `DASHBOARD_RETAIN_*_DAYS` in `DashboardEnv`.
 
-설치 시 DB를 자동 변경하지 않습니다. 소비 Worker의 Wrangler 설정에서 `migrations_dir`를 `node_modules/@5pecia1/agent-dashboard-server/migrations`로 지정하고, 배포 전에 `npx wrangler d1 migrations apply DB --remote`를 명시적으로 실행합니다. 기존 `0001`~`0005` SQL은 이름과 내용이 동일합니다. 마이그레이션 ledger를 보존하고 전환 중 `/admin/rebuild`를 실행하지 않습니다. 패키지 버전 되돌리기는 DB 되돌리기가 아닙니다.
+Installation does not modify the database automatically. In the consuming Worker's Wrangler configuration, set `migrations_dir` to `node_modules/@5pecia1/agent-dashboard-server/migrations` and explicitly run `npx wrangler d1 migrations apply DB --remote` before deployment. Existing SQL migrations `0001` through `0005` retain their names and contents. Preserve the migration ledger and do not run `/admin/rebuild` during the transition. Rolling back the package version does not roll back the database.
 
-## 개발과 검증
+## Development and verification
 
-다음 명령은 저장소 루트에서 실행합니다.
+Run these commands from the repository root:
 
 ```sh
 npm --prefix server ci
@@ -67,8 +67,8 @@ npm --prefix server run verify:package
 npm --prefix server run test:upgrade
 ```
 
-`verify:package`는 임시 tarball을 별도 디렉터리에 실제 설치하여 타입, Worker 번들, D1, API, hook 배포, 유지관리와 hook 통합을 검사합니다. 검사한 archive와 로그는 출력된 임시 경로에 남습니다. `-- --tarball /path/package.tgz --receipt /path/receipt.json`을 넘기면 해당 archive를 재빌드하지 않고 검증합니다. `test:upgrade`도 같은 `--tarball`·`--receipt` 옵션을 받아 릴리스할 정확한 archive를 검사할 수 있습니다. 이전 Worker가 HTTP 요청으로 만든 합성 DB fixture를 복원해 migration ledger·커서·읽음·상관 정보를 확인합니다. fixture 기대값은 현재 구현으로 재생성하지 않습니다.
+`verify:package` installs a temporary tarball into a separate directory and checks types, the Worker bundle, D1, the API, hook delivery, maintenance, and hook integration. The verified archive and logs remain at the printed temporary path. Pass `-- --tarball /path/package.tgz --receipt /path/receipt.json` to verify that archive without rebuilding it. `test:upgrade` accepts the same `--tarball` and `--receipt` options to verify the exact release archive. It restores a synthetic database fixture created through HTTP requests to the previous Worker and checks the migration ledger, cursors, read tracking, and correlation data. Fixture expectations are not regenerated from the current implementation.
 
-`hono`는 호스트와 라우터 구현을 공유하기 위한 peer dependency이며 현재 검사한 버전으로 고정합니다. esbuild와 TypeScript는 빌드 도구이고 패키지 설치 후 실행하지 않습니다. SQL·API 계약·hook manifest는 각각 `migrations/`, `contracts/` 경로에 포함됩니다. hook 원본과 API 계약은 저장소 루트에서만 편집합니다.
+`hono` is a peer dependency so the host and package share the router implementation, pinned to the verified version. esbuild and TypeScript are build tools and do not run after package installation. SQL migrations are included under `migrations/`; the API contract and hook manifest are included under `contracts/`. Edit hook sources and the API contract only at the repository root.
 
-라이선스 조건은 [LICENSE](LICENSE), 기존 배포물 및 제삼자 고지는 [NOTICE](NOTICE)를 확인합니다. 현재 prerelease 패키지는 공개 registry 발행 전이므로 검증한 `.tgz`로 소비합니다.
+See [LICENSE](LICENSE) for license terms and [NOTICE](NOTICE) for existing distribution and third-party notices. The current prerelease package is consumed as a verified `.tgz` before public registry publication.

@@ -1,5 +1,13 @@
 # Agent Dashboard
 
+[English](README.md) · [한국어](README.ko.md)
+
+> Tired of switching between agent windows and checking terminals one by one?
+>
+> I built this project to see the status of agents running across multiple servers and clients in one place. There are many tools for managing agent status, but I found them difficult to use in my setup, which combines SSH and devcontainers.
+>
+> With help from AI agents, we can now build the tools we need or adapt existing ones to our own environments. I'm sharing this project's source code so that others facing similar frustrations can get started more easily and adapt it to their needs.
+
 [Open the web app](https://agent-dashboard.5pecia1.dev) · [Install macOS](#install-the-macos-app) · [Set up your server](#set-up-your-server) · [Quickstart](docs/quickstart.md)
 
 Agent Dashboard collects coding-agent activity so you can see which sessions need your attention. It includes a web/macOS dashboard, agent hooks, and a Cloudflare Workers + D1 server that can also be embedded in another Worker.

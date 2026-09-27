@@ -1,12 +1,12 @@
-# 사용량 연동
+# Usage integrations
 
-Agent Dashboard에는 TeamClaude와 Devin 사용량 연동이 포함됩니다. 계정 정보는 배포 파일에 들어 있지 않으며 각 사용자가 설정 화면에서 연결합니다. 연결하지 않은 연동은 요청을 보내지 않습니다.
+Agent Dashboard includes TeamClaude and Devin usage integrations. Distribution files contain no account credentials; each user connects their own services in Settings. An unconfigured integration makes no requests.
 
-1. 앱의 **설정**에서 TeamClaude 또는 Devin 항목을 펼칩니다.
-2. 자신의 서비스 주소와 API 키를 입력하고 저장합니다. TeamClaude는 서버 루트 또는 `/teamclaude/dashboard` 주소와 API 키를 받습니다. Devin은 자신의 API 서버와 키를 받습니다.
-3. 홈의 사용량 패널에서 값과 마지막 조회 시각을 확인합니다. macOS 트레이에서도 같은 사용량을 확인할 수 있습니다.
-4. 연결을 해제하려면 해당 연동 설정을 지웁니다. 기존 대시보드 서버·세션·알림 설정은 유지됩니다.
+1. Open **Settings** and expand TeamClaude or Devin.
+2. Enter and save your service URL and API key. TeamClaude accepts a server root URL or a `/teamclaude/dashboard` URL and an API key. Devin accepts your API server URL and key.
+3. Check the usage values and last fetch time in the home screen's usage panels. The same usage information is available in the macOS tray.
+4. To disconnect, clear that integration's settings. Your dashboard server, session, and notification settings remain unchanged.
 
-웹에서는 HTTPS 서비스 주소가 필요하며 연동 서버가 이 웹의 origin을 CORS로 허용해야 합니다. 개인 네트워크의 HTTP 주소는 공개 HTTPS 웹에서 직접 호출되지 않을 수 있습니다. 이 경우 macOS 앱을 사용하거나 본인이 운영하는 HTTPS 중계를 구성합니다. 대시보드 서버가 연동 키를 대신 보관하거나 자동으로 프록시하지 않습니다.
+The web app requires HTTPS service URLs, and each integration server must allow the web app's origin through CORS. A public HTTPS page may be unable to call an HTTP address on a private network directly. In that case, use the macOS app or configure an HTTPS relay that you operate. The dashboard server does not store integration keys on your behalf or automatically proxy requests.
 
-키는 현재 기기의 앱 설정 또는 브라우저 localStorage에 보관됩니다. 설정 화면에서 입력한 키와 실제 계정 응답을 이슈·스크린샷에 포함하지 마세요. Devin 사용량은 공식 공개 API와 별개인 CLI 호환 조회 경로를 사용하므로 제공자 변경 시 연동 업데이트가 필요할 수 있습니다. Devin 세션 상태 hook 지원은 사용량 조회와 독립적입니다.
+Keys are stored in the current device's app settings or the browser's localStorage. Do not include keys entered in Settings or real account responses in issues or screenshots. Devin usage relies on a CLI-compatible query endpoint separate from the official public API, so provider changes may require integration updates. Devin session-status hook support is independent of usage queries.

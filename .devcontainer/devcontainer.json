@@ -1,7 +1,10 @@
 {
   "build": {
     "context": ".",
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "options": [
+      "--platform=linux/amd64"
+    ]
   },
   "containerEnv": {
     "MISE_TRUSTED_CONFIG_PATHS": "${containerWorkspaceFolder}"
@@ -34,7 +37,10 @@
           "**/build/**": true,
           "**/target/**": true
         },
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "rust-analyzer.linkedProjects": [
+          "app/Cargo.toml"
+        ]
       }
     }
   },

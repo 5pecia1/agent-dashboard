@@ -1,53 +1,40 @@
 # tool/visual_qa/
 
-골든 테스트(`test/widget_tests/goldens_test.dart`)는 Ahem 폴백 폰트로
-렌더링된다 — 호스트 간 픽셀 결정성을 지키려는 의도적 선택이다. 그
-대가로 한글 실제 글리프 렌더링(자모 조합, 폰트 fallback 체인)이나
-말줄임(ellipsis) 처리처럼, 사람 눈으로만 판별되는 시각 회귀는 골든이
-잡지 못한다.
+Golden tests (`test/widget_tests/goldens_test.dart`) render with the Ahem fallback font to keep pixels deterministic across hosts. They do not cover real Korean glyph rendering, character composition, font fallback, or visual regressions such as incorrect ellipsis placement.
 
-골든이 못 잡는 시각 회귀를 사람 눈으로 직접 확인하는 별도 진입점을
-여기 둔다. **`lib/`도 `test/`도 아니다** — 앱 코드도 자동화된 테스트도
-아닌, `flutter run -t tool/visual_qa/<시나리오>_main.dart -d <device>`로
-사람이 직접 띄워서 눈으로 확인하는 수동 QA 전용 진입점이다.
+This directory provides entry points for manual visual QA using `flutter run -t tool/visual_qa/<scenario>_main.dart -d <device>`. Each scenario uses real widgets and Provider overrides. Input and storage isolation vary by scenario; entry points that exercise native features require macOS plugins and the Rust bundle. Run the commands below from `app/flutter_app`.
 
-각 시나리오는 실제 위젯과 Provider override를 사용한다. 입력과 저장은
-시나리오에 따라 격리하며, 네이티브 기능을 확인하는 진입점은 macOS 플러그인과
-Rust 번들이 필요하다. 아래 명령은 `app/flutter_app`에서 실행한다.
-
-
-## 트레이 작업 창 전환
+## Switch to a task window from the tray
 
 ```sh
 mise exec -- flutter run -d macos -t tool/visual_qa/window_navigation_main.dart
 ```
 
-실제 트레이와 macOS 창 조회·전환을 사용하되 서버 요청·개인 설정·연결 규칙·읽음 처리는 메모리로 격리한다. 손쉬운 사용 권한은 해당 실행 앱에 직접 허용해야 한다. 코드 서명이 바뀐 빌드에서는 설정의 기존 허용 표시와 실제 권한 상태가 다를 수 있으므로 다시 조회하여 확인한다.
+This scenario uses the real tray and macOS window discovery and focus. Server requests, personal settings, connection rules, and read tracking are isolated in memory. Grant Accessibility permission to the running app. When a build's code signature changes, the permission shown in Settings may differ from the effective permission; query it again to confirm.
 
-1. VS Code 창 두 개를 열고 트레이의 미확인 항목을 선택한다. 앱 필터에서 Code를 고른 뒤 특정 창을 선택하고 제목 규칙을 저장한다.
-2. 다른 에이전트의 항목을 선택해 같은 호스트·프로젝트의 규칙을 공유하는지 확인한다. `Native focus: focused`와 실제 앞에 나온 창을 함께 확인한다.
-3. 미읽음 초기화 후 `5초 뒤 새 알림`을 누르고 트레이를 연다. 새 알림이 온 뒤 처음 표시한 항목을 눌러 `latest=30`, `seen=10`, `unread=true`가 유지되는지 확인한다.
-4. 대상 창 최소화·앱 숨김·다른 Space·전체 화면, 선택 도중 창 종료, 권한 없음, 선택 취소를 확인한다. 전환 실패·취소에는 읽음 호출이 없어야 한다.
-5. 실제 배포에는 기본 `lib/main.dart`를 다시 빌드한다. QA 진입점을 운영 설치본으로 남기지 않는다.
+1. Open two VS Code windows and select an unacknowledged tray item. Choose Code in the app filter, select a window, and save a title rule.
+2. Select another agent's item and confirm that it shares the rule for the same host and project. Check both `Native focus: focused` and the actual window brought to the foreground.
+3. Reset unread state, press `5초 뒤 새 알림` (new notification in five seconds), and open the tray. After the new notification arrives, click the item displayed before it and confirm that `latest=30`, `seen=10`, and `unread=true` remain.
+4. Test a minimized window, a hidden app, another Space, full screen, a window closed during selection, missing permission, and cancellation. Failed or canceled focus attempts must not mark the item as read.
+5. Rebuild the normal `lib/main.dart` entry point for production. Do not leave a QA entry point installed as the production app.
 
-## macOS 배너에서 작업 창으로 이동
+## Open a task window from a macOS banner
 
 ```sh
 mise exec -- flutter run -d macos -t tool/visual_qa/notification_window_main.dart
 ```
 
-다른 창을 기본 대상으로 쓰려면 실행·빌드 명령에 `--dart-define=QA_WINDOW_APP=com.microsoft.VSCode --dart-define='QA_WINDOW_TITLE=검증할 창의 정확한 제목'`을 추가한다.
-이 옵션으로 지정한 기본 규칙은 같은 QA 번들을 종료 후 다시 실행해도 유지된다. 실제 창 제목을 소스에 저장하지 않는다.
+To use another default target, add `--dart-define=QA_WINDOW_APP=com.microsoft.VSCode --dart-define='QA_WINDOW_TITLE=Exact window title to verify'` to the run or build command. This default rule survives quitting and relaunching the same QA bundle. Do not store real window titles in source code.
 
-이 진입점은 실제 macOS 로컬 배너와 창 조회·전환을 사용한다. 서버 요청은 차단하고 개인 설정·토큰을 읽지 않으며, 설정·규칙·읽음은 메모리에만 보관한다. 화면의 `network sends=0`과 `Blocked HTTP requests`를 함께 확인한다. 화면의 `알림 백엔드`가 `flutterLocalNotifications`여야 배너 클릭을 검사할 수 있다. `osascript`에는 클릭 콜백이 없다. 시작 전에 macOS 설정의 알림에서 해당 앱을 허용한다. 배너가 보이지 않으면 알림 표시 방식과 집중 모드를 확인하고, 이미 받은 알림은 알림 센터에서 찾는다. 백엔드나 알림 권한을 확인하지 못한 상태는 환경 미설정으로 기록한다.
+This entry point uses real macOS local banners and window discovery and focus. It blocks server requests, does not read personal settings or tokens, and keeps settings, rules, and read tracking in memory. Check both `network sends=0` and `Blocked HTTP requests`. The screen's notification backend (`알림 백엔드`) must be `flutterLocalNotifications` to test banner clicks; `osascript` has no click callback. Before starting, enable notifications for the app in macOS Settings. If no banner appears, check the notification style and Focus mode; look for previously delivered notifications in Notification Center. Record an unverified backend or notification permission as incomplete environment setup.
 
-같은 앱 ID의 운영 앱은 먼저 종료한다. QA 빌드가 코드 서명을 바꾸면 손쉬운 사용 설정의 허용 표시가 켜져 있어도 실제 조회는 `trusted=false`일 수 있다. macOS 설정에서 해당 QA 실행 앱의 권한을 사용자가 확인하고 다시 조회한다. 필요하면 기존 항목을 제거한 뒤 실제 실행 중인 번들을 다시 추가한다. 시스템이 인증을 요구하면 사용자가 승인해야 하며, 권한 저장소를 직접 수정하지 않는다.
+First quit any production app with the same app ID. A QA build that changes the code signature may report `trusted=false` even when Accessibility Settings shows permission enabled. Have the user confirm permission for the actual QA app in macOS Settings, then query it again. If necessary, remove the old entry and add the running bundle. The user must approve any system authentication request; do not modify the permission database directly.
 
-1. VS Code에 QA 대상으로 쓸 창을 연다. 기본 규칙은 앱 `com.microsoft.VSCode`의 제목이 정확히 `Dashboard`인 창이다. 다른 제목을 사용할 때는 `연결 대상 확인·변경`에서 선택하고 메모리 규칙을 저장한다. 이 화면에 `my-dashboard`, `notification-qa.local`, `/visual-qa/my-dashboard`가 고정되어 있는지, 창 목록을 스크롤해도 대상이 보이는지 확인한다.
-2. `가짜 동기화 목록에 세션 포함`을 끈 채 `배너 보내기 (전이 10)`를 누른다. 배너를 클릭해 선택한 작업 창이 앞으로 오고 `Native focus: focused`가 되는지 확인한다. 대시보드 세션 상세를 거치지 않아야 하며, `cachedSessions=0`에서도 `Seen`에 원본 상한 `2000000010`이 기록되어야 한다.
-3. 읽음을 초기화하고 배너를 다시 보낸 뒤 `새 전이 30`을 누른다. 이전 배너를 클릭했을 때 `latest=2000000030`, `seen=2000000010`, `unread=true`가 남는지 확인한다. 최소화하거나 숨긴 대상은 복원된 실제 창과 `Native focus: focused`를 함께 확인한다. 선택 중 닫힌 창은 전환 실패를 안내해야 하며, 실패하거나 선택을 취소하면 `Seen` 기록이 추가되지 않아야 한다.
-4. 종료 후 클릭은 **같은 QA 번들을 OS가 다시 실행하는 상태**에서 확인한다. `배너 보내기 → Cmd+Q 종료`를 누르고 앱을 완전히 종료한 뒤 알림 센터의 QA 배너를 클릭한다. 재실행된 QA 앱이 첫 프레임 이후 클릭을 처리하고 실제 대상 창으로 이동하는지 확인한다. 메모리 규칙은 종료하면 초기화되므로, 이 검사는 기본 `Dashboard` 규칙으로 수행하거나 재실행 후 나타나는 선택 화면에서 창을 고른다. 운영 설치본이 대신 열리면 QA 결과로 인정하지 않는다.
-5. 설치 위치에서 Release QA를 확인해야 한다면 아래 백업 명령을 먼저 실행하고 출력된 경로를 보관한다. `app/flutter_app`에서 `mise exec -- flutter build macos --release -t tool/visual_qa/notification_window_main.dart`로 빌드하고, 앱을 종료한 뒤 산출물 `build/macos/Build/Products/Release/my_dashboard.app`을 `/Applications/my_dashboard.app`에 복사해 실행한다. 설치 위치·서명이 바뀐 뒤에는 접근성 권한을 다시 확인한다.
+1. Open a VS Code window for QA. The default rule matches app `com.microsoft.VSCode` and the exact title `Dashboard`. For another title, use `연결 대상 확인·변경` (check or change target) and save an in-memory rule. Confirm that the screen uses the fixed fixture values `my-dashboard`, `notification-qa.local`, and `/visual-qa/my-dashboard`, and that the target remains visible while scrolling the window list.
+2. Leave `가짜 동기화 목록에 세션 포함` (include session in fake sync list) off and press `배너 보내기 (전이 10)` (send banner, transition 10). Click the banner and confirm that the selected task window comes forward and `Native focus: focused` appears. It must open the task window directly without passing through dashboard session details. Even with `cachedSessions=0`, `Seen` must record the original upper bound `2000000010`.
+3. Reset read tracking, send another banner, and press `새 전이 30` (new transition 30). Clicking the earlier banner must leave `latest=2000000030`, `seen=2000000010`, and `unread=true`. For a minimized or hidden target, check both the restored window and `Native focus: focused`. If the window closes during selection, the app must report focus failure. Failure or cancellation must not add a `Seen` record.
+4. Test clicks after quit by letting the OS relaunch **the same QA bundle**. Press `배너 보내기 → Cmd+Q 종료` (send banner, then quit with Cmd+Q), quit the app completely, and click the QA banner in Notification Center. Confirm that the relaunched QA app handles the click after its first frame and opens the actual target window. In-memory rules reset on quit, so use the default `Dashboard` rule or select a window when the chooser appears after relaunch. A production app opening instead does not count as a successful QA result.
+5. To verify Release QA from the installation directory, first run the backup commands below and retain the printed path. Build with `mise exec -- flutter build macos --release -t tool/visual_qa/notification_window_main.dart` from `app/flutter_app`. Quit the app, copy `build/macos/Build/Products/Release/my_dashboard.app` to `/Applications/my_dashboard.app`, and launch it. Recheck Accessibility permission after the installation path or signature changes.
 
 ```sh
 mkdir -p "$HOME/Library/Application Support/my-dashboard/backups"
@@ -56,7 +43,7 @@ ditto /Applications/my_dashboard.app "$notification_qa_backup/my_dashboard.app"
 echo "$notification_qa_backup"
 ```
 
-검사가 끝나면 QA 앱을 종료하고 저장소 루트에서 기본 `lib/main.dart`를 다시 빌드하고 실행한다. 운영 앱에서도 접근성 조회가 가능한지 확인한다. 이 명령은 현재 소스의 운영 빌드를 설치한다. 빌드가 실패해 이전 설치본으로 되돌려야 한다면, 실행 중인 앱을 종료하고 보관한 `notification_qa_backup`의 `my_dashboard.app`을 `/Applications`에 복원한다. 메모리 규칙은 운영 설정 파일에 저장되지 않는다.
+After verification, quit the QA app and rebuild and run the normal `lib/main.dart` entry point from the repository root. Confirm that the production app can query Accessibility permission. These commands build and launch the current production source. If the build fails and you need the previous installation, quit the running app and restore `my_dashboard.app` from the saved `notification_qa_backup` directory to `/Applications`. In-memory rules are not written to the production settings file.
 
 ```sh
 cd app
@@ -64,4 +51,4 @@ mise run build
 open flutter_app/build/macos/Build/Products/Release/my_dashboard.app
 ```
 
-이미 받은 로컬 배너의 종료 후 클릭과, 앱이 종료된 동안 새 배너를 받는 APNs 동작은 별도 검사다. 이 진입점은 APNs를 등록하지 않는다. APNs 실물 검증에는 별도의 서명·entitlement·서버 Firebase 설정이 필요하며, 로컬 배너의 성공으로 대신할 수 없다. 전달과 읽음 경계는 [알림 클릭 처리](../../lib/src/ui/notification_click_actions.dart)와 [회귀 검사](../../test/widget_tests/notification_app_wiring_test.dart)에서 확인한다.
+Clicking an already-delivered local banner after quit is separate from receiving a new APNs banner while the app is closed. This entry point does not register for APNs. APNs verification needs separate signing, entitlements, and server Firebase configuration; successful local banners do not establish APNs behavior. See [notification click handling](../../lib/src/ui/notification_click_actions.dart) and the [regression tests](../../test/widget_tests/notification_app_wiring_test.dart) for delivery and read-tracking boundaries.

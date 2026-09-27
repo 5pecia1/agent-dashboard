@@ -1,13 +1,7 @@
 # test/test_helpers/
 
-여러 테스트 파일이 공유하는 픽스처·하네스를 두는 곳이다 — 예를 들면
-자주 반복되는 `ProviderScope` override 묶음, 골든 테스트의 뷰포트 고정
-헬퍼, 결정적인 가짜 FRB 응답 빌더 같은 것들이다.
+Shared fixtures and harnesses for multiple test files belong here, such as recurring `ProviderScope` overrides, fixed viewports for golden tests, and deterministic fake FRB response builders.
 
-이 디렉터리의 파일은 테스트 자체가 아니므로 `*_test.dart` 접미사를
-붙이지 않는다 — 그래야 `flutter test`의 테스트 디스커버리 대상에
-잡히지 않는다(디스커버리는 파일명 패턴 기반이다).
+These files are helpers, not tests. Do not use the `*_test.dart` suffix, which would include them in Flutter's filename-based test discovery.
 
-이 템플릿 단계에서는 공유할 만큼 반복되는 셋업이 아직 없어 비어 있다.
-`state_tests/`나 `widget_tests/`에 같은 override 묶음이나 헬퍼 함수가
-두 번 이상 나타나면, 그때 이 디렉터리로 추출한다.
+Extract shared setup here when the same override group or helper appears in two or more files under `state_tests/` or `widget_tests/`.

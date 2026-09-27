@@ -77,11 +77,12 @@ def main():
             missing = json.loads(result.stdout)
             if not isinstance(missing, dict) or missing:
                 raise ValueError(f'workspace tools are missing from image; rebuild the Devcontainer ({directory})')
-        result = subprocess.run(['mise', 'tasks', '--json'], env=env, text=True, encoding='utf-8', capture_output=True, check=True)
+        task_directory = workspace if (workspace / '.mise.toml').is_file() else workspace / 'app'
+        result = subprocess.run(['mise', 'tasks', '--json'], cwd=task_directory, env=env, text=True, encoding='utf-8', capture_output=True, check=True)
         tasks = {task['name'] for task in json.loads(result.stdout)}
         bootstrap = next((task for task in ('platform:bootstrap', 'bootstrap') if task in tasks), None)
         if bootstrap:
-            subprocess.run(['mise', 'run', bootstrap], env=env, check=True)
+            subprocess.run(['mise', 'run', bootstrap], cwd=task_directory, env=env, check=True)
         print('Selected environment tools and bootstrap are ready.')
         return 0
     except subprocess.CalledProcessError as error:
