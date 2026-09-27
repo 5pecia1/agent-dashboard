@@ -1,24 +1,75 @@
 # Agent Dashboard
 
-[Open the web app](https://agent-dashboard.5pecia1.dev) · [Download the app](https://github.com/5pecia1/agent-dashboard/releases/latest)
+[Open the web app](https://agent-dashboard.5pecia1.dev) · [Install macOS](#install-the-macos-app) · [Set up your server](#set-up-your-server) · [Quickstart](docs/quickstart.md)
 
 Agent Dashboard collects coding-agent activity so you can see which sessions need your attention. It includes a web/macOS dashboard, agent hooks, and a Cloudflare Workers + D1 server that can also be embedded in another Worker.
 
-This is source-available software. Read [LICENSE](LICENSE) for the permitted uses and restrictions and [NOTICE](NOTICE) for third-party notices. The first alpha server package is available from [GitHub Releases](https://github.com/5pecia1/agent-dashboard/releases). The npm registry workflow is prepared; until its trusted-publisher connection is configured, install the fixed Release archive directly with npm.
+The web and macOS apps connect to **your own server**. The public web app does not include a hosted account or store your dashboard data on a shared server.
 
-## Install the server package
+## Install the macOS app
 
-For an existing Hono Worker, install the tested alpha archive:
+On an Apple silicon Mac, install the latest stable app from GitHub Releases:
 
 ```sh
-npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.1/5pecia1-agent-dashboard-server-0.1.0-alpha.1.tgz
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh | bash
 ```
 
-Commit the generated lockfile. Release assets include SHA256 and the independent installation/upgrade checks. [The server guide](server/README.md) shows the imports, D1 binding, and explicit migration step. For a new Worker, use the template below.
+The installer verifies the release checksum and installs `~/Applications/Agent Dashboard.app`. Open it and enter your server origin and client token. No source build is needed. You can also download the macOS ZIP from [Releases](https://github.com/5pecia1/agent-dashboard/releases).
 
-## Start with the server
+The current app is not Developer ID signed or notarized; macOS may require approval on first launch. See [macOS installation and updates](docs/quickstart.md#macos-installation-and-updates). For a browser, simply [open the web app](https://agent-dashboard.5pecia1.dev).
 
-Requirements: Node.js 22 or newer, npm, and a Cloudflare account for deployment. Local verification uses an isolated local D1 database and does not require an account.
+## Set up your server
+
+Requirements: Node.js 22 or newer, npm, and a Cloudflare account. Install the released server starter, without cloning or building this repository:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- server --prerelease
+cd agent-dashboard-server
+npm ci
+```
+
+The server is currently an alpha release, so this command explicitly includes prereleases. Follow the generated `README.md` or the [quickstart](docs/quickstart.md#set-up-your-cloudflare-server) to sign in to Cloudflare, create D1, set two tokens, and deploy. The installer creates a project; it does not create cloud resources or deploy them.
+
+For an existing Hono Worker, [install the server package](server/README.md) instead. Use `INGEST_TOKEN` for agent hooks and a separate `CLIENT_TOKEN` for the dashboard.
+
+## Connect your agents
+
+After deploying your server, install its matching hooks on each agent machine. Replace `https://YOUR_SERVER` with the server origin:
+
+```sh
+curl -fsSL https://YOUR_SERVER/setup.sh | bash
+```
+
+The hook installer needs `curl`, `jq`, and `python3`. Enter the ingest token when asked; in Codex, trust the new hooks through `/hooks`. Start an agent session and check it in the dashboard. [The hook guide](hooks/README.md) covers previewing changes, updates, and data handling. Push notifications are optional.
+
+## Choose a version or update
+
+Without a version, the installer selects the latest stable release **for that component** and fixes the download target for that installation. `--prerelease` includes prereleases. `--version` selects an exact version, including a prerelease, and fails if it does not exist; it never falls back to another version.
+
+```sh
+# Install a particular app version.
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- --version v0.1.1
+
+# Update an existing app to the latest stable version; keep its settings.
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- --replace
+
+# Create a server project from an exact prerelease.
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- server --version 0.1.0-alpha.2 --dir ./my-agent-server
+```
+
+Use `--dry-run` to see the selected release and destination without installing. To inspect the installer first, [read install.sh](install.sh), or download it and run it locally. The script is served by GitHub Raw; release archives and checksums come from GitHub Releases. Pages hosts the web app only.
+
+## Usage integrations
+
+TeamClaude and Devin usage panels are included in the web and macOS apps. Configure your own endpoint and key in Settings; an unconfigured integration makes no requests. [Usage integration setup](docs/integrations.md) explains browser HTTPS/CORS requirements and local credential storage.
+
+## Development and upgrades
+
+The API contract lives in `contracts/dashboard-protocol.v1.json`. App releases use `vVERSION`; server releases use `server-vVERSION`. Each server release includes the matching hook assets. To work on the server, run from the repository root:
 
 ```sh
 npm --prefix server ci
@@ -27,32 +78,10 @@ npm --prefix server test
 npm --prefix server run verify:package
 ```
 
-Follow [the server guide](server/README.md) and [the Worker example](examples/cloudflare-worker/README.md) to deploy your own instance. The package exports `createDashboardApp`, `createDashboardHooksApp`, `runDashboardMaintenance`, and `DashboardEnv`. It contains the SQL migrations and served hook assets.
-
-Use a separate ingest token for agent hooks and client token for the dashboard. Store secrets in your Worker environment. Database migrations are an explicit deployment step; installing the npm package does not apply them.
-
-## Connect the app and hooks
-
-Build the app with [the app guide](app/README.md), then enter your own server origin and client token in its setup screen. The app starts without an embedded server token. [The deployment guide](docs/deployment.md) covers Cloudflare Pages hosting and versioned web/macOS releases.
-
-Download your server's `setup.sh`, inspect it, and run it locally:
-
-```sh
-curl -fsSL https://YOUR_SERVER/setup.sh -o setup.sh
-less setup.sh
-bash setup.sh
-```
-
-Use the ingest token when asked. [The hook guide](hooks/README.md) explains the integration and data handling. Push notifications are optional; server polling works without Firebase credentials.
-
-## Usage integrations
-
-TeamClaude and Devin usage panels are included in the web and macOS apps. Configure your own endpoint and key in Settings; an unconfigured integration makes no requests. [Usage integration setup](docs/integrations.md) explains browser HTTPS/CORS requirements and local credential storage.
-
-## Development and upgrades
-
-The API contract lives in `contracts/dashboard-protocol.v1.json`. The server, app, and hooks are versioned together in this repository. For an embedded server, pin `@5pecia1/agent-dashboard-server` to an exact version once it is published. Before publication, install the exact locally built `.tgz` described in the server guide.
+See [the app guide](app/README.md) for source builds and [the deployment guide](docs/deployment.md) for web hosting and releases.
 
 Review release notes, apply pending SQL migrations, and update the server package before upgrading the hooks served by that server. Back up your database before schema upgrades. Do not run the administrative rebuild endpoint as a package upgrade step.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a change and [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+This is source-available software. Read [LICENSE](LICENSE) for permitted uses and restrictions and [NOTICE](NOTICE) for third-party notices.

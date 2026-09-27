@@ -3,15 +3,21 @@
   "name": "agent-dashboard",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
-  "triggers": { "crons": ["0 * * * *"] },
-  "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:8080",
-    "DASHBOARD_APP_ORIGIN": "http://localhost:8080"
+  "triggers": {
+    "crons": [
+      "0 * * * *"
+    ]
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "agent-dashboard",
-    "database_id": "00000000-0000-4000-8000-000000000001",
-    "migrations_dir": "node_modules/@5pecia1/agent-dashboard-server/migrations"
-  }]
+  "vars": {
+    "ALLOWED_ORIGINS": "https://agent-dashboard.5pecia1.dev,http://localhost:8080",
+    "DASHBOARD_APP_ORIGIN": "https://agent-dashboard.5pecia1.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "agent-dashboard",
+      "database_id": "00000000-0000-4000-8000-000000000001",
+      "migrations_dir": "node_modules/@5pecia1/agent-dashboard-server/migrations"
+    }
+  ]
 }

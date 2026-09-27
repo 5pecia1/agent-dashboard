@@ -1,6 +1,6 @@
 {
   "name": "@5pecia1/agent-dashboard-server",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": false,
   "type": "module",
   "description": "Composable coding-agent dashboard server for Cloudflare Workers and D1.",
@@ -27,7 +27,9 @@
     "test": "npm run generate && vitest run",
     "build": "node scripts/build.mjs",
     "verify:package": "node scripts/verify-package.mjs",
-    "test:upgrade": "node scripts/verify-upgrade.mjs"
+    "test:upgrade": "node scripts/verify-upgrade.mjs",
+    "package:starter": "node scripts/package-starter.mjs",
+    "verify:starter": "node scripts/verify-starter.mjs"
   },
   "peerDependencies": {
     "hono": "4.13.7"

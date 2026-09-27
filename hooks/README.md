@@ -2,9 +2,35 @@
 
 The server package serves `GET /setup.sh` and `GET /hooks/files/:name`. Its build reads the hook source files in this directory, so the installer and event hooks match that server release.
 
-Download and inspect the setup script from your own server before running it. Supply a dedicated ingest token. The setup script installs Claude Code, Codex, and Devin integrations and prints the configuration backup paths. Run `bash setup.sh --dry-run` first to inspect the changes. To select integrations individually from a source checkout, use `bash hooks/install.sh --claude`, `--codex`, or `--devin` after configuring your environment. Codex requires trusting the new hooks through its `/hooks` command.
+## Install from your server
 
-For a source checkout, create the hook environment before registering integrations:
+Requirements: `curl`, `jq`, and `python3`. [Deploy your own server](../docs/quickstart.md#set-up-your-cloudflare-server) first, then replace `https://YOUR_SERVER` with its HTTPS origin:
+
+```sh
+curl -fsSL https://YOUR_SERVER/setup.sh | bash
+```
+
+Supply your dedicated ingest token when the terminal prompts you. The prompt reads from the terminal, not the script's piped input. The setup script installs Claude Code, Codex, and Devin integrations and prints the configuration backup paths. Codex requires trusting the new hooks through its `/hooks` command.
+
+The common installer offers the same server-matched setup:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- hooks --server-url https://YOUR_SERVER
+```
+
+There is no independent `--version` for hooks: upgrade the server, then obtain its setup script again. To inspect the script and preview changes before installing:
+
+```sh
+curl -fsSL https://YOUR_SERVER/setup.sh -o setup.sh
+less setup.sh
+bash setup.sh --dry-run
+bash setup.sh
+```
+
+## Install from source
+
+From a source checkout, create the hook environment before registering integrations. Choose any of `--claude`, `--codex`, or `--devin`:
 
 ```sh
 mkdir -p ~/.config/my-dashboard

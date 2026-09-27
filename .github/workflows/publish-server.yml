@@ -68,14 +68,29 @@ jobs:
         run: |
           PUBLIC_COMMIT="$(git rev-parse HEAD)"
           python3 scripts/release_artifact.py --tarball "release/$TARBALL" --receipt release/test-receipt.json --upgrade-receipt release/upgrade-receipt.json --commit "$PUBLIC_COMMIT" --tag "$RELEASE_TAG" --output release/release-evidence.json
+      - name: Package the standalone server with the same verified archive
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          TARBALL: ${{ steps.archive.outputs.tarball }}
+        run: |
+          npm --prefix server run package:starter -- --tarball "$GITHUB_WORKSPACE/release/$TARBALL" --out "$GITHUB_WORKSPACE/release" --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG"
+      - name: Verify detached starter installation
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          TARBALL: ${{ steps.archive.outputs.tarball }}
+        run: |
+          STARTER="agent-dashboard-server-${RELEASE_TAG#server-v}-starter.tar.gz"
+          npm --prefix server run verify:starter -- --tarball "$GITHUB_WORKSPACE/release/$TARBALL" --starter "$GITHUB_WORKSPACE/release/$STARTER" --receipt "$GITHUB_WORKSPACE/release/starter-test-receipt.json"
       - uses: actions/upload-artifact@v4
         with:
           name: verified-server-package
           if-no-files-found: error
           path: |
             release/*.tgz
+            release/*.tar.gz
             release/*.sha256
             release/release-evidence.json
+            release/starter-test-receipt.json
   github-release:
     needs: verify
     runs-on: ubuntu-latest
@@ -95,17 +110,30 @@ jobs:
         run: |
           cd release
           sha256sum --check ./*.sha256
+          prerelease_args=()
+          if [[ "$RELEASE_TAG" =~ ^server-v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            prerelease_args=(--prerelease)
+          fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             mkdir existing
-            gh release download "$RELEASE_TAG" --pattern "$TARBALL" --dir existing
-            cmp "$TARBALL" "existing/$TARBALL"
+            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > existing-assets.txt
+            for artifact in ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json; do
+              if grep -Fxq "${artifact##*/}" existing-assets.txt; then
+                gh release download "$RELEASE_TAG" --pattern "${artifact##*/}" --dir existing
+                cmp "$artifact" "existing/${artifact##*/}"
+              fi
+            done
+            for artifact in ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json; do
+              if ! grep -Fxq "${artifact##*/}" existing-assets.txt; then
+                gh release upload "$RELEASE_TAG" "$artifact"
+              fi
+            done
           else
-            prerelease_args=()
-            if [[ "$RELEASE_TAG" =~ ^server-v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
-              prerelease_args=(--prerelease)
-            fi
-            gh release create "$RELEASE_TAG" --verify-tag "${prerelease_args[@]}" --title "Server $RELEASE_TAG" --notes 'Verified server archive and SHA256. See release-evidence.json for source and validation details.' ./*.tgz ./*.sha256 release-evidence.json
+            gh release create "$RELEASE_TAG" --verify-tag --draft --latest=false "${prerelease_args[@]}" --title "Server ${RELEASE_TAG#server-}" --notes 'Standalone server starter and reusable server package, each with SHA256 checksums. The starter includes a pinned lockfile and the same verified package. See release-evidence.json and starter-test-receipt.json for validation details.' ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json
           fi
+          # A failed upload leaves a draft; retries add only missing assets and
+          # compare every existing file before making the complete release visible.
+          gh release edit "$RELEASE_TAG" --draft=false --latest=false "${prerelease_args[@]}"
   npm:
     if: inputs.publish_npm
     needs: [verify, github-release]

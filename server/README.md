@@ -2,6 +2,29 @@
 
 Cloudflare Workers와 D1에서 실행하는 에이전트 상태 서버입니다. Hono 앱에 마운트하거나 [단독 Worker 예제](https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker)를 생성할 수 있습니다. API prefix는 `/dashboard`를 사용합니다.
 
+## 릴리스로 설치하기
+
+새 Worker는 Node.js 22 이상과 npm을 설치한 뒤 다음 명령으로 시작합니다. 소스 빌드는 필요하지 않습니다.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
+  | bash -s -- server --prerelease
+cd agent-dashboard-server
+npm ci
+```
+
+현재 서버는 alpha 릴리스만 있으므로 `--prerelease`를 사용합니다. 버전을 지정하려면 `--version 0.1.0-alpha.2`를 사용합니다. 설치기는 SHA256을 확인한 starter를 새 폴더에 풀며 기존 프로젝트를 덮어쓰지 않습니다. 생성된 `README.md`를 따라 Cloudflare 로그인, D1 생성, `INGEST_TOKEN`·`CLIENT_TOKEN` 설정, 배포를 진행합니다. 상세 절차는 [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server)에 있습니다.
+
+기존 Hono Worker에는 검증한 패키지 archive를 정확한 버전으로 설치합니다.
+
+```sh
+npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.2/5pecia1-agent-dashboard-server-0.1.0-alpha.2.tgz
+```
+
+생성된 lockfile을 커밋합니다. [릴리스](https://github.com/5pecia1/agent-dashboard/releases)에는 SHA256과 패키지 설치·업그레이드 검증 결과가 포함됩니다. npm registry 발행은 아직 사용하지 않으며 GitHub Release 파일을 설치합니다.
+
+## 기존 Worker에 연결하기
+
 ```ts
 import { Hono } from 'hono';
 import {
@@ -32,7 +55,9 @@ FCM은 선택 기능입니다. `FCM_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `FI
 
 설치 시 DB를 자동 변경하지 않습니다. 소비 Worker의 Wrangler 설정에서 `migrations_dir`를 `node_modules/@5pecia1/agent-dashboard-server/migrations`로 지정하고, 배포 전에 `npx wrangler d1 migrations apply DB --remote`를 명시적으로 실행합니다. 기존 `0001`~`0005` SQL은 이름과 내용이 동일합니다. 마이그레이션 ledger를 보존하고 전환 중 `/admin/rebuild`를 실행하지 않습니다. 패키지 버전 되돌리기는 DB 되돌리기가 아닙니다.
 
-개발과 검증은 저장소 루트에서 실행합니다.
+## 개발과 검증
+
+다음 명령은 저장소 루트에서 실행합니다.
 
 ```sh
 npm --prefix server ci

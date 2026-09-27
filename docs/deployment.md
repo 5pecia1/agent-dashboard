@@ -2,6 +2,8 @@
 
 Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudflare Pages에 배포합니다. 웹 주소는 [agent-dashboard.5pecia1.dev](https://agent-dashboard.5pecia1.dev)입니다. 브라우저에서 자신의 서버 주소와 클라이언트 토큰을 입력해 연결합니다. 웹 배포는 Worker 서버를 배포하거나 갱신하지 않습니다.
 
+앱을 설치하거나 자신의 서버를 배포하려면 [quickstart](quickstart.md)를 따릅니다. 이 문서는 공개 웹과 릴리스를 관리하는 절차입니다. `install.sh`는 공개 저장소의 GitHub Raw에서 제공하며, 설치 파일과 checksum은 GitHub Releases에서 제공합니다. Pages에는 설치기나 설치용 archive를 복사하지 않으므로 웹 재배포·롤백과 설치기 갱신은 서로 독립적입니다.
+
 ## 처음 한 번: Cloudflare 토큰 연결
 
 현재 저장소에는 Pages 프로젝트, 배포 변수와 토큰이 설정되어 있습니다. 토큰을 교체하거나 새 저장소를 연결할 때 다음 순서로 등록합니다.

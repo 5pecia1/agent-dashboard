@@ -185,7 +185,11 @@ jobs:
           PY
           else
             args=()
-            if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+            if [ "$PRERELEASE" = true ]; then
+              args+=(--prerelease --latest=false)
+            else
+              args+=(--latest=true)
+            fi
             cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
           Web and macOS builds of Agent Dashboard. See `release.json` for the source commit and artifact hashes, and `SHA256SUMS` to verify downloads.
 
