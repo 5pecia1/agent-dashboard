@@ -28,6 +28,16 @@ The installer replaces only the app bundle, keeps a backup of the previous bundl
 
 ## Set up your Cloudflare server
 
+### Deploy in your browser
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker/deploy)
+
+Use Cloudflare and GitHub accounts to create your server without installing local build tools. Cloudflare copies the deployment template into your GitHub account, asks for `INGEST_TOKEN` and `CLIENT_TOKEN`, creates D1, and deploys the Worker. Generate and save two different random tokens in your password manager.
+
+Follow the [browser deployment guide](../examples/cloudflare-worker/deploy/README.md), then continue with [Connect agent hooks](#connect-agent-hooks). Firebase push is optional.
+
+### Deploy from a terminal
+
 1. Install Node.js 22 or newer and npm, and have a Cloudflare account ready. Download the current server starter:
 
    ```sh
@@ -88,7 +98,7 @@ Hook versions come from your server, so `hooks` does not accept `--version`. The
 |---|---|
 | No component, or `app` | Installs the macOS app; defaults to the latest stable app release. |
 | `server` | Creates a server project from the latest stable server starter. |
-| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.1` or `0.1.1` for the app, and `server-v0.1.0-alpha.2` or `0.1.0-alpha.2` for the server. |
+| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.1` or `0.1.1` for the app, and `server-v0.1.0-alpha.3` or `0.1.0-alpha.3` for the server. |
 | `--prerelease` | Includes prereleases when resolving the latest version. Explicit prerelease versions do not need this flag. |
 | `--dir DIR` | Sets the app installation parent or the new server project directory. |
 | `--replace` | Allows replacing an existing app, retaining a backup and its settings. Does not overwrite server projects. |

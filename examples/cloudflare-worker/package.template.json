@@ -2,6 +2,14 @@
   "name": "agent-dashboard-worker",
   "private": true,
   "type": "module",
+  "cloudflare": {
+    "bindings": {
+      "DB": { "description": "Stores your agent sessions and events. A new D1 database is created for this server." },
+      "INGEST_TOKEN": { "description": "Generate and save a random token of at least 32 characters in your password manager. Agent hooks use this token to send events." },
+      "CLIENT_TOKEN": { "description": "Generate and save a different random token of at least 32 characters. Enter this token in the dashboard app to read and manage sessions." },
+      "ALLOWED_ORIGINS": { "description": "Web app origins allowed to connect. The default includes the public Agent Dashboard web app." }
+    }
+  },
   "scripts": {
     "dev": "wrangler dev",
     "check": "tsc --noEmit",

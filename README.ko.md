@@ -28,7 +28,11 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 ## 서버 설정
 
-Node.js 22 이상, npm, Cloudflare 계정이 필요합니다. 이 저장소를 복제하거나 빌드하지 않고도 릴리스된 서버 스타터를 설치할 수 있습니다.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker/deploy)
+
+Cloudflare와 GitHub 계정으로 브라우저에서 서버를 배포할 수 있습니다. 설정 화면에 훅용 `INGEST_TOKEN`과 대시보드용 `CLIENT_TOKEN`을 서로 다른 값으로 입력하면, Cloudflare가 D1을 생성하고 서버를 배포합니다. 완료 후 앱을 연결하고 에이전트를 실행하는 각 머신에 훅을 설치하세요. [브라우저 배포 안내](examples/cloudflare-worker/deploy/README.md)를 참고하세요.
+
+터미널로 설치하려면 Node.js 22 이상, npm, Cloudflare 계정이 필요합니다. 릴리스된 서버 스타터를 다음 명령으로 설치할 수 있습니다.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
@@ -66,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # 특정 사전 릴리스로 서버 프로젝트를 생성합니다.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.2 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.3 --dir ./my-agent-server
 ```
 
 `--dry-run`을 사용하면 설치하지 않고 선택된 릴리스와 설치 경로를 확인할 수 있습니다. 실행 전에 설치기를 살펴보려면 [install.sh](install.sh)를 읽거나, 내려받아 로컬에서 실행하세요. 스크립트는 GitHub Raw에서, 릴리스 압축 파일과 체크섬은 GitHub Releases에서 제공합니다. Pages는 웹 앱만 호스팅합니다.

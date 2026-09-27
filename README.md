@@ -28,7 +28,11 @@ The current app is not Developer ID signed or notarized; macOS may require appro
 
 ## Set up your server
 
-Requirements: Node.js 22 or newer, npm, and a Cloudflare account. Install the released server starter, without cloning or building this repository:
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker/deploy)
+
+Deploy from your browser with Cloudflare and GitHub accounts. The setup form asks for two different tokens: `INGEST_TOKEN` for hooks and `CLIENT_TOKEN` for the dashboard. Cloudflare creates D1 and deploys the server. Then connect the app and install hooks on your agent machines. See the [browser deployment guide](examples/cloudflare-worker/deploy/README.md).
+
+For terminal-based installation, use Node.js 22 or newer, npm, and a Cloudflare account:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
@@ -66,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # Create a server project from an exact prerelease.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.2 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.3 --dir ./my-agent-server
 ```
 
 Use `--dry-run` to see the selected release and destination without installing. To inspect the installer first, [read install.sh](install.sh), or download it and run it locally. The script is served by GitHub Raw; release archives and checksums come from GitHub Releases. Pages hosts the web app only.

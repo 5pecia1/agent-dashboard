@@ -21,6 +21,7 @@ jobs:
       - run: npm --prefix server run verify:package
       - run: npm --prefix server run test:upgrade
       - run: npm --prefix server run verify:starter
+      - run: npm --prefix server run verify:deploy
       - run: python3 scripts/contract_check.py
       - name: Check Pages deployment guards
         run: python3 -m unittest discover -s scripts/tests -p test_pages_deployment.py

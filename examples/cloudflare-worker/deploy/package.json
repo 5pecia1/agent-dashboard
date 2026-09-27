@@ -1,0 +1,40 @@
+{
+  "name": "agent-dashboard-worker",
+  "private": true,
+  "type": "module",
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "Stores your agent sessions and events. A new D1 database is created for this server."
+      },
+      "INGEST_TOKEN": {
+        "description": "Generate and save a random token of at least 32 characters in your password manager. Agent hooks use this token to send events."
+      },
+      "CLIENT_TOKEN": {
+        "description": "Generate and save a different random token of at least 32 characters. Enter this token in the dashboard app to read and manage sessions."
+      },
+      "ALLOWED_ORIGINS": {
+        "description": "Web app origins allowed to connect. The default includes the public Agent Dashboard web app."
+      }
+    }
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run migrate:remote && wrangler deploy"
+  },
+  "dependencies": {
+    "@5pecia1/agent-dashboard-server": "https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.3/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz",
+    "hono": "4.13.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260905.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.129.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

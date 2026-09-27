@@ -65,7 +65,13 @@ class ServerPublicationRetryTests(unittest.TestCase):
                         MOCK_RELEASE_STATE=str(self.state), RELEASE_TAG='server-v0.1.0-alpha.2')
         content = WORKFLOW.read_text()
         section = content.split('      - name: Create release with the verified archive\n', 1)[1]
-        self.script = textwrap.dedent(section.split('        run: |\n', 1)[1].split('\n  npm:', 1)[0])
+        body = section.split('        run: |\n', 1)[1]
+        lines = []
+        for line in body.splitlines():
+            if line.strip() and not line.startswith('          '):
+                break
+            lines.append(line)
+        self.script = textwrap.dedent('\n'.join(lines))
 
     def run_publish(self):
         return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', self.script],

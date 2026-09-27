@@ -1,6 +1,6 @@
 # Standalone Worker starter
 
-Start a new server from a released starter archive. Install Node.js 22 or newer and npm, then run the following commands. The server currently has alpha releases only, so include `--prerelease` explicitly.
+Deploy from your browser with the [Cloudflare button](deploy/README.md), or start a new server from a released starter archive. Install Node.js 22 or newer and npm, then run the following commands. The server currently has alpha releases only, so include `--prerelease` explicitly.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
@@ -9,7 +9,7 @@ cd agent-dashboard-server
 npm ci
 ```
 
-To select an exact version, replace `--prerelease` with `--version 0.1.0-alpha.2`. Follow the generated project's `README.md` or the [deployment instructions](STARTER.md) to sign in to Cloudflare, create D1, configure tokens, and deploy. You do not need to clone the source repository or build the server. The installer does not overwrite an existing server folder.
+To select an exact version, replace `--prerelease` with `--version 0.1.0-alpha.3`. Follow the generated project's `README.md` or the [deployment instructions](STARTER.md) to sign in to Cloudflare, create D1, configure tokens, and deploy. You do not need to clone the source repository or build the server. The installer does not overwrite an existing server folder.
 
 ## Generate a starter from source
 
@@ -20,11 +20,25 @@ npm --prefix server ci
 npm --prefix server run build
 (cd server && npm pack --pack-destination /tmp)
 node server/scripts/create-example.mjs \
-  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.2.tgz \
+  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz \
   --out /tmp/agent-dashboard-worker
 ```
 
 The generator copies the package into the project's `vendor/` directory and references it by a relative path. Moving the generated folder does not leave it dependent on the original tarball path. Generation installs dependencies; if you move the project without `node_modules`, run `npm ci` again.
+
+## Maintain the browser deployment template
+
+`deploy/` is a generated, standalone project for the Cloudflare button. Edit the source templates in this directory and `DEPLOY.md`, then regenerate `deploy/` from the exact server archive prepared for release. The generator requires an empty output directory:
+
+```sh
+node server/scripts/create-example.mjs \
+  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz \
+  --out /tmp/agent-dashboard-deploy --release
+```
+
+Replace the tracked `deploy/` files with that output. This mode writes a fixed GitHub Release dependency URL and lockfile integrity; it does not copy a `.tgz` into Git or install dependencies. Run `npm --prefix server run verify:deploy -- --tarball /path/to/package.tgz` before publication, and `npm --prefix server run verify:deploy -- --published` after publication. The latter installs the real release URL with an empty npm cache. Publish the release before exposing the updated button on public `main`.
+
+## Develop locally
 
 In the generated project, copy `.dev.vars.example` to `.dev.vars` and enter separate ingest and client tokens. Keep this file out of Git.
 

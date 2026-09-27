@@ -4,6 +4,8 @@ This package provides an agent-status server for Cloudflare Workers and D1. Moun
 
 ## Install a release
 
+For browser-based setup, use the [Deploy to Cloudflare button](https://github.com/5pecia1/agent-dashboard/tree/main/examples/cloudflare-worker/deploy). Cloudflare creates D1 and prompts for two separate tokens. You do not need local build tools for server deployment.
+
 For a new Worker, install Node.js 22 or newer and npm, then run the following commands. No source build is required.
 
 ```sh
@@ -13,12 +15,12 @@ cd agent-dashboard-server
 npm ci
 ```
 
-The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.2`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
+The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.3`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
 
 For an existing Hono Worker, install an exact version of the verified package archive:
 
 ```sh
-npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.2/5pecia1-agent-dashboard-server-0.1.0-alpha.2.tgz
+npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.3/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz
 ```
 
 Commit the generated lockfile. [Releases](https://github.com/5pecia1/agent-dashboard/releases) include SHA256 checksums and package installation and upgrade verification results. The package is not yet published to the npm registry; install the GitHub Release archive.
@@ -65,6 +67,8 @@ npm --prefix server run check
 npm --prefix server test
 npm --prefix server run verify:package
 npm --prefix server run test:upgrade
+npm --prefix server run verify:starter
+npm --prefix server run verify:deploy
 ```
 
 `verify:package` installs a temporary tarball into a separate directory and checks types, the Worker bundle, D1, the API, hook delivery, maintenance, and hook integration. The verified archive and logs remain at the printed temporary path. Pass `-- --tarball /path/package.tgz --receipt /path/receipt.json` to verify that archive without rebuilding it. `test:upgrade` accepts the same `--tarball` and `--receipt` options to verify the exact release archive. It restores a synthetic database fixture created through HTTP requests to the previous Worker and checks the migration ledger, cursors, read tracking, and correlation data. Fixture expectations are not regenerated from the current implementation.
