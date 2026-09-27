@@ -202,7 +202,7 @@ describe("전이는 상태가 실제로 바뀔 때만 쌓인다", () => {
 
     const first = await postEvent(payload({ session_id: "restop", event: "Stop" }));
     expect(first.json.state).toBe("done");
-    // done은 push_states.enum에 없다(2026-09-14 Sol 확정) - 전이 자체는 쌓이지만 발송은 없다.
+    // done은 push_states.enum에 없다 - 전이 자체는 쌓이지만 발송은 없다.
     expect(first.json.push).toBe("none");
     const transitionId = first.json.transition_id!;
     expect(transitionId).toBeGreaterThan(0);
@@ -220,7 +220,7 @@ describe("전이는 상태가 실제로 바뀔 때만 쌓인다", () => {
     expect(await eventsOf(key)).toBe(4); // 이벤트 로그에는 네 줄 다 남는다
   });
 
-  // 회귀 방지(2026-09-14, Sol 확정): done은 계약상 "턴 실행을 마쳤다"일 뿐인데,
+  // 회귀 방지: done은 계약상 "턴 실행을 마쳤다"일 뿐인데,
   // 백그라운드 서브에이전트가 계속 일하면 heartbeat.ts의 조건부 승격이 곧바로
   // working으로 되돌려 "끝났다" 알림 직후 "진행 중"이 이어지는 소음이 있었다.
   // push_states.enum에서 done을 뺀 결정이 되돌아가지 않는지 명시적으로 확인한다.

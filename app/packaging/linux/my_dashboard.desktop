@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=My Dashboard
-Comment=Sol Platform device app template
+Comment=Coding agent activity dashboard
 Exec=my_dashboard %u
 Icon=my_dashboard
 Categories=Utility;

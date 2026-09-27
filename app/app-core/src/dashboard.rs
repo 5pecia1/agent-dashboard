@@ -3,7 +3,7 @@
 //! 이 모듈은 그 계약을 Rust 도메인 타입으로 옮긴 것일 뿐 새 규칙을 만들지
 //! 않는다: [`SessionState`]의 코드 문자열, [`label_key`]의 i18n 키,
 //! [`EVENT_STATE_MAP`]의 (source, event) → state 매핑, [`SessionState::is_push_state`]의
-//! push 대상 상태 2종(`done`은 2026-09-14 Sol 확정으로 제외)이 모두 계약 파일 값과
+//! push 대상 상태 2종(`done`은 턴 종료와 백그라운드 작업을 구분하기 위해 제외)이 모두 계약 파일 값과
 //! 바이트 단위로 같아야 하고,
 //! 아래 `tests` 모듈이 계약 파일을 직접 읽어 대조한다 — 둘이 갈라지면
 //! `cargo test --workspace`가 실패해 드리프트를 잡는다.
@@ -71,7 +71,7 @@ impl SessionState {
     /// 화면 목록 정렬([`compare_session_order`])도 같은 집합을 "먼저 보여줄
     /// 상태"로 재사용한다 — 사람이 반응해야 하는 상태라는 뜻이 같기 때문이다.
     ///
-    /// `Done`은 없다(2026-09-14, Sol 확정) — done은 "턴 실행을 마쳤다"일
+    /// `Done`은 없다 — done은 "턴 실행을 마쳤다"일
     /// 뿐인데, 백그라운드 서브에이전트가 계속 일하면 조건부 승격이 곧바로
     /// working으로 되돌려 "끝났다" 알림 직후 "진행 중"이 이어지는 소음을
     /// 만들었다. 자세한 사유는 계약 `push_states.$note_done_excluded` 참고.
@@ -424,7 +424,7 @@ mod tests {
         sort_sessions(&mut sessions);
         let ordered: Vec<SessionState> = sessions.iter().map(|s| s.state).collect();
         // alert(WaitingInput/Stalled) 그룹이 먼저, updated_at 내림차순. `Done`은
-        // 2026-09-14(Sol 확정)부터 alert이 아니다 — 조건부 승격이 곧 working으로
+        // 계약상 alert이 아니다 — 조건부 승격이 곧 working으로
         // 되돌리는 done을 push/정렬 우선순위로 올리면 오히려 소음이었다. 대신
         // 2순위 규칙(updated_at 내림차순)이 방금 끝난 세션을 여전히 위쪽에 둔다.
         // WaitingInput과 Stalled는 둘 다 50이라 동률 — 안정 정렬이 입력에서의

@@ -4,7 +4,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
   <name>My Dashboard</name>
-  <summary>Sol Platform device app template</summary>
+  <summary>Coding agent activity dashboard</summary>
   <description>
     <p>My Dashboard is the sol-platform device-app template: a Flutter UI over a Rust core (flutter_rust_bridge), packaged for desktop and web from one source tree.</p>
   </description>

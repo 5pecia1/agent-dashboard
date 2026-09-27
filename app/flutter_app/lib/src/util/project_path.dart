@@ -15,7 +15,7 @@
 library;
 
 /// `SessionViewDto.project`/`TransitionDto.project`(보통 절대경로)에서
-/// 마지막 경로 세그먼트만 뽑는다 — Sol 요구사항: 카드 제목과 알림 제목은
+/// 마지막 경로 세그먼트만 뽑는다 — 표시 규칙: 카드 제목과 알림 제목은
 /// "현 디렉토리 이름"만 보이고, 전체 경로는 [Tooltip]과
 /// `session_detail_page.dart`에서 본다. POSIX(`/`)와 Windows(`\`) 구분자 둘
 /// 다 인식하고, 끝에 남는 구분자는 건너뛴다. 세그먼트가 하나도 안 남으면

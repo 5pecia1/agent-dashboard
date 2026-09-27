@@ -182,7 +182,7 @@ mod tests {
         ];
         let sorted = sort_session_order(input);
         let states: Vec<SessionStateDto> = sorted.iter().map(|s| s.state).collect();
-        // `Done`은 2026-09-14(Sol 확정)부터 alert이 아니다 - 둘 다 non-alert라
+        // `Done`은 계약상 alert이 아니다 - 둘 다 non-alert라
         // updated_at 내림차순만 남고, Idle(100)이 Done(50)보다 앞선다.
         assert_eq!(states, vec![SessionStateDto::Idle, SessionStateDto::Done]);
     }
