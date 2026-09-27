@@ -1,0 +1,18 @@
+name: Check Pages deployment access
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == '5pecia1/agent-dashboard' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: cloudflare-pages
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Pages access without exposing the token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+        run: python3 scripts/check_cloudflare_pages.py
