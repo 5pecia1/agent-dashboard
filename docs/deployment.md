@@ -24,7 +24,7 @@ GitHub의 비밀값 `CLOUDFLARE_API_TOKEN`과 위 변수 세 개를 함께 사�
 ## 버전을 올려 배포하기
 
 1. `app/Cargo.toml`의 workspace 버전과 `app/flutter_app/pubspec.yaml`의 `version`, 숫자 형식의 `msix_version`을 함께 올립니다. 변경된 lockfile도 커밋하고 검토를 거쳐 `main`에 병합합니다.
-2. 해당 공개 커밋에 앱 버전 태그를 붙입니다. 앱 버전이 `0.1.1`이라면 다음과 같이 실행합니다.
+2. **공개 `agent-dashboard` checkout에서만** 해당 커밋에 앱 버전 태그를 붙입니다. 개발 정본에서 변경했다면 먼저 Copybara로 공개 저장소에 반영합니다. 비공개 `my-dashboard`에 앱 태그를 push하지 않습니다. 앱 버전이 `0.1.1`이라면 다음과 같이 실행합니다.
 
    ```sh
    git switch main

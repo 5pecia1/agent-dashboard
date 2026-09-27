@@ -25,6 +25,7 @@ Run with: uv run --with playwright python app/scripts/web_push_smoke.py URL
  --browser /path/to/chrome --output /tmp/web-push-evidence
 """
 import argparse
+import traceback
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -167,107 +168,132 @@ def main():
     origin = args.url.rstrip('/') + '/'
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(executable_path=args.browser, headless=True)
+        # Use the full browser's new headless mode. Playwright's default headless
+        # shell is a different runtime and disables Notification permissions.
+        browser_options = {'executable_path': args.browser} if args.browser else {'channel': 'chromium'}
+        browser = playwright.chromium.launch(**browser_options, headless=True)
         context = browser.new_context(viewport={'width': 900, 'height': 700})
         page = context.new_page()
-        errors, warnings = [], []
+        errors, warnings, console, failed_requests = [], [], [], []
         page.on('pageerror', lambda error: errors.append(str(error)))
+        page.on('console', lambda message: console.append({'type': message.type, 'text': message.text}))
         page.on('console', lambda message: warnings.append(message.text) if CONTROL_WARNING in message.text else None)
+        page.on('requestfailed', lambda request: failed_requests.append({
+            'url': request.url, 'failure': request.failure,
+        }))
 
-        page.goto(args.url)
-        controller = boot(page, args.greeting)
-        assert scopes(page) == [origin], f'expected only the app shell registration before the probe: {scopes(page)}'
+        try:
+            page.goto(args.url)
+            controller = boot(page, args.greeting)
+            assert scopes(page) == [origin], f'expected only the app shell registration before the probe: {scopes(page)}'
 
-        # The app registers this from lib/src/platform/web_push_web.dart once the
-        # server hands it credentials. With no server configured we register it
-        # here the same way, so the coexistence claim is testable with zero
-        # credentials.
-        page.evaluate(
-            'async ({url, scope}) => { const r = await navigator.serviceWorker.register(url, {scope}); await navigator.serviceWorker.ready; return r.scope; }',
-            {'url': PUSH_SW_URL, 'scope': PUSH_SW_SCOPE},
-        )
-        page.wait_for_function(
-            'async () => (await navigator.serviceWorker.getRegistrations()).length === 2',
-        )
-        registered = scopes(page)
-        assert registered == [origin, origin + PUSH_SW_SCOPE], f'unexpected registrations: {registered}'
-        assert page.evaluate('() => navigator.serviceWorker.controller?.scriptURL ?? null') == controller, (
-            'the push worker took the page over; it must never control a document'
-        )
-        page.screenshot(path=str(args.output / 'online.png'))
+            # The app registers this from lib/src/platform/web_push_web.dart once the
+            # server hands it credentials. With no server configured we register it
+            # here the same way, so the coexistence claim is testable with zero
+            # credentials.
+            page.evaluate(
+                'async ({url, scope}) => { const r = await navigator.serviceWorker.register(url, {scope}); await navigator.serviceWorker.ready; return r.scope; }',
+                {'url': PUSH_SW_URL, 'scope': PUSH_SW_SCOPE},
+            )
+            page.wait_for_function(
+                'async () => (await navigator.serviceWorker.getRegistrations()).length === 2',
+            )
+            registered = scopes(page)
+            assert registered == [origin, origin + PUSH_SW_SCOPE], f'unexpected registrations: {registered}'
+            assert page.evaluate('() => navigator.serviceWorker.controller?.scriptURL ?? null') == controller, (
+                'the push worker took the page over; it must never control a document'
+            )
+            page.screenshot(path=str(args.output / 'online.png'))
 
-        source = page.evaluate('async (url) => (await fetch(url)).text()', PUSH_SW_URL)
-        # The file's own comments name both bans, so compare against code only.
-        code = '\n'.join(line for line in source.splitlines() if not line.lstrip().startswith('//'))
-        assert 'importScripts' not in code, 'push_sw.js must stay a pure worker'
-        assert "'fetch'" not in code, 'push_sw.js must never intercept fetches'
-        assert 'caches' not in code, 'push_sw.js must hold no caching logic'
-        with_window = page.evaluate(HARNESS, {'source': source, 'envelope': ENVELOPE, 'windowCount': 1})
-        without_window = page.evaluate(HARNESS, {'source': source, 'envelope': ENVELOPE, 'windowCount': 0})
+            source = page.evaluate('async (url) => (await fetch(url)).text()', PUSH_SW_URL)
+            # The file's own comments name both bans, so compare against code only.
+            code = '\n'.join(line for line in source.splitlines() if not line.lstrip().startswith('//'))
+            assert 'importScripts' not in code, 'push_sw.js must stay a pure worker'
+            assert "'fetch'" not in code, 'push_sw.js must never intercept fetches'
+            assert 'caches' not in code, 'push_sw.js must hold no caching logic'
+            with_window = page.evaluate(HARNESS, {'source': source, 'envelope': ENVELOPE, 'windowCount': 1})
+            without_window = page.evaluate(HARNESS, {'source': source, 'envelope': ENVELOPE, 'windowCount': 0})
 
-        shown = [call for call in with_window['calls'] if call['kind'] == 'showNotification']
-        assert len(shown) == 2, f'one push must show exactly one notification: {len(shown)} for 2 pushes'
-        title, options = shown[0]['title'], shown[0]['options']
-        assert title == ENVELOPE['data']['title'], title
-        assert options['body'] == ENVELOPE['data']['body'], options
-        assert options['tag'] == ENVELOPE['data']['session_key'], options
-        assert options['renotify'] is True, options
-        assert options['data'] == {
-            'link': ENVELOPE['data']['link'],
-            'transition_id': ENVELOPE['data']['transition_id'],
-            'session_key': ENVELOPE['data']['session_key'],
-        }, options
-        assert shown[1]['options']['tag'] == options['tag'], 'the second push must replace the first by tag'
+            shown = [call for call in with_window['calls'] if call['kind'] == 'showNotification']
+            assert len(shown) == 2, f'one push must show exactly one notification: {len(shown)} for 2 pushes'
+            title, options = shown[0]['title'], shown[0]['options']
+            assert title == ENVELOPE['data']['title'], title
+            assert options['body'] == ENVELOPE['data']['body'], options
+            assert options['tag'] == ENVELOPE['data']['session_key'], options
+            assert options['renotify'] is True, options
+            assert options['data'] == {
+                'link': ENVELOPE['data']['link'],
+                'transition_id': ENVELOPE['data']['transition_id'],
+                'session_key': ENVELOPE['data']['session_key'],
+            }, options
+            assert shown[1]['options']['tag'] == options['tag'], 'the second push must replace the first by tag'
 
-        posted = [call for call in with_window['calls'] if call['kind'] == 'postMessage']
-        assert len(posted) == 1 and posted[0]['message']['refresh'] is True, posted
-        assert posted[0]['message']['link'] == ENVELOPE['data']['link'], posted
-        assert any(call['kind'] == 'channel' and call['name'] == 'dashboard' for call in with_window['calls'])
-        assert any(call['kind'] == 'focus' for call in with_window['calls']), 'an open window must be focused'
-        assert not any(call['kind'] == 'openWindow' for call in with_window['calls']), 'do not open a second window'
+            posted = [call for call in with_window['calls'] if call['kind'] == 'postMessage']
+            assert len(posted) == 1 and posted[0]['message']['refresh'] is True, posted
+            assert posted[0]['message']['link'] == ENVELOPE['data']['link'], posted
+            assert any(call['kind'] == 'channel' and call['name'] == 'dashboard' for call in with_window['calls'])
+            assert any(call['kind'] == 'focus' for call in with_window['calls']), 'an open window must be focused'
+            assert not any(call['kind'] == 'openWindow' for call in with_window['calls']), 'do not open a second window'
 
-        opened = [call for call in without_window['calls'] if call['kind'] == 'openWindow']
-        assert len(opened) == 1 and opened[0]['url'] == ENVELOPE['data']['link'], opened
-        assert not any(call['kind'] == 'postMessage' for call in without_window['calls']), 'nobody to talk to'
+            opened = [call for call in without_window['calls'] if call['kind'] == 'openWindow']
+            assert len(opened) == 1 and opened[0]['url'] == ENVELOPE['data']['link'], opened
+            assert not any(call['kind'] == 'postMessage' for call in without_window['calls']), 'nobody to talk to'
 
-        # The SDK is vendored under web/vendor/. If the one rewritten import
-        # specifier were wrong, or COEP blocked the module, this is where it
-        # shows: the module would not load, or isSupported() would be false.
-        bridge = page.evaluate(BRIDGE_PROBE, {'module': PUSH_BRIDGE_URL, 'scope': PUSH_SW_SCOPE})
-        assert bridge['loaded'], 'push_token_bridge.js did not load as a module'
-        assert bridge['permission'] == 'default', f'this probe assumes a fresh profile: {bridge}'
-        assert bridge['half_configured']['status'] == 'unsupported', bridge['half_configured']
-        assert bridge['configured']['status'] == 'permission-required', (
-            f'getToken() must not be reached without permission: {bridge["configured"]}'
-        )
+            # The SDK is vendored under web/vendor/. If the one rewritten import
+            # specifier were wrong, or COEP blocked the module, this is where it
+            # shows: the module would not load, or isSupported() would be false.
+            bridge = page.evaluate(BRIDGE_PROBE, {'module': PUSH_BRIDGE_URL, 'scope': PUSH_SW_SCOPE})
+            assert bridge['loaded'], 'push_token_bridge.js did not load as a module'
+            assert bridge['permission'] == 'default', f'this probe assumes a fresh profile: {bridge}'
+            assert bridge['half_configured']['status'] == 'unsupported', bridge['half_configured']
+            assert bridge['configured']['status'] == 'permission-required', (
+                f'getToken() must not be reached without permission: {bridge["configured"]}'
+            )
 
-        # The offline contract has to survive the second registration.
-        context.set_offline(True)
-        page.reload()
-        boot(page, args.greeting)
-        assert scopes(page) == registered, f'registrations changed offline: {scopes(page)}'
-        page.screenshot(path=str(args.output / 'offline.png'))
-        context.set_offline(False)
+            # The offline contract has to survive the second registration.
+            context.set_offline(True)
+            page.reload()
+            boot(page, args.greeting)
+            assert scopes(page) == registered, f'registrations changed offline: {scopes(page)}'
+            page.screenshot(path=str(args.output / 'offline.png'))
+            context.set_offline(False)
 
-        assert not errors, errors
-        assert not warnings, warnings
-        result = {
-            'url': args.url,
-            'controller': controller,
-            'registrations': registered,
-            'push_sw_pure': True,
-            'notifications_per_push': 1,
-            'click_with_window': 'focus+broadcast',
-            'click_without_window': 'openWindow',
-            'offline_reload': True,
-            'firebase_sdk_same_origin': True,
-            'permission_gate': bridge['configured']['status'],
-            'page_errors': errors,
-            'control_warnings': warnings,
-        }
-        (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        print(json.dumps(result))
-        browser.close()
+            assert not errors, errors
+            assert not warnings, warnings
+            result = {
+                'url': args.url,
+                'controller': controller,
+                'registrations': registered,
+                'push_sw_pure': True,
+                'notifications_per_push': 1,
+                'click_with_window': 'focus+broadcast',
+                'click_without_window': 'openWindow',
+                'offline_reload': True,
+                'firebase_sdk_same_origin': True,
+                'permission_gate': bridge['configured']['status'],
+                'page_errors': errors,
+                'control_warnings': warnings,
+            }
+            (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+            print(json.dumps(result))
+        except Exception:
+            (args.output / 'failure.txt').write_text(traceback.format_exc())
+            # Keep the original failure even if a crashed page cannot be captured.
+            try:
+                page.screenshot(path=str(args.output / 'failure.png'), timeout=5000)
+                (args.output / 'failure.html').write_text(page.content())
+            except Exception as capture_error:
+                (args.output / 'capture-error.txt').write_text(str(capture_error) + '\n')
+            raise
+        finally:
+            (args.output / 'browser.json').write_text(json.dumps({
+                'version': browser.version,
+                'page_errors': errors,
+                'control_warnings': warnings,
+                'console': console,
+                'failed_requests': failed_requests,
+            }, indent=2) + '\n')
+            browser.close()
 
 
 if __name__ == '__main__':
