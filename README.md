@@ -1,5 +1,7 @@
 # Agent Dashboard
 
+[Open the web app](https://agent-dashboard-qgd.pages.dev) · [Download the app](https://github.com/5pecia1/agent-dashboard/releases/latest)
+
 Agent Dashboard collects coding-agent activity so you can see which sessions need your attention. It includes a web/macOS dashboard, agent hooks, and a Cloudflare Workers + D1 server that can also be embedded in another Worker.
 
 This is source-available software. Read [LICENSE](LICENSE) for the permitted uses and restrictions and [NOTICE](NOTICE) for third-party notices. The first alpha server package is available from [GitHub Releases](https://github.com/5pecia1/agent-dashboard/releases). The npm registry workflow is prepared; until its trusted-publisher connection is configured, install the fixed Release archive directly with npm.

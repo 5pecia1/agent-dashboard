@@ -8,7 +8,7 @@ Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudfl
 
 1. [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)에서 **Create Token → Create Custom Token**을 선택합니다. 권한은 **Account / Cloudflare Pages / Edit**, Account Resources는 배포할 계정 하나로 제한합니다.
 2. 생성된 토큰을 복사한 뒤 [GitHub의 cloudflare-pages 환경](https://github.com/5pecia1/agent-dashboard/settings/environments/22852585188/edit)을 엽니다. **Add environment secret**으로 이름을 `CLOUDFLARE_API_TOKEN`으로 지정하고 토큰을 붙여 넣습니다. 토큰을 소스 코드나 이슈에 남기지 않습니다.
-3. 아래 절차로 버전을 올리고 태그를 push합니다. 이미 태그의 배포가 실패했다면 같은 태그로 워크플로를 다시 실행합니다.
+3. 아래 절차로 버전을 올리고 태그를 push합니다. 이미 태그의 배포가 실패했다면 Actions의 해당 실행에서 **Re-run failed jobs**를 선택해 실패한 배포 작업만 다시 실행합니다.
 4. [GitHub Actions](https://github.com/5pecia1/agent-dashboard/actions/workflows/release-product.yml)에서 **Release Agent Dashboard**의 마지막 `deploy` 작업까지 성공했는지 확인합니다.
 
 다른 계정이나 프로젝트로 옮길 때는 같은 GitHub 환경에서 다음 변수도 수정합니다. Pages 프로젝트의 production branch는 `main`으로 설정합니다. 환경에 배포 참조 제한을 적용했다면 `v*` 태그를 허용해야 합니다.
