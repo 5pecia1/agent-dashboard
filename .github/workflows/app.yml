@@ -21,6 +21,8 @@ jobs:
       - run: mise run tools:rust
       - run: mise run tools:licenses
       - run: xcodebuild -version
+      - name: Register CocoaPods CDN
+        run: pod repo add-cdn trunk https://cdn.cocoapods.org/
       - run: mise run deps
       - run: mise run build
       - run: mise run check
