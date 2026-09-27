@@ -1,0 +1,94 @@
+name: Deploy published Agent Dashboard
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing app release to deploy (no rebuild)
+        type: string
+        required: true
+        default: v0.1.1
+      allow_rollback:
+        description: Explicitly allow an older stable version
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == '5pecia1/agent-dashboard' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: cloudflare-pages
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      ALLOW_ROLLBACK: ${{ inputs.allow_rollback }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      CLOUDFLARE_PAGES_URL: ${{ vars.CLOUDFLARE_PAGES_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the immutable release source
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?', tag):
+              raise SystemExit('Expected an app release tag such as v0.1.1')
+          commit = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
+          subprocess.run(['git', 'merge-base', '--is-ancestor', commit, 'origin/main'], check=True)
+          branch = 'release-' + tag.replace('.', '-') if '-' in tag else 'main'
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'SOURCE_COMMIT={commit}\nPAGES_BRANCH={branch}\n')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm --prefix server ci
+      - name: Download the existing release without rebuilding it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir published
+          gh release download "$RELEASE_TAG" --pattern '*-web.tar.gz' --pattern SHA256SUMS --pattern release.json --dir published
+          (cd published && sha256sum --check --ignore-missing SHA256SUMS)
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          release = json.load(open('published/release.json'))
+          if release['tag'] != os.environ['RELEASE_TAG'] or release['source_commit'] != os.environ['SOURCE_COMMIT']:
+              raise SystemExit('Published release metadata differs from the tag source')
+          files = [item for item in release['artifacts'] if item['platform'] == 'web']
+          if len(files) != 1 or pathlib.Path(files[0]['file']).name != files[0]['file']:
+              raise SystemExit('Expected exactly one safe web archive filename')
+          subprocess.run(['python3', 'app/scripts/release_product.py', 'verify-web',
+                          '--archive', 'published/' + files[0]['file'], '--sha256', files[0]['sha256'],
+                          '--tag', release['tag'], '--commit', release['source_commit'],
+                          '--output', os.environ['RUNNER_TEMP'] + '/pages-web'], check=True)
+          PY
+      - name: Verify Pages access and production version
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 scripts/pages_deployment.py check
+      - name: Deploy the verified release archive
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, sys
+          sys.path.insert(0, 'scripts')
+          from pages_deployment import normalized_token
+          env = dict(os.environ, CLOUDFLARE_API_TOKEN=normalized_token(os.environ['CLOUDFLARE_API_TOKEN']))
+          subprocess.run(['server/node_modules/.bin/wrangler', 'pages', 'deploy',
+                          os.environ['RUNNER_TEMP'] + '/pages-web', '--project-name', os.environ['CLOUDFLARE_PAGES_PROJECT'],
+                          '--branch', os.environ['PAGES_BRANCH'], '--commit-hash', os.environ['SOURCE_COMMIT'],
+                          '--commit-message', 'Agent Dashboard ' + os.environ['RELEASE_TAG']], env=env, check=True)
+          PY
+      - name: Confirm the deployed production manifest
+        if: env.PAGES_BRANCH == 'main'
+        run: python3 scripts/pages_deployment.py confirm

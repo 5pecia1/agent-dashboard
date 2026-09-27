@@ -242,77 +242,32 @@ jobs:
           archive="published/agent-dashboard-$RELEASE_TAG-web.tar.gz"
           digest="$(sha256sum "$archive" | cut -d ' ' -f 1)"
           python3 app/scripts/release_product.py verify-web --archive "$archive" --sha256 "$digest" --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/pages-web"
-      - name: Prevent an older release from replacing production
-        if: needs.source.outputs.prerelease == 'false'
+      - name: Verify Pages access and production version
         env:
           RELEASE_TAG: ${{ needs.source.outputs.tag }}
           ALLOW_ROLLBACK: ${{ inputs.allow_rollback || false }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          python3 - <<'PY'
-          import json, os, re, time, urllib.parse, urllib.request
-          account = urllib.parse.quote(os.environ['CLOUDFLARE_ACCOUNT_ID'], safe='')
-          project = urllib.parse.quote(os.environ['CLOUDFLARE_PAGES_PROJECT'], safe='')
-          endpoint = f'https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects/{project}/deployments'
-          deployed = False
-          for page in range(1, 51):
-              request = urllib.request.Request(endpoint + f'?env=production&per_page=100&page={page}', headers={'Authorization': 'Bearer ' + os.environ['CLOUDFLARE_API_TOKEN']})
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  data = json.load(response)
-              if data.get('success') is not True or not isinstance(data.get('result'), list):
-                  raise SystemExit('Cannot verify Cloudflare production deployment history')
-              if any(item.get('environment') == 'production' and item.get('latest_stage', {}).get('status') == 'success' for item in data['result']):
-                  deployed = True
-                  break
-              if not data['result']:
-                  break
-              pages = data.get('result_info', {}).get('total_pages')
-              if pages is not None and page >= pages:
-                  break
-          else:
-              raise SystemExit('Production history exceeded the lookup limit; inspect the project before deploying')
-          if not deployed:
-              raise SystemExit(0)
-          origin = os.environ['CLOUDFLARE_PAGES_URL'].rstrip('/')
-          with urllib.request.urlopen(origin + '/release-manifest.json?check=' + str(time.time_ns()), timeout=30) as response:
-              manifest = json.load(response)
-          current = manifest.get('tag', '')
-          if (manifest.get('schema') != 1 or manifest.get('product') != 'Agent Dashboard' or
-                  manifest.get('platform') != 'web' or not re.fullmatch(r'v\d+\.\d+\.\d+', current) or
-                  manifest.get('version') != current[1:] or not re.fullmatch(r'[0-9a-f]{40}', manifest.get('source_commit', ''))):
-              raise SystemExit('Production metadata is invalid; inspect the existing deployment before replacing it')
-          number = lambda tag: tuple(map(int, tag[1:].split('.')))
-          if number(current) > number(os.environ['RELEASE_TAG']) and os.environ['ALLOW_ROLLBACK'] != 'true':
-              raise SystemExit(f'Production is already {current}; an older release needs an explicit allow_rollback dispatch')
-          PY
+        run: python3 scripts/pages_deployment.py check
       - name: Deploy the published artifact to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RELEASE_TAG: ${{ needs.source.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
           PAGES_BRANCH: ${{ needs.source.outputs.pages_branch }}
-        run: server/node_modules/.bin/wrangler pages deploy "$RUNNER_TEMP/pages-web" --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$PAGES_BRANCH" --commit-hash "$SOURCE_COMMIT" --commit-message "Agent Dashboard $RELEASE_TAG"
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, sys
+          sys.path.insert(0, 'scripts')
+          from pages_deployment import normalized_token
+          env = dict(os.environ, CLOUDFLARE_API_TOKEN=normalized_token(os.environ['CLOUDFLARE_API_TOKEN']))
+          subprocess.run(['server/node_modules/.bin/wrangler', 'pages', 'deploy',
+                          os.environ['RUNNER_TEMP'] + '/pages-web', '--project-name', os.environ['CLOUDFLARE_PAGES_PROJECT'],
+                          '--branch', os.environ['PAGES_BRANCH'], '--commit-hash', os.environ['SOURCE_COMMIT'],
+                          '--commit-message', 'Agent Dashboard ' + os.environ['RELEASE_TAG']], env=env, check=True)
+          PY
       - name: Confirm production serves this release
         if: needs.source.outputs.prerelease == 'false'
         env:
           RELEASE_TAG: ${{ needs.source.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
-        run: |
-          python3 - <<'PY'
-          import json, os, time, urllib.request
-          origin = os.environ['CLOUDFLARE_PAGES_URL'].rstrip('/')
-          for attempt in range(24):
-              try:
-                  url = origin + '/release-manifest.json?commit=' + os.environ['SOURCE_COMMIT']
-                  with urllib.request.urlopen(url, timeout=20) as response:
-                      data = json.load(response)
-                  if data['tag'] == os.environ['RELEASE_TAG'] and data['source_commit'] == os.environ['SOURCE_COMMIT']:
-                      with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-                          summary.write(f"Deployed [{data['tag']}]({origin}) from `{data['source_commit']}`.\n")
-                      break
-              except (OSError, ValueError, KeyError):
-                  pass
-              time.sleep(5)
-          else:
-              raise SystemExit('Production did not serve the expected release manifest; inspect the Pages deployment')
-          PY
+        run: python3 scripts/pages_deployment.py confirm

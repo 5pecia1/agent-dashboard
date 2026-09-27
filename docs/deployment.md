@@ -8,10 +8,10 @@ Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudfl
 
 1. [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)에서 **Create Token → Create Custom Token**을 선택합니다. 권한은 **Account / Cloudflare Pages / Edit**, Account Resources는 배포할 계정 하나로 제한합니다.
 2. 생성된 토큰을 복사한 뒤 [GitHub의 cloudflare-pages 환경](https://github.com/5pecia1/agent-dashboard/settings/environments/22852585188/edit)을 엽니다. **Add environment secret**으로 이름을 `CLOUDFLARE_API_TOKEN`으로 지정하고 토큰을 붙여 넣습니다. 토큰을 소스 코드나 이슈에 남기지 않습니다.
-3. 아래 절차로 버전을 올리고 태그를 push합니다. 이미 태그의 배포가 실패했다면 Actions의 해당 실행에서 **Re-run failed jobs**를 선택해 실패한 배포 작업만 다시 실행합니다.
-4. [GitHub Actions](https://github.com/5pecia1/agent-dashboard/actions/workflows/release-product.yml)에서 **Release Agent Dashboard**의 마지막 `deploy` 작업까지 성공했는지 확인합니다.
+3. 기존 릴리스를 배포하려면 아래의 **기존 릴리스 다시 배포하기**를 따릅니다. 새 버전을 배포하려면 버전을 올리고 태그를 push합니다.
+4. 해당 Actions 실행의 마지막 `deploy` 작업까지 성공했는지 확인합니다.
 
-다른 계정이나 프로젝트로 옮길 때는 같은 GitHub 환경에서 다음 변수도 수정합니다. Pages 프로젝트의 production branch는 `main`으로 설정합니다. 환경에 배포 참조 제한을 적용했다면 `v*` 태그를 허용해야 합니다.
+다른 계정이나 프로젝트로 옮길 때는 같은 GitHub 환경에서 다음 변수도 수정합니다. Pages 프로젝트의 production branch는 `main`으로 설정합니다. 환경에 배포 참조 제한을 적용했다면 `main` 브랜치와 `v*` 태그를 허용해야 합니다.
 
 | 변수 | 값 |
 |---|---|
@@ -41,13 +41,19 @@ GitHub의 비밀값 `CLOUDFLARE_API_TOKEN`과 위 변수 세 개를 함께 사�
 
 릴리스의 `SHA256SUMS`와 `release.json`에는 아카이브 해시와 소스 커밋이 기록됩니다. 웹의 `/release-manifest.json`에서도 배포된 태그와 커밋을 확인할 수 있으며, 운영 배포 작업이 이 값까지 확인해야 성공합니다. 현재 macOS 릴리스에는 Developer ID 서명과 공증을 제공하지 않으므로 Gatekeeper가 실행을 막을 수 있습니다. 실제 서명 상태는 릴리스 메타데이터에 기록됩니다.
 
-실패한 배포의 설정을 고친 뒤에는 같은 기존 태그로 다시 실행합니다.
+## 기존 릴리스 다시 배포하기
+
+1. [Deploy published Agent Dashboard](https://github.com/5pecia1/agent-dashboard/actions/workflows/deploy-web.yml)를 엽니다.
+2. **Run workflow**에서 브랜치를 `main`, `tag`를 배포할 기존 버전(예: `v0.1.1`)으로 지정하고 실행합니다. `allow_rollback`은 의도적으로 이전 버전으로 되돌릴 때만 켭니다.
+3. `deploy` 작업과 마지막 **Confirm the deployed production manifest** 단계의 성공을 확인합니다. 사전 버전은 미리보기로 배포되므로 운영 확인 단계가 생략됩니다.
+
+CLI로도 같은 작업을 실행할 수 있습니다.
 
 ```sh
-gh workflow run release-product.yml --repo 5pecia1/agent-dashboard --ref v0.1.1 -f tag=v0.1.1
+gh workflow run deploy-web.yml --repo 5pecia1/agent-dashboard --ref main -f tag=v0.1.1
 ```
 
-재실행은 기존 릴리스의 해시와 소스를 확인한 뒤 그 산출물을 재사용합니다. 게시된 빌드를 바꾸려면 새 버전을 만듭니다. 이미 운영 중인 버전보다 낮은 버전은 자동 배포되지 않습니다. 의도적으로 되돌릴 때만 위 명령에 `-f allow_rollback=true`를 추가합니다.
+이 workflow는 `main`의 최신 배포 코드를 사용하며 기존 릴리스의 해시와 소스를 확인한 뒤 같은 산출물을 재사용합니다. 이전 태그의 실패한 실행에서 **Re-run failed jobs**를 누르면 이전 workflow 코드도 그대로 실행되므로, 배포 코드가 수정됐을 때는 위 절차를 사용합니다. 게시된 빌드 자체를 바꾸려면 새 버전을 만듭니다. CLI에서 의도적으로 이전 버전으로 되돌릴 때는 `-f allow_rollback=true`를 추가합니다.
 
 ## 자신의 Pages 프로젝트에 직접 배포하기
 
