@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  TASK D-app (A안 설계 ⑤): APNs entitlement는 준비만 하고 비활성이다.
+
+	  아래 aps-environment 항목은 주석 안에 있다 - 지금 이 파일에서 실제로
+	  유효한 키가 아니다. 이유: aps-environment가 켜져 있으면 코드 서명 시
+	  Apple Developer 팀의 프로비저닝 프로파일이 필요해지고, 팀 지정이 없는
+	  로컬 ad-hoc 서명 빌드(mise run build가 하는 것)가 깨진다. 그래서
+	  파일만 준비해 두고 활성화는 Sol이 Xcode에서 팀 지정과 함께 한다.
+
+	  활성화 절차(Sol이 Xcode에서, 자격증명이 준비된 뒤):
+	    1. Apple Developer 계정에서 이 앱 id(io.github.5pecia1.mydashboard)에
+	       Push Notifications capability를 켜고 APNs 키(.p8)를 만든 뒤 그 키를
+	       Firebase 콘솔의 이 Apple 앱에 업로드한다(서버는 FCM으로만 보내고,
+	       FCM이 그 키로 APNs에 대신 쏜다).
+	    2. Xcode에서 Runner.xcworkspace를 열고 Runner 타깃 > Signing &
+	       Capabilities에서 Team을 지정한다(Automatically manage signing).
+	    3. 같은 화면에서 "+ Capability" > Push Notifications를 추가한다 -
+	       Xcode가 이 파일과 Release.entitlements에 아래 항목을 직접 써 넣는다
+	       (이 주석을 손으로 풀어 쓰지 않아도 된다).
+	    4. 그 뒤에도 mise run build가 통과하는지 확인한다. 깨지면 팀 지정이
+	       빠진 것이다 - 그 상태로 커밋하지 않는다.
+
+	  활성화 전까지 앱은 이 상태를 정상 분기로 다룬다: APNs device token이
+	  없으므로 lib/src/platform/apns_push_native.dart가 unsupported를 돌리고,
+	  배너는 기존 로컬 알림 경로가 계속 띄운다(설계 ②).
+
+	  Debug/Profile 빌드는 개발용이므로 활성화 시 값이 development다:
+
+	    <key>aps-environment</key>
+	    <string>development</string>
+	-->
+	<!-- 창 활성화를 위해 Release와 동일하게 App Sandbox를 사용하지 않는다. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>

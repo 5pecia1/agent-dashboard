@@ -1,0 +1,25 @@
+name: App
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: app
+      - run: mise run tools:rust
+      - run: mise run tools:licenses
+      - run: mise exec -- flutter pub get
+        working-directory: app/flutter_app
+      - run: mise run check
+      - run: mise run verify
+      - run: mise run build

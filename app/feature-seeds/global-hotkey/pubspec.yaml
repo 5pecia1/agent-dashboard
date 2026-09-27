@@ -1,0 +1,6 @@
+name: sol_app_global_hotkey_seed
+publish_to: none
+environment:
+  sdk: ^3.12.0
+dependencies:
+  hotkey_manager: ^0.2.3

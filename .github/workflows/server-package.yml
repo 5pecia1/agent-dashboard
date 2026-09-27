@@ -1,0 +1,23 @@
+name: Server package
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm --prefix server ci
+      - run: npm --prefix server run check
+      - run: npm --prefix server test
+      - run: npm --prefix server run verify:package
+      - run: npm --prefix server run test:upgrade
+      - run: python3 scripts/contract_check.py

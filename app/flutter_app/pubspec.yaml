@@ -1,0 +1,205 @@
+name: my_dashboard
+description: "Agent Dashboard: coding agent status and notifications"
+# 사설 패키지다. pub.dev에 실수로 게시되는 걸 막는다.
+publish_to: 'none'
+
+# 버전/빌드 번호. 이 값은 sol-platform 자체의 SOL_PLATFORM_VERSION(레포
+# 앵커, .sol-platform.env 참고)과는 무관하다 — 이 필드는 이 템플릿에서
+# 새로 만든 개별 앱의 버전이다.
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  # collection (BSD-3-Clause): compare retained JSON deeply; shallow mapEquals
+  # causes redundant writes after reading nested fields from disk.
+  collection: ^1.19.1
+  flutter:
+    sdk: flutter
+
+  # Flutter 기본 아이콘 폰트. 표준 스캐폴드 보일러플레이트.
+  cupertino_icons: ^1.0.8
+
+  # 상태 관리(MIT). 이 템플릿의 FFI capability 시임
+  # (lib/src/state/capability_provider.dart)이 전제하는 `Provider<Fn>` +
+  # `overrideWith`/`overrideWithValue` API가 이 패키지에서 온다.
+  # 애노테이션 생성기 대신 함수 provider를 사용해 플랫폼 경계의 실제 구현과
+  # 테스트 대역을 같은 타입으로 교체한다.
+  flutter_riverpod: ^3.3.1
+
+  # riverpod(MIT)은 flutter_riverpod의 전이 의존성이지만
+  # `config_provider.dart`가 `Override` 타입을 정본 위치인
+  # `package:riverpod/misc.dart`에서 직접 가져온다 — 그 import 때문에
+  # `flutter analyze`가 depend_on_referenced_packages를 지목한다. 트리에서
+  # 항상 flutter_riverpod와 같은 메이저를 받도록 여기 명시한다(버전은
+  # pubspec.lock에 이미 고정된 해석 버전과 맞춘다).
+  riverpod: ^3.4.3
+
+  # Dart ↔ Rust FFI 브리지의 런타임 라이브러리(MIT OR Apache-2.0). app-core의
+  # 함수를 lib/src/rust/api/**로 노출한다 — 이 디렉터리는 codegen 산출물이라
+  # analysis_options.yaml에서 제외했고, `mise run frb:codegen`이 채운다.
+  # 버전은 app-frb/Cargo.toml의 flutter_rust_bridge crate 버전과 반드시
+  # 맞춘다(둘이 어긋나면 codegen이 실패하거나 조용히 잘못된 바인딩을 만든다).
+  flutter_rust_bridge: 2.13.0
+  # cargokit 기반 Rust 통합. app-frb/(pub 패키지명 my_dashboard_frb — 언더스코어인
+  # 이유는 app-frb/Cargo.toml 주석 참고)는 이 Flutter 앱과 나란히 있는 FFI
+  # 플러그인 패키지다. 플랫폼별 네이티브 빌드 글루(linux/CMakeLists.txt,
+  # macos/*.podspec 등, `flutter create`로 생성 후 채움)가 cargokit을 호출해
+  # app-core crate를 빌드하고 cdylib을 이 앱에 번들한다.
+  my_dashboard_frb:
+    path: rust_builder
+
+  # 웹 플러그인 등록기(Flutter SDK). `flutter build web`이 만드는
+  # `web_plugin_registrant.dart`가 이 패키지를 import한다 — 웹 구현을 가진
+  # 플러그인(여기서는 T16의 flutter_local_notifications가 끌고 오는
+  # flutter_local_notifications_web)이 하나라도 있으면 생성되는 파일이다.
+  # 그 플러그인 패키지가 flutter_web_plugins를 자기 의존성으로 선언하지
+  # 않아서(1.0.0 pubspec 확인) 해석 목록에서 빠지고, 웹 빌드만
+  # "Couldn't resolve the package 'flutter_web_plugins'"로 죽는다.
+  # `flutter analyze`/`flutter test`(VM 타깃)는 이 파일을 만들지 않으므로
+  # 초록으로 남는다 — 그래서 여기서 명시적으로 선언한다.
+  flutter_web_plugins:
+    sdk: flutter
+
+  # 웹 타깃의 DOM/Push API/Fetch 바인딩(BSD-3-Clause). flutter_rust_bridge가
+  # 이미 전이 의존성으로 끌어오지만, T13의 `push_bridge_web.dart`/
+  # `http_transport_web.dart`/`config_store_web.dart`가 이 패키지의 API를
+  # 직접 호출하므로 전이 의존에 조용히 얹혀타지 않고 명시적으로 선언한다.
+  web: ^1.1.1
+
+  # 불변 모델 + 유니온 타입 codegen 애노테이션(MIT). 손으로 쓴
+  # copyWith와 유니온 패턴의 필드 누락을 생성 코드와 타입 검사로 방지한다.
+  freezed_annotation: ^3.1.0
+  # JSON (역)직렬화 codegen 애노테이션(BSD-3-Clause). freezed 모델의
+  # toJson/fromJson을 모델 정의에서 생성한다.
+  json_annotation: ^4.9.0
+
+  # T16: macOS 로컬 알림 1차 백엔드(BSD-3-Clause, MaikuB/flutter_local_notifications).
+  # `lib/src/platform/local_notifications_native.dart`의 최초 실행 1회
+  # 프로브가 이 플러그인으로 권한 요청 + 자기 테스트 알림을 먼저 시도한다 —
+  # 왜 이 라이브러리인가: macOS(UNUserNotificationCenter)에서 클릭 콜백
+  # (`didReceiveNotificationResponse`)을 Dart로 그대로 넘겨주는 사실상
+  # 유일한 성숙 패키지라, 알림 탭 → session_key 딥링크에 필요하다.
+  # osascript(`display notification`)는 클릭 콜백 자체가 없어(AppleScript
+  # 표준 명령이 그런 이벤트를 발행하지 않는다) 딥링크를 못 만든다 — 그래서
+  # 이 플러그인이 실패할 때만(프로브 실패) 2차로 접는 폴백이다.
+  # 탈락시킨 대안: `local_notifier`(macOS 클릭 콜백을 노출하지 않는다),
+  # 자체 Swift MethodChannel로 UNUserNotificationCenter를 직접 감싸기(가능은
+  # 하지만 OS 권한/스레딩이 얽힌 표면을 직접 구현하면
+  # 실물 QA 부담만 부풀고 얻는 게 없다 — 검증된 패키지가 있는데 다시 만들 이유가
+  # 없다).
+  flutter_local_notifications: ^22.3.0
+
+  # TASK D-app (A안 설계 ②③): macOS 상주 앱이 APNs 경유 FCM 등록 토큰을 받아
+  # `POST /dashboard/devices {transport:'fcm-apns'}`로 신고하기 위한 Firebase
+  # 런타임(BSD-3-Clause, firebase/flutterfire).
+  #
+  # 왜 이 라이브러리인가: 서버가 이미 FCM HTTP v1 하나로만 발송한다(정본
+  # `push.channels.fcm` / `fcm-apns`). macOS 대상도 그 같은 엔드포인트·
+  # 자격증명을 쓰므로 클라이언트는 "APNs device token"이 아니라 **FCM 등록
+  # 토큰**을 등록해야 한다 — 그 토큰을 만들어 주는 것은 Firebase Apple SDK
+  # 뿐이고, 그 SDK를 Flutter에서 부르는 유일한 1st-party 경로가 이 두
+  # 패키지다. `firebase_core`는 `firebase_messaging`의 전이 의존성이지만
+  # `platform/apns_push_native.dart`가 `FirebaseOptions`/`Firebase.initializeApp`
+  # 을 직접 부르므로(설계 ③: 옵션을 GoogleService-Info.plist가 아니라 서버
+  # push-config에서 받아 코드 주입한다) `depend_on_referenced_packages`를
+  # 피하기 위해 명시적으로 선언한다(`riverpod`을 같은 이유로 명시한 것과
+  # 같은 자리).
+  #
+  # 탈락시킨 대안:
+  #   * 순수 APNs(자체 Swift `registerForRemoteNotifications` + 서버에 APNs
+  #     device token 등록): 서버에 APNs 전용 트랜스포트(p8 키·JWT 서명·
+  #     api.push.apple.com)를 새로 만들어야 한다 — 채널을 FCM 하나로 유지한다는
+  #     확정 설계와 정면으로 어긋난다.
+  #   * `flutter_apns` 계열 서드파티: FCM 등록 토큰을 만들지 못하고(APNs
+  #     토큰만 준다) 유지보수도 끊겨 있다.
+  #   * 웹처럼 Firebase JS SDK를 벤더링해 쓰기: macOS에는 서비스 워커가 없다.
+  #
+  # **웹 경로는 이 플러그인을 절대 초기화하지 않는다.** 웹은 기존
+  # `web/vendor/firebase-*.js` + `push_token_bridge.js` 경로 그대로다
+  # (`platform/apns_push_web.dart`가 전부 "해당 없음"으로 접는다) — 서비스
+  # 워커가 둘로 늘어나는 것을 막기 위한 계약이고, `app/scripts/web_push_smoke.py`
+  # 가 그 사실을 실제 브라우저에서 확인한다.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
+
+  # macOS 메뉴 바 아이콘(MIT, leanflutter/tray_manager). NSStatusItem,
+  # 아이콘, 컨텍스트 메뉴와 클릭 콜백을 기존 Dart 플랫폼 경계에 연결한다.
+  # 자체 Swift MethodChannel 대안보다 이 앱이 유지할 네이티브 코드가 적다.
+  # 창 소환은 기존 알림 채널을 재사용한다.
+  #
+  # `dart:io`를 무조건 import하므로(`package:tray_manager/src/tray_manager
+  # .dart`) 이 패키지를 참조하는 코드는 웹 컴파일 그래프에서 반드시
+  # 제외해야 한다 — `platform/tray_native.dart`/`tray_web.dart`의 조건부
+  # export가 그 경계다(`local_notifications_native.dart`/`_web.dart`와 같은
+  # 자리).
+  tray_manager: ^0.5.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Dart 팀이 권장하는 린트 세트(BSD-3-Clause). analysis_options.yaml에서
+  # include하고 일부 규칙을 strict로 승격한다. 그 파일에 상세 사유를 둔다.
+  flutter_lints: ^6.0.0
+  # freezed/json_serializable/flutter_rust_bridge가 공유하는 codegen
+  # 러너(BSD-3-Clause). `mise run dart:codegen`이 이걸 구동한다.
+  build_runner: ^2.15.0
+  # freezed_annotation의 codegen 구현체(MIT).
+  freezed: ^3.2.5
+  # json_annotation의 codegen 구현체(BSD-3-Clause).
+  json_serializable: ^6.9.0
+  # Windows MSIX 패키징(MIT). `dart run msix:create`가 아래 msix_config를
+  # 읽는다 — packaging/README.md §4 참고.
+  msix: ^3.16.7
+
+# Windows MSIX 패키징 메타데이터. `dart run msix:create`가 소비한다
+# (절차는 packaging/README.md §4). 패키징은 mise 태스크로 감싸지 않는다 —
+# Windows 호스트에서만 도는 단계라 .mise.toml의 태스크 계약(어느 호스트에서나
+# 도는 build/test/lint/dev + check/verify)에 넣지 않았다. 코드 서명은 범위
+# 밖이다 — 이 템플릿은 "무서명 배포"를 기본 계약으로 삼는다. 서명은
+# 실제 프로젝트가 자신의 인증서로 얹는 슬롯으로만 남겨둔다(값을 채우지
+# 않은 서명 관련 키는 여기 아예 적지 않았다 — 있는 키는 전부 지금
+# 유효하게 동작하는 것들이다).
+msix_config:
+  sign_msix: false
+  display_name: My Dashboard
+  publisher_display_name: sol-platform contributors
+  identity_name: io.github.5pecia1.mydashboard
+  publisher: CN=sol-platform contributors
+  msix_version: 0.1.0.0
+  logo_path: web/icons/Icon-512.png
+  capabilities: internetClient
+
+flutter:
+  uses-material-design: true
+
+  # TASK TRAY-impl: 메뉴 바 트레이 아이콘. `assets/2.0x/tray_icon.png`는
+  # Flutter의 표준 해상도-변형 폴더 관례를 따른다 — 다만 `tray_manager`의
+  # `setIcon`은 `rootBundle.load(iconPath)`를 리터럴 경로로 직접 부르고
+  # `AssetImage`의 디바이스-픽셀-비율 변형 해석을 타지 않으므로(패키지
+  # 소스, `lib/src/tray_manager.dart`의 `setIcon` 확인) 실제로 로드되는
+  # 파일은 항상 `assets/tray_icon.png` 하나다 — `2.0x` 변형은 지금은
+  # 등록만 되고 tray_manager 쪽에서는 쓰이지 않는다(알려진 한계로 정직하게
+  # 남긴다). macOS는 반환받은 단일 비트맵을 `iconSize`(기본 18pt)에 맞춰
+  # 자체적으로 리스케일하므로, 32×32 원본을 남겨 두면 다른 소비자(향후
+  # `AssetImage` 경로 등)가 생겼을 때 재사용할 수 있다.
+  #
+  # 2026-09-20 컬러화(`.okf/log.md` 결정 참고): 아이콘은 더 이상 RGB=0의
+  # 흑백 template이 아니라 **컬러 non-template**(`isTemplate: false`)이다 —
+  # template이면 macOS가 메뉴 바 테마 단색으로 재색칠해 색으로 상태를 못
+  # 나타낸다. 세 PNG는 같은 종 모양 알파를 공유하고 RGB만 다르다 —
+  # 기본은 보라 `#A56FD8`, `tray_icon_attention_waiting.png`(종+점)는
+  # 호박 `#DE9E1F`, `tray_icon_attention_stalled.png`(종+점)는 적갈
+  # `#E0705B`다. 어느 경로를 고를지는 `platform/tray_native.dart`의
+  # `trayBadgeIconAssetPath`가 stalled > waiting > idle 우선으로 정한다.
+  assets:
+    - assets/tray_icon.png
+    - assets/2.0x/tray_icon.png
+    - assets/tray_icon_attention_waiting.png
+    - assets/2.0x/tray_icon_attention_waiting.png
+    - assets/tray_icon_attention_stalled.png
+    - assets/2.0x/tray_icon_attention_stalled.png

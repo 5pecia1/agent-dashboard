@@ -1,0 +1,130 @@
+name: Publish server package
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing public tag (server-vVERSION)
+        type: string
+        required: true
+      publish_npm:
+        description: Also publish through the configured npm trusted publisher
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: publish-server-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == '5pecia1/agent-dashboard'
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.archive.outputs.tarball }}
+    steps:
+      - name: Require dispatch from the release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm install --global npm@11.6.2
+      - run: npm --prefix server ci
+      - run: npm --prefix server run check
+      - run: npm --prefix server test
+      - run: python3 scripts/contract_check.py
+      - name: Build and pack once
+        id: archive
+        run: |
+          npm --prefix server run build
+          mkdir release
+          cd server
+          npm pack --json --pack-destination ../release > ../release/pack.json
+          python3 - <<'PY'
+          import json, os
+          name = json.load(open('../release/pack.json'))[0]['filename']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('tarball=' + name + '\n')
+          PY
+      - name: Verify the exact archive
+        env:
+          TARBALL: ${{ steps.archive.outputs.tarball }}
+        run: npm --prefix server run verify:package -- --tarball "$GITHUB_WORKSPACE/release/$TARBALL" --receipt "$GITHUB_WORKSPACE/release/test-receipt.json"
+      - name: Verify existing database upgrade with the same archive
+        env:
+          TARBALL: ${{ steps.archive.outputs.tarball }}
+        run: npm --prefix server run test:upgrade -- --tarball "$GITHUB_WORKSPACE/release/$TARBALL" --receipt "$GITHUB_WORKSPACE/release/upgrade-receipt.json"
+      - name: Write public release evidence
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          TARBALL: ${{ steps.archive.outputs.tarball }}
+        run: |
+          PUBLIC_COMMIT="$(git rev-parse HEAD)"
+          python3 scripts/release_artifact.py --tarball "release/$TARBALL" --receipt release/test-receipt.json --upgrade-receipt release/upgrade-receipt.json --commit "$PUBLIC_COMMIT" --tag "$RELEASE_TAG" --output release/release-evidence.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-server-package
+          if-no-files-found: error
+          path: |
+            release/*.tgz
+            release/*.sha256
+            release/release-evidence.json
+  github-release:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-server-package
+          path: release
+      - name: Create release with the verified archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TARBALL: ${{ needs.verify.outputs.tarball }}
+        run: |
+          cd release
+          sha256sum --check ./*.sha256
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mkdir existing
+            gh release download "$RELEASE_TAG" --pattern "$TARBALL" --dir existing
+            cmp "$TARBALL" "existing/$TARBALL"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --title "Server $RELEASE_TAG" --notes 'Verified server archive and SHA256. See release-evidence.json for source and validation details.' ./*.tgz ./*.sha256 release-evidence.json
+          fi
+  npm:
+    if: inputs.publish_npm
+    needs: [verify, github-release]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-server-package
+          path: release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.6.2
+      - name: Publish the same verified archive using OIDC
+        env:
+          TARBALL: ${{ needs.verify.outputs.tarball }}
+        run: |
+          cd release
+          sha256sum --check ./*.sha256
+          node -e "const e=require('./release-evidence.json'); if (!e.npm_publish_enabled) throw new Error('package.json is still private; prepare a reviewed release version before npm publication')"
+          npm publish "$TARBALL" --access public --provenance --tag next

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=My Dashboard
+Comment=Sol Platform device app template
+Exec=my_dashboard %u
+Icon=my_dashboard
+Categories=Utility;
+Terminal=false
+StartupWMClass=my_dashboard

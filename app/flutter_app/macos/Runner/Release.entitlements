@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  TASK D-app (A안 설계 ⑤): APNs entitlement는 준비만 하고 비활성이다.
+	  활성화 절차와 그 이유는 DebugProfile.entitlements의 같은 주석에 있다
+	  (그 파일이 정본이고, 이 주석은 값만 다르다는 것을 알리는 짝이다).
+
+	  Release 빌드는 활성화 시 값이 production이다:
+
+	    <key>aps-environment</key>
+	    <string>production</string>
+
+	  주의: 이 항목이 켜진 채 팀 지정이 없으면 mise run build의 ad-hoc
+	  서명이 깨진다. 지금은 비활성이라 mise run build가 그대로 통과한다.
+	-->
+	<!--
+	  직접 설치하는 macOS 앱은 접근성 API로 사용자가 지정한 다른 앱의 창을
+	  활성화하므로 App Sandbox를 사용하지 않는다. 접근성 권한은 사용자가
+	  시스템 설정에서 허용한다. 이전 container 설정은 install_local.sh가
+	  기존 설치의 entitlement를 확인한 뒤 실제 HOME으로 이관한다.
+	-->
+</dict>
+</plist>

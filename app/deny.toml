@@ -1,0 +1,9 @@
+# Platform license allowlist, including MPL-2.0. cargo-deny evaluates SPDX.
+[licenses]
+allow = ["MIT", "MPL-2.0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib", "CC0-1.0"]
+confidence-threshold = 0.8
+
+# The two unpublished workspace crates use the product LICENSE.
+# Transitive third-party dependencies still follow the allowlist above.
+[licenses.private]
+ignore = true

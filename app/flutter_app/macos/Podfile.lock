@@ -1,0 +1,22 @@
+PODS:
+  - FlutterMacOS (1.0.0)
+  - my_dashboard_frb (0.0.1):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - my_dashboard_frb (from `Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos`)
+
+EXTERNAL SOURCES:
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  my_dashboard_frb:
+    :path: Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos
+
+SPEC CHECKSUMS:
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  my_dashboard_frb: 161c2058f1ae2cd9764ab29f03b89cad219d2c40
+
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
+
+COCOAPODS: 1.17.0

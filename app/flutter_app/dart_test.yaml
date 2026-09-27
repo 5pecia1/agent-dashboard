@@ -1,0 +1,4 @@
+# OS별 골든은 생성/검토와 비교를 분리한다. verify는 항상 비교한다.
+tags:
+  golden:
+    skip: false

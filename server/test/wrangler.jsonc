@@ -1,0 +1,18 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "dashboard-package-test",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-01",
+  "vars": {
+    "DASHBOARD_STORE_MESSAGE": "1",
+    "AUTH_TOKEN": "test-auth-token",
+    "INGEST_TOKEN": "test-ingest-token",
+    "CLIENT_TOKEN": "test-client-token"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "dashboard-package-test",
+    "database_id": "00000000-0000-4000-8000-000000000001",
+    "migrations_dir": "../migrations"
+  }]
+}

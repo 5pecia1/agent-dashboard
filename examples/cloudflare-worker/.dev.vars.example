@@ -1,0 +1,3 @@
+# Generate two distinct random values and set them locally or with wrangler secret put.
+INGEST_TOKEN=
+CLIENT_TOKEN=

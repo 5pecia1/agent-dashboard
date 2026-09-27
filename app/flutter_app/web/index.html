@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    $FLUTTER_BASE_HREF는 `flutter build web --base-href /경로/`가 치환하는
+    토큰이다. 서브 경로(예: GitHub Pages의 /repo-name/)에 배포할 때 그
+    플래그로 넘기고, 도메인 루트에 배포하면 기본값 "/"가 들어간다.
+    이 토큰을 지우면 서브 경로 배포에서 애셋 URL이 전부 깨진다.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Agent Dashboard — coding agent status and notifications">
+
+  <!-- iOS 홈 화면 추가 시의 PWA 동작. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Agent Dashboard">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- 첫 페인트 배경. lib/src/theme/app_tokens.dart의 AppTokens.dark.bg와
+       같은 값이라, Flutter 엔진이 뜨기 전 빈 화면이 흰색으로 번쩍이지
+       않는다. 토큰 팔레트를 바꾸면 이 값도 함께 고친다 —
+       scripts/theme_token_check.sh는 .dart 파일만 보므로 이 hex는 잡지
+       못한다. -->
+  <meta name="theme-color" content="#0A0B0D">
+
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+
+  <title>Agent Dashboard</title>
+
+  <style>
+    /* 엔진 부팅 전 흰 배경이 보이지 않게 한다(위 theme-color와 같은 값). */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #0A0B0D;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    flutter_bootstrap.js는 이 템플릿이 손으로 관리하는 파일이다(그 파일
+    상단 주석 참고) — service worker 등록과 CanvasKit same-origin 로딩을
+    직접 처리한다. `flutter build web`이 이 자리에서 그 파일의 토큰
+    ({{flutter_js}} 등)을 치환한다.
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

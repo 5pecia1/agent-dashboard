@@ -1,0 +1,21 @@
+# 개발 시점에 "이 repo가 최신 플랫폼 표준 위에 있는가"만 알려주는 얇은 호출부다.
+# mise 태스크 계약을 요구하지 않으므로 ci.yml(CI 중앙화) 채택 여부와 무관하게
+# 독립적으로 도입할 수 있다 — mise 없는 repo도 이 파일만 배치하면 채택 가능하다.
+# 실물/설계 근거: 5pecia1/my-ecosystem .github/workflows/platform-check.yml, .okf/platform-design.md §1·§2.
+name: platform-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  platform-check:
+    uses: 5pecia1/my-ecosystem/.github/workflows/platform-check.yml@v0.5.0 # Renovate가 태그를 범프한다
+    secrets:
+      # my-platform이 private인 동안만 필요하다. 기존 RENOVATE_TOKEN(Contents 읽기 범위로 충분)을
+      # 그대로 재사용한다. secret이 없어도 이 워크플로는 실패하지 않고 경고만 남긴다
+      # (플랫폼측 platform-check.yml이 토큰 부재를 감지해 경고로 처리한다).
+      platform_token: ${{ secrets.RENOVATE_TOKEN }}
+    # with:
+    #   fail_on_outdated: true  # 필요한 repo만 버전 뒤처짐을 잡 실패로 승격할 수 있다 (기본 false)

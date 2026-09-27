@@ -1,0 +1,77 @@
+[settings]
+activate_aggressive = true
+
+# Tool version source: Flutter SDK installers read FLUTTER_VERSION here.
+# FRB runtime pins are derived via scripts/toolchain.py sync and checked in verify.
+[env]
+FLUTTER_VERSION = "3.44.0"
+FRB_WEB_TOOLCHAIN = "nightly-2026-05-21"
+DART_LICENSE_CHECKER_VERSION = "1.6.0"
+
+[tools]
+cargo-binstall = "1.23.0"
+flutter = "{{ env.FLUTTER_VERSION }}"
+"cargo:cargo-deny" = "0.18.3"
+"cargo:cargo-expand" = "1.0.126"
+"cargo:wasm-pack" = "0.15.0"
+rust = "1.98.1"
+"cargo:flutter_rust_bridge_codegen" = "2.13.0"
+
+[tasks.bootstrap]
+description = "Initialize this copied seed, then resolve packages and generate FRB bindings"
+run = "python3 scripts/bootstrap.py"
+
+[tasks.build]
+description = "Build the selected host desktop, or a web-only app"
+run = "python3 scripts/build.py"
+
+[tasks."build:web"]
+description = "Build Rust WASM, then Flutter web with the generated Rust assets"
+run = "python3 scripts/build.py --target web"
+
+[tasks.test]
+run = ["cargo test --workspace", "cd flutter_app && flutter test"]
+
+[tasks.lint]
+run = ["cargo fmt --all -- --check", "cargo clippy --workspace --all-targets -- -D warnings", "cd flutter_app && flutter analyze"]
+
+[tasks.dev]
+dir = "flutter_app"
+run = "flutter run"
+
+[tasks.check]
+run = ["cargo fmt --all -- --check", "cargo clippy --workspace --all-targets -- -D warnings", "python3 scripts/quality_check.py budget", "cargo test --workspace"]
+
+[tasks.verify]
+depends = ["check", "frb:codegen:check", "dart:codegen:check"]
+run = ["python3 scripts/toolchain.py check", "cd flutter_app && flutter analyze", "cd flutter_app && flutter test", "python3 scripts/quality_check.py theme", "python3 scripts/i18n_check.py check", "python3 scripts/quality_check.py boundary", "python3 scripts/quality_check.py constants", "python3 scripts/license_check.py", "python3 scripts/version_check.py"]
+
+[tasks."frb:codegen"]
+run = "flutter_rust_bridge_codegen generate"
+
+[tasks."dart:codegen"]
+dir = "flutter_app"
+run = "dart run build_runner build --delete-conflicting-outputs"
+
+[tasks."frb:codegen:check"]
+run = "python3 scripts/codegen_check.py"
+
+[tasks."golden:update"]
+dir = "flutter_app"
+run = "flutter test --update-goldens --tags=golden"
+
+[tasks."license:check"]
+run = "python3 scripts/license_check.py"
+
+[tasks."dart:codegen:check"]
+run = "python3 scripts/codegen_check.py --generator dart"
+
+[tasks."tools:licenses"]
+run = "dart pub global activate license_checker {{env.DART_LICENSE_CHECKER_VERSION}}"
+
+[tasks."tools:web"]
+run = "rustup toolchain install {{env.FRB_WEB_TOOLCHAIN}} --profile minimal --component rust-src --target wasm32-unknown-unknown"
+
+[tasks."tools:rust"]
+description = "Install formatting and lint components for the configured Rust toolchain"
+run = "python3 scripts/toolchain.py rust"

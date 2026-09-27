@@ -1,0 +1,6 @@
+{
+  "project": "my_dashboard",
+  "version": 1,
+  "note": "Snapshot of pre-existing hardcoded user-facing strings in flutter_app/lib/src. New entries fail `python3 scripts/i18n_check.py check`; migrate strings to the project's i18n helper and regenerate via scripts/i18n_check.py write. This starter begins empty.",
+  "violations": []
+}

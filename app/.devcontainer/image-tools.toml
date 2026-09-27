@@ -1,0 +1,14 @@
+[tools]
+"cargo-binstall" = "1.23.0"
+"cargo:cargo-deny" = "0.18.3"
+"cargo:cargo-expand" = "1.0.126"
+"cargo:flutter_rust_bridge_codegen" = "2.13.0"
+"cargo:wasm-pack" = "0.15.0"
+"flutter" = "3.44.0"
+"python" = "3.13.9"
+"rust" = "1.98.1"
+"uv" = "0.9.16"
+
+[env]
+"DART_LICENSE_CHECKER_VERSION" = "1.6.0"
+"FRB_WEB_TOOLCHAIN" = "nightly-2026-05-21"

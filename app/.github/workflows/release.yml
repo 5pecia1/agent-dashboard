@@ -1,0 +1,23 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing app tag; empty input builds without publishing'
+        required: false
+permissions:
+  contents: read
+jobs:
+  release:
+    permissions:
+      contents: write
+      packages: write
+    uses: 5pecia1/my-ecosystem/.github/workflows/device-app-release.yml@v0.5.0
+    secrets:
+      platform_token: ${{ secrets.SOL_PLATFORM_TOKEN || secrets.RENOVATE_TOKEN }}
+    with:
+      linux-runner: ${{ vars.LINUX_RUNNER || '' }}
+      app-directory: '.'
+      tag: ${{ inputs.tag || '' }}

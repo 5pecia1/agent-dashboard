@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.5pecia1.mydashboard</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>My Dashboard</name>
+  <summary>Sol Platform device app template</summary>
+  <description>
+    <p>My Dashboard is the sol-platform device-app template: a Flutter UI over a Rust core (flutter_rust_bridge), packaged for desktop and web from one source tree.</p>
+  </description>
+  <launchable type="desktop-id">my_dashboard.desktop</launchable>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+</component>

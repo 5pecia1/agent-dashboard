@@ -1,0 +1,21 @@
+{
+  "name": "agent-dashboard-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run migrate:remote && wrangler deploy"
+  },
+  "dependencies": {
+    "@5pecia1/agent-dashboard-server": "__PACKAGE_TGZ__",
+    "hono": "4.13.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260905.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.129.0"
+  }
+}

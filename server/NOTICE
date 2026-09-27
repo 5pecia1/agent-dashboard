@@ -1,0 +1,8 @@
+Agent Dashboard server
+Copyright (c) 2026 Sol and contributors.
+
+This archive contains Agent Dashboard server and hook code. See LICENSE for its terms.
+The source distribution also contains MIT-licensed platform seed code; its notice is
+retained in LICENSES/sol-platform-MIT.txt. Existing grants remain unchanged.
+License text provenance is recorded in LICENSES/Sustainable-Use-License-source.md.
+Hono is an external peer dependency and retains its own MIT license.

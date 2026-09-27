@@ -1,0 +1,62 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ${{ vars.LINUX_RUNNER || fromJSON('["self-hosted", "linux", "x64"]') }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare the Devcontainer CLI controller
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.20.0'
+          package-manager-cache: false
+      - name: Read the selected source's fixed platform anchor
+        id: provider
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          anchor = Path('.sol-platform.env')
+          if anchor.is_symlink() or not anchor.is_file():
+              raise SystemExit('A regular .sol-platform.env with a fixed platform tag is required')
+          values = re.findall(r'^\s*SOL_PLATFORM_VERSION=([^\s#]+)\s*(?:#.*)?$', anchor.read_text(), re.M)
+          if len(values) != 1:
+              raise SystemExit('.sol-platform.env must contain one fixed SOL_PLATFORM_VERSION')
+          version = values[0]
+          match = re.fullmatch(r'v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?', version)
+          if not match or (match[4] and any(part.isdigit() and len(part) > 1 and part[0] == '0' for part in match[4].split('.'))):
+              raise SystemExit('A fixed SemVer platform tag is required')
+          if Path('.sol-platform-provider').exists() or Path('.sol-platform-provider').is_symlink():
+              raise SystemExit('The temporary provider checkout path already exists')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('version=v' + version.removeprefix('v') + '\n')
+          PY
+      - name: Check out the fixed platform runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: 5pecia1/my-ecosystem
+          ref: ${{ steps.provider.outputs.version }}
+          path: .sol-platform-provider
+          token: ${{ secrets.SOL_PLATFORM_TOKEN || secrets.RENOVATE_TOKEN || github.token }}
+          persist-credentials: false
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+      - name: Verify in the saved development container
+        run: |
+          python3 .sol-platform-provider/tools/ci/app-check.py verify --project "$PWD" --app-directory . \
+            --config .devcontainer/devcontainer.json --gha-cache --output "$RUNNER_TEMP/app-ci-evidence"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: app-ci-evidence
+          path: ${{ runner.temp }}/app-ci-evidence/
+          if-no-files-found: warn

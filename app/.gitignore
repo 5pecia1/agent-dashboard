@@ -1,0 +1,24 @@
+# Rust 빌드 산출물.
+/target/
+
+# Flutter/Dart 도구·빌드 산출물.
+flutter_app/.dart_tool/
+flutter_app/build/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+
+# 커밋하는 것들(반대 목록 — 실수로 여기 추가하지 않는다):
+#   Cargo.lock / pubspec.lock  — 앱(최종 산출물) 워크스페이스라 재현성을 위해 커밋한다
+#   app-frb/src/frb_generated.rs, flutter_app/lib/src/rust/ — codegen 산출물이지만
+#     커밋한다. frb:codegen:check(.mise.toml)가 커밋본과 재생성본의 drift를 게이트한다
+#   test/goldens/*.png — 골든 베이스라인은 커밋한다
+
+.fvm/
+**/.dart_tool/
+**/__pycache__/
+flutter_app/web/pkg/
+# 골든 실패 산출물. flutter_test는 실패한 골든의 diff를 **테스트 파일이 있는
+# 디렉터리 옆**에 만든다(예: test/widget_tests/failures/) — 최상위
+# test/failures/ 하나만 막으면 새어 나간다.
+flutter_app/test/**/failures/
+flutter_app/test/failures/

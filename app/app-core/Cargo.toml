@@ -1,0 +1,28 @@
+[package]
+name = "app-core"
+version.workspace = true
+edition.workspace = true
+publish = false
+license-file.workspace = true
+description = "my_dashboard의 surface 중립 도메인 크레이트 — 에러 타입과 i18n 카탈로그처럼 UI에 의존하지 않는 순수 로직만 담는다."
+
+[dependencies]
+thiserror = { workspace = true }
+phf = { workspace = true }
+# 선택적 직렬화. app-frb가 FRB DTO(예: Locale)를 만들 때 이 피처를 켜서
+# 문다 — 코어 자체는 기본적으로 직렬화 의존성 없이 최소 상태를 유지한다.
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+# dashboard.rs 테스트가 contracts/dashboard-protocol.v1.json(정본)을 파싱해
+# 매핑 표·상태 어휘를 대조한다. 프로덕션 크레이트에는 영향 없음(dev만) —
+# quality.json의 forbidden_core_dependencies는 flutter_rust_bridge/dart-sys만
+# 금지하므로 이 dev-dependency는 boundary 규칙과 무관하다.
+serde_json = { workspace = true }
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[lints]
+workspace = true

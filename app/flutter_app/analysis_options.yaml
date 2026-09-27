@@ -1,0 +1,50 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    # 암시적 다운캐스트/업캐스트, dynamic 추론, raw generic 타입을 전부
+    # 막는다 — FFI 경계(FRB DTO)를 넘나드는 코드에서 타입이 조용히
+    # 어긋나는 걸 컴파일 타임에 잡으려는 목적이다.
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    # freezed가 생성하는 `@JsonKey`류 애노테이션이 프라이빗 생성자 위에
+    # 붙을 때 나는 오탐. freezed 공식 가이드가 이 무시를 권장한다.
+    invalid_annotation_target: ignore
+  exclude:
+    # flutter_rust_bridge codegen 산출물. `mise run frb:codegen`이 다시
+    # 만든다 — 손으로 고치면 다음 codegen에서 사라진다.
+    - "lib/src/rust/**"
+    # freezed/json_serializable이 만드는 파생 소스. 같은 이유로 제외.
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    # cargokit이 심는 FFI 플러그인 글루(app-frb의 Flutter 플러그인 쪽,
+    # `flutter create --template=plugin_ffi`류 산출물). 자기 자신의
+    # pubspec/린트 설정을 갖고 있어 이 프로젝트 규칙과 맞지 않는다 —
+    # 따로 분석하고 싶으면 그 디렉터리에서 `dart analyze`를 직접 돌린다.
+    - "rust_builder/**"
+    - "build/**"
+    - ".dart_tool/**"
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+
+linter:
+  rules:
+    # `dynamic` 값에 메서드/연산자를 직접 거는 걸 막는다 — FRB 경계를
+    # 넘어온 JSON스러운 값을 다룰 때 특히 쉽게 새어 들어오는 버그다.
+    avoid_dynamic_calls: true
+    # 상대 `import '../x.dart'` 대신 항상 `package:my_dashboard/...`을 쓰게
+    # 강제한다. 파일을 옮겨도 import가 안 깨지고, `test/`에서도 같은
+    # import 문이 그대로 통한다.
+    always_use_package_imports: true
+    # `for (final x in xs)`에서 `x`가 재할당되지 않음을 보장 — 의도치
+    # 않은 루프 변수 재대입을 막는다.
+    prefer_final_in_for_each: true
+    # 여러 줄로 나열되는 인자/컬렉션 리터럴에 trailing comma를 강제한다.
+    # dart format이 한 줄→여러 줄로 접고 펼 때 diff를 최소화한다.
+    require_trailing_commas: true

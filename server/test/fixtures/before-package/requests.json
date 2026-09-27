@@ -1,0 +1,78 @@
+[
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-0",
+    "occurred_at": 1790496563620,
+    "source": "generic",
+    "session_id": "upgrade-working",
+    "state": "working",
+    "event": "Status"
+  },
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-1",
+    "occurred_at": 1790496563621,
+    "source": "generic",
+    "session_id": "upgrade-waiting",
+    "state": "waiting_input",
+    "event": "Status"
+  },
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-2",
+    "occurred_at": 1790496563622,
+    "source": "generic",
+    "session_id": "upgrade-ended",
+    "state": "ended",
+    "event": "Status"
+  },
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-3",
+    "occurred_at": 1790496563623,
+    "source": "devin",
+    "session_id": "upgrade-devin",
+    "event": "UserPromptSubmit",
+    "prompt_id": "prompt-fixture"
+  },
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-4",
+    "occurred_at": 1790496563624,
+    "source": "devin",
+    "session_id": "upgrade-devin",
+    "event": "PermissionRequest",
+    "prompt_id": "prompt-fixture",
+    "tool_use_id": "tool-a",
+    "tool_name": "exec"
+  },
+  {
+    "protocol_version": 1,
+    "project": "/workspace/example",
+    "host": "fixture-host",
+    "hook_rev": "1234abcd",
+    "event_id": "upgrade-5",
+    "occurred_at": 1790496563625,
+    "source": "devin",
+    "session_id": "upgrade-devin",
+    "event": "PermissionRequest",
+    "prompt_id": "prompt-fixture",
+    "tool_use_id": "tool-b",
+    "tool_name": "exec"
+  }
+]

@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+__pycache__/
+server/dist/
+server/contracts/
+server/src/generated/
+*.tgz
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example

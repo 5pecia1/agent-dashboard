@@ -1,0 +1,48 @@
+# 패키지 이름은 디렉터리(app-frb, 대시)와 달리 언더스코어(my_dashboard_frb)를 쓴다:
+# cargokit의 build_tool(rust_builder/cargokit/build_tool/lib/src/cargo.dart —
+# Flutter 쪽 빌드 스크립트)이 패키지명을 그대로 cdylib
+# 산출물의 stem으로 써서 `lib<package.name>.so`를 기대하는데, rustc는 크레이트
+# 이름에 있는 대시를 무조건 언더스코어로 바꿔 `libmy_dashboard_frb.so`를 내보낸다.
+# 두 이름이 어긋나면 Flutter가 빌드된 동적 라이브러리를 찾지 못한다 — 그래서
+# 디렉터리는 다른 Rust 크레이트와 통일해 대시(app-frb)로 두고, 패키지명만
+# 언더스코어로 맞춘다.
+[package]
+name = "my_dashboard_frb"
+version.workspace = true
+edition.workspace = true
+publish = false
+license-file.workspace = true
+description = "my_dashboard Flutter 프런트엔드용 flutter_rust_bridge cdylib. api 모듈이 실제 표면이고, frb_generated.rs는 codegen 산출물이다."
+
+[lib]
+# cdylib   : Flutter 데스크톱/모바일 바이너리가 FFI로 로드.
+# staticlib: 향후 iOS/macOS 정적 링크 옵션 대비.
+# rlib     : FFI 바인딩 없이 이 크레이트 안에서 순수 Rust 단위 테스트를 돌리기
+#            위함(`cargo test -p my_dashboard_frb`).
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+flutter_rust_bridge = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+app-core = { workspace = true, features = ["serde"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# 웹(wasm32) 빌드에서 JS와 상호작용해야 하는 시점을 위한 자리. flutter_rust_bridge
+# 자체의 wasm32 지원은 wasm-bindgen 위에서 동작한다.
+wasm-bindgen = "0.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# 네이티브 전용 의존성 자리 — Cargo의 default-features는 타겟별로 나뉘지
+# 않으므로, "네이티브 전용"은 피처 플래그가 아니라 이렇게 의존성 자체를
+# 타겟으로 게이팅해서 표현한다. 예를 들어 OS 프로세스 스폰이나 파일
+# 시스템 다이얼로그처럼 wasm32에는 없는 기능에 의존성이 필요해지면 여기에
+# 추가한다. 이 스타터에는 아직 그런 의존성이 없어 빈 테이블로 남겨 둔다.
+
+[lints]
+workspace = true
+
+# FRB uses WASM atomics; Binaryen must validate the threads feature.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--all-features"]

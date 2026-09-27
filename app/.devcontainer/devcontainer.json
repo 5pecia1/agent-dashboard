@@ -1,0 +1,53 @@
+{
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  "containerEnv": {
+    "MISE_TRUSTED_CONFIG_PATHS": "${containerWorkspaceFolder}"
+  },
+  "customizations": {
+    "sol-platform": {
+      "platforms": [
+        "linux/amd64"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "dart-code.flutter",
+        "dart-code.dart-code"
+      ],
+      "settings": {
+        "[dart]": {
+          "editor.formatOnSave": true
+        },
+        "[rust]": {
+          "editor.formatOnSave": true
+        },
+        "explorer.fileNesting.enabled": true,
+        "explorer.fileNesting.patterns": {
+          "*.dart": "${capture}.g.dart, ${capture}.freezed.dart, ${capture}.frb.dart"
+        },
+        "files.watcherExclude": {
+          "**/.dart_tool/**": true,
+          "**/build/**": true,
+          "**/target/**": true
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "name": "my_dashboard",
+  "postCreateCommand": [
+    "python3",
+    ".devcontainer/setup.py"
+  ],
+  "remoteUser": "root",
+  "runArgs": [
+    "--platform=linux/amd64",
+    "--init"
+  ],
+  "waitFor": "postCreateCommand",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+}

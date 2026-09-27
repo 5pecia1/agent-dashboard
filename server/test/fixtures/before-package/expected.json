@@ -1,0 +1,340 @@
+{
+  "tables": {
+    "d1_migrations": [
+      {
+        "id": 1,
+        "name": "0001_dashboard.sql",
+        "applied_at": "2026-09-27 08:09:15"
+      },
+      {
+        "id": 2,
+        "name": "0002_dashboard_v2.sql",
+        "applied_at": "2026-09-27 08:09:15"
+      },
+      {
+        "id": 3,
+        "name": "0003_dashboard_v3.sql",
+        "applied_at": "2026-09-27 08:09:16"
+      },
+      {
+        "id": 4,
+        "name": "0004_dashboard_seen.sql",
+        "applied_at": "2026-09-27 08:09:17"
+      },
+      {
+        "id": 5,
+        "name": "0005_devin_input_tracking.sql",
+        "applied_at": "2026-09-27 08:09:18"
+      }
+    ],
+    "dashboard_events": [
+      {
+        "id": 1,
+        "session_key": "generic:upgrade-working",
+        "source": "generic",
+        "event": "Status",
+        "message": null,
+        "received_at": 1790496563627,
+        "event_id": "upgrade-0",
+        "occurred_at": 1790496563620,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-0\",\"occurred_at\":1790496563620,\"source\":\"generic\",\"session_id\":\"upgrade-working\",\"state\":\"working\",\"event\":\"Status\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": null,
+        "tool_use_id": null,
+        "tool_name": null
+      },
+      {
+        "id": 2,
+        "session_key": "generic:upgrade-waiting",
+        "source": "generic",
+        "event": "Status",
+        "message": null,
+        "received_at": 1790496563646,
+        "event_id": "upgrade-1",
+        "occurred_at": 1790496563621,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-1\",\"occurred_at\":1790496563621,\"source\":\"generic\",\"session_id\":\"upgrade-waiting\",\"state\":\"waiting_input\",\"event\":\"Status\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": null,
+        "tool_use_id": null,
+        "tool_name": null
+      },
+      {
+        "id": 3,
+        "session_key": "generic:upgrade-ended",
+        "source": "generic",
+        "event": "Status",
+        "message": null,
+        "received_at": 1790496563667,
+        "event_id": "upgrade-2",
+        "occurred_at": 1790496563622,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-2\",\"occurred_at\":1790496563622,\"source\":\"generic\",\"session_id\":\"upgrade-ended\",\"state\":\"ended\",\"event\":\"Status\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": null,
+        "tool_use_id": null,
+        "tool_name": null
+      },
+      {
+        "id": 4,
+        "session_key": "devin:upgrade-devin",
+        "source": "devin",
+        "event": "UserPromptSubmit",
+        "message": null,
+        "received_at": 1790496564007,
+        "event_id": "upgrade-3",
+        "occurred_at": 1790496563623,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-3\",\"occurred_at\":1790496563623,\"source\":\"devin\",\"session_id\":\"upgrade-devin\",\"event\":\"UserPromptSubmit\",\"prompt_id\":\"prompt-fixture\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": "prompt-fixture",
+        "tool_use_id": null,
+        "tool_name": null
+      },
+      {
+        "id": 5,
+        "session_key": "devin:upgrade-devin",
+        "source": "devin",
+        "event": "PermissionRequest",
+        "message": null,
+        "received_at": 1790496564020,
+        "event_id": "upgrade-4",
+        "occurred_at": 1790496563624,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-4\",\"occurred_at\":1790496563624,\"source\":\"devin\",\"session_id\":\"upgrade-devin\",\"event\":\"PermissionRequest\",\"prompt_id\":\"prompt-fixture\",\"tool_use_id\":\"tool-a\",\"tool_name\":\"exec\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": "prompt-fixture",
+        "tool_use_id": "tool-a",
+        "tool_name": "exec"
+      },
+      {
+        "id": 6,
+        "session_key": "devin:upgrade-devin",
+        "source": "devin",
+        "event": "PermissionRequest",
+        "message": null,
+        "received_at": 1790496564035,
+        "event_id": "upgrade-5",
+        "occurred_at": 1790496563625,
+        "host": "fixture-host",
+        "raw": "{\"protocol_version\":1,\"project\":\"/workspace/example\",\"host\":\"fixture-host\",\"hook_rev\":\"1234abcd\",\"event_id\":\"upgrade-5\",\"occurred_at\":1790496563625,\"source\":\"devin\",\"session_id\":\"upgrade-devin\",\"event\":\"PermissionRequest\",\"prompt_id\":\"prompt-fixture\",\"tool_use_id\":\"tool-b\",\"tool_name\":\"exec\"}",
+        "occurred_at_provided": 1,
+        "prompt_id": "prompt-fixture",
+        "tool_use_id": "tool-b",
+        "tool_name": "exec"
+      }
+    ],
+    "dashboard_sessions": [
+      {
+        "key": "generic:upgrade-working",
+        "source": "generic",
+        "session_id": "upgrade-working",
+        "project": "/workspace/example",
+        "state": "working",
+        "last_event": "Status",
+        "last_message": null,
+        "created_at": 1790496563627,
+        "updated_at": 1790496563627,
+        "host": "fixture-host",
+        "last_occurred_at": 1790496563620,
+        "last_progress_at": 1790496563627,
+        "last_transition_id": 1,
+        "input_state": null,
+        "projection_token": "c8644452-657e-41a8-94f2-4fede3c3cdcd"
+      },
+      {
+        "key": "generic:upgrade-waiting",
+        "source": "generic",
+        "session_id": "upgrade-waiting",
+        "project": "/workspace/example",
+        "state": "waiting_input",
+        "last_event": "Status",
+        "last_message": null,
+        "created_at": 1790496563646,
+        "updated_at": 1790496563646,
+        "host": "fixture-host",
+        "last_occurred_at": 1790496563621,
+        "last_progress_at": 1790496563646,
+        "last_transition_id": 2,
+        "input_state": null,
+        "projection_token": "5820a4b6-dd5c-4f1f-92ab-589f72e6cf75"
+      },
+      {
+        "key": "generic:upgrade-ended",
+        "source": "generic",
+        "session_id": "upgrade-ended",
+        "project": "/workspace/example",
+        "state": "ended",
+        "last_event": "Status",
+        "last_message": null,
+        "created_at": 1790496563667,
+        "updated_at": 1790496563667,
+        "host": "fixture-host",
+        "last_occurred_at": 1790496563622,
+        "last_progress_at": 1790496563667,
+        "last_transition_id": 3,
+        "input_state": null,
+        "projection_token": "485dd485-0692-49d0-9543-270059177c8f"
+      },
+      {
+        "key": "devin:upgrade-devin",
+        "source": "devin",
+        "session_id": "upgrade-devin",
+        "project": "/workspace/example",
+        "state": "waiting_input",
+        "last_event": "PermissionRequest",
+        "last_message": null,
+        "created_at": 1790496564007,
+        "updated_at": 1790496564035,
+        "host": "fixture-host",
+        "last_occurred_at": 1790496563625,
+        "last_progress_at": 1790496564035,
+        "last_transition_id": 5,
+        "input_state": "{\"prompt_id\":\"prompt-fixture\",\"pending\":[{\"tool_use_id\":\"tool-a\",\"tool_name\":\"exec\"},{\"tool_use_id\":\"tool-b\",\"tool_name\":\"exec\"}],\"untracked\":false}",
+        "projection_token": "fa0fb801-e355-43e0-ae0a-7bf65b47cb5a"
+      }
+    ],
+    "dashboard_transitions": [
+      {
+        "id": 1,
+        "session_key": "generic:upgrade-working",
+        "from_state": null,
+        "to_state": "working",
+        "source": "generic",
+        "project": "/workspace/example",
+        "host": "fixture-host",
+        "message": null,
+        "occurred_at": 1790496563620,
+        "created_at": 1790496563627,
+        "notified_at": null
+      },
+      {
+        "id": 2,
+        "session_key": "generic:upgrade-waiting",
+        "from_state": null,
+        "to_state": "waiting_input",
+        "source": "generic",
+        "project": "/workspace/example",
+        "host": "fixture-host",
+        "message": null,
+        "occurred_at": 1790496563621,
+        "created_at": 1790496563646,
+        "notified_at": 1790496563655
+      },
+      {
+        "id": 3,
+        "session_key": "generic:upgrade-ended",
+        "from_state": null,
+        "to_state": "ended",
+        "source": "generic",
+        "project": "/workspace/example",
+        "host": "fixture-host",
+        "message": null,
+        "occurred_at": 1790496563622,
+        "created_at": 1790496563667,
+        "notified_at": null
+      },
+      {
+        "id": 4,
+        "session_key": "devin:upgrade-devin",
+        "from_state": null,
+        "to_state": "working",
+        "source": "devin",
+        "project": "/workspace/example",
+        "host": "fixture-host",
+        "message": null,
+        "occurred_at": 1790496563623,
+        "created_at": 1790496564007,
+        "notified_at": null
+      },
+      {
+        "id": 5,
+        "session_key": "devin:upgrade-devin",
+        "from_state": "working",
+        "to_state": "waiting_input",
+        "source": "devin",
+        "project": "/workspace/example",
+        "host": "fixture-host",
+        "message": null,
+        "occurred_at": 1790496563624,
+        "created_at": 1790496564020,
+        "notified_at": 1790496564026
+      }
+    ],
+    "dashboard_seen": [
+      {
+        "session_key": "generic:upgrade-waiting",
+        "seen_transition_id": 2
+      }
+    ],
+    "dashboard_settings": [
+      {
+        "key": "mute_until",
+        "value": "1790500164087"
+      },
+      {
+        "key": "ui_lang",
+        "value": "ko"
+      }
+    ],
+    "dashboard_meta": [
+      {
+        "key": "pruned_below_id",
+        "value": "0"
+      },
+      {
+        "key": "protocol_version",
+        "value": "1"
+      },
+      {
+        "key": "hook_revs",
+        "value": "{\"fixture-host\":{\"rev\":\"1234abcd\",\"at\":1790496563620.0,\"project\":\"/workspace/example\"}}"
+      }
+    ],
+    "dashboard_devices": [
+      {
+        "token": "fixture-fcm-token",
+        "platform": "web",
+        "created_at": 1790496564274,
+        "last_seen_at": 1790496564274,
+        "transport": "fcm",
+        "label": "fixture browser",
+        "enabled": 1,
+        "failure_count": 0,
+        "last_error": null,
+        "last_error_at": null
+      }
+    ],
+    "dashboard_push_log": [
+      {
+        "id": 1,
+        "transition_id": 2,
+        "transport": "fcm",
+        "target": "all",
+        "result": "skipped",
+        "detail": "FCM_SERVICE_ACCOUNT \ubbf8\uc124\uc815",
+        "created_at": 1790496563655
+      },
+      {
+        "id": 2,
+        "transition_id": 5,
+        "transport": "fcm",
+        "target": "all",
+        "result": "skipped",
+        "detail": "FCM_SERVICE_ACCOUNT \ubbf8\uc124\uc815",
+        "created_at": 1790496564026
+      }
+    ]
+  },
+  "cursor": 5,
+  "sourceRevision": "adb92a6b829477d36bda8301f05da7278372258e",
+  "databaseSha256": "984f677bc52b10467786429d0a34da1d1d19e7a979b7d67476f038958c47eb19",
+  "migrationSha256": {
+    "0001_dashboard.sql": "86ca84e9acdc2ee870d3c6b80f6a3ac70647def341c4161d050a57fc34250c36",
+    "0002_dashboard_v2.sql": "86ba6bc4141d0539ecb2e279bd12d338dca27234dd63a984397b0077c38d7c84",
+    "0003_dashboard_v3.sql": "bc0542e96ee66a037e1c18a60d0255a793a89871aa0b55745ee697151b881934",
+    "0004_dashboard_seen.sql": "a09edd64265148f50ef97d0741c8da76bc0d80114049b2cc2bf016f61930d6e4",
+    "0005_devin_input_tracking.sql": "5a8d2ec0eeec7738c480ed76aa51be1a99802528d4db416418485966f99d3e9f"
+  }
+}

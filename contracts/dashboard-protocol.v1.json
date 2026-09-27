@@ -1,0 +1,1224 @@
+{
+  "$id": "agent-dashboard/contracts/dashboard-protocol.v1.json",
+  "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
+  "title": "Agent Dashboard protocol",
+  "protocol_version": 1,
+  "revision": "2026-09-27",
+  "copies": {
+    "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
+    "package": "server/contracts/dashboard-protocol.v1.json"
+  },
+  "versioning": {
+    "description": "protocol_version은 major 정수 하나뿐이다. 소수점·문자열 버전은 없다.",
+    "field": "protocol_version",
+    "type": "integer",
+    "current": 1,
+    "accepted_by_server": [
+      1
+    ],
+    "rules": [
+      "수집 요청(POST /dashboard/events)에서 protocol_version은 필수 정수다. 없거나 정수가 아니면 400.",
+      "서버가 모르는 major(accepted_by_server에 없는 값)는 400 {error:'unsupported protocol_version'}으로 거절한다. 조용히 추측해서 처리하지 않는다.",
+      "필드 추가는 major를 올리지 않는다. 수신 측은 모르는 키를 무시한다(forward compatible).",
+      "필드 의미 변경·삭제, 상태 어휘 변경은 major를 올린다.",
+      "이벤트→상태 매핑은 서버만 해석하므로 매핑 규칙의 변경(추가·의미 변경 모두)은 revision이다. major는 states.enum과 event_payload 필드의 의미가 바뀔 때만 올린다."
+    ]
+  },
+  "auth": {
+    "description": "토큰을 용도별로 분리한다. CORS 화이트리스트 검사가 인증보다 앞에 온다.",
+    "scheme": "Authorization: Bearer <token>",
+    "tokens": {
+      "INGEST_TOKEN": {
+        "description": "hook이 이벤트를 넣을 때만 쓰는 토큰. 조회 권한 없음.",
+        "endpoints": [
+          "POST /dashboard/events",
+          "GET /dashboard/auth/ingest-check"
+        ]
+      },
+      "CLIENT_TOKEN": {
+        "description": "PWA·앱이 조회·기기 등록·설정 변경에 쓰는 토큰. 수집 권한 없음.",
+        "endpoints": [
+          "GET /dashboard/sync",
+          "GET /dashboard/sessions",
+          "GET /dashboard/events",
+          "DELETE /dashboard/sessions/{key}",
+          "POST /dashboard/sessions/{key}/ack",
+          "POST /dashboard/devices",
+          "GET /dashboard/devices",
+          "POST /dashboard/push-subscriptions",
+          "POST /dashboard/mute",
+          "POST /dashboard/test-push",
+          "GET /dashboard/ui-lang",
+          "POST /dashboard/ui-lang"
+        ]
+      },
+      "AUTH_TOKEN": {
+        "description": "전환기 호환용 단일 토큰. 양쪽 용도 모두 허용한다. 두 토큰이 다 배포되면 없앤다.",
+        "deprecated": true,
+        "endpoints": [
+          "*"
+        ]
+      }
+    },
+    "unauthenticated_endpoints": [
+      "GET /healthz",
+      "OPTIONS *"
+    ],
+    "cors": {
+      "description": "PWA(Cloudflare Pages)와 API(Worker)는 다른 origin이다. 화이트리스트만 허용한다.",
+      "allowed_origins_env": "ALLOWED_ORIGINS",
+      "required_response_headers": [
+        "Access-Control-Allow-Origin",
+        "Vary: Origin",
+        "Cache-Control: no-store"
+      ],
+      "preflight": "OPTIONS는 인증 없이 204로 응답한다."
+    },
+    "ingest_check": {
+      "endpoint": "GET /dashboard/auth/ingest-check",
+      "success_status": 204,
+      "invalid_token_status": 401,
+      "wrong_role_status": 403,
+      "side_effects": "none"
+    }
+  },
+  "sources": {
+    "description": "이벤트를 보내는 에이전트 종류. 등록되지 않은 source도 거절하지 않고 이벤트 로그에만 남긴다(202).",
+    "registered": {
+      "claude-code": {
+        "description": "Claude Code. lifecycle hook이 stdin JSON으로 이벤트를 준다.",
+        "event_vocabulary": "claude-code",
+        "state_field_allowed": false,
+        "notification_type_translation": {
+          "description": "A: Notification 이벤트는 stdin에 notification_type 필드를 동봉한다(permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/quota_* 등). hook은 이 값이 제외목록(exclude_exact) 3종과 정확히 일치할 때만 event 이름을 합성 이벤트로 바꿔 보낸다 — 부분 문자열 매칭은 금지다.",
+          "exclude_exact": {
+            "idle_prompt": "IdleNotification",
+            "auth_success": "AuthNotification",
+            "agent_completed": "AgentCompletedNotification"
+          },
+          "default": "제외목록에 없으면(모르는 타입 포함) event는 원래 그대로 Notification이다 — event_state_map.by_source.claude-code에 따라 waiting_input으로 이어진다.",
+          "$note": "미탐(놓친 승인 대기)이 오탐보다 훨씬 비싼 비용 구조라 화이트리스트가 아니라 블랙리스트(제외목록)로 설계했다. 합성 이벤트 3종(IdleNotification/AuthNotification/AgentCompletedNotification)은 event_state_map.by_source.claude-code에 의도적으로 없다 — 현재는 기록만 되고 상태는 바뀌지 않는다. notification_type 원본 값 자체는 event_payload.fields.notification_type으로 raw와 함께 additive하게 동봉되어, 나중에 서버가 매핑을 재판정할 근거(원장)로 남는다."
+        }
+      },
+      "codex": {
+        "description": "Codex CLI. lifecycle hook, 구버전은 notify(argv JSON) fallback.",
+        "event_vocabulary": "codex",
+        "state_field_allowed": false
+      },
+      "generic": {
+        "description": "임의의 스크립트·CI가 직접 상태를 신고하는 통로. 고정된 이벤트 어휘가 없다.",
+        "event_vocabulary": null,
+        "state_field_allowed": true,
+        "$note": "generic은 event 이름이 자유롭기 때문에 state 필드가 필수다. state가 없으면 기록만 되고 상태는 바뀌지 않는다."
+      },
+      "devin": {
+        "description": "Devin CLI. lifecycle hook, JSONC config.json (주석 허용).",
+        "event_vocabulary": "devin",
+        "state_field_allowed": false,
+        "sessionstart_handling": "ignore_initialization",
+        "$note": "SessionStart 이벤트는 source:'startup'일 때 초기화 이벤트로 간주하여 상태 변경 없음. 실제 작업 시작은 UserPromptSubmit부터. hook stdin에는 cwd가 없다(공식 문서상 공통 필드는 session_id·prompt_id + 이벤트별 필드뿐) — hook이 event_payload.project를 DEVIN_PROJECT_DIR env → hook 프로세스의 cwd → 'unknown' 순으로 채운다."
+      }
+    },
+    "unregistered": {
+      "description": "registered에 없는 source. 이벤트는 raw까지 보존하지만 프로젝션·전이·push는 만들지 않는다.",
+      "response": {
+        "status": 202,
+        "body": {
+          "accepted": "logged"
+        }
+      }
+    },
+    "session_key": {
+      "description": "프로젝션·전이·push가 공통으로 쓰는 세션 식별자.",
+      "format": "<source>:<session_id>",
+      "example": "claude-code:0f2c1a9e-7b31-4d55-9c2e-1a2b3c4d5e6f"
+    }
+  },
+  "states": {
+    "description": "세션이 가질 수 있는 상태 6종. 이 목록이 상태 어휘의 전부다.",
+    "enum": [
+      "idle",
+      "working",
+      "waiting_input",
+      "done",
+      "ended",
+      "stalled"
+    ],
+    "detail": {
+      "idle": {
+        "description": "세션이 열려 있고 사람의 입력을 기다린다.",
+        "terminal": false,
+        "derived": false
+      },
+      "working": {
+        "description": "에이전트가 실행 중이다.",
+        "terminal": false,
+        "derived": false
+      },
+      "waiting_input": {
+        "description": "질문·승인 대기. 사람이 답해야 진행된다.",
+        "terminal": false,
+        "derived": false
+      },
+      "done": {
+        "description": "턴 실행을 마쳤다. 세션 자체는 살아 있다.",
+        "terminal": false,
+        "derived": false
+      },
+      "ended": {
+        "description": "세션이 끝났다. SessionStart로만 되살아난다.",
+        "terminal": true,
+        "derived": false
+      },
+      "stalled": {
+        "description": "working이었는데 DASHBOARD_STALL_MS 동안 아무 신호가 없다. 터미널 강제 종료 등으로 조용히 죽은 세션을 드러낸다.",
+        "terminal": false,
+        "derived": true,
+        "derivation": {
+          "produced_by": "server-cron",
+          "from_states": [
+            "working"
+          ],
+          "condition": "now - dashboard_sessions.last_progress_at > DASHBOARD_STALL_MS",
+          "env": {
+            "name": "DASHBOARD_STALL_MS",
+            "default_ms": 300000
+          },
+          "cron_interval": "hourly (retention.cron과 같은 주기를 공유한다)",
+          "detection_latency": "판정이 조건 충족 즉시가 아니라 cron 주기에 매여 있다 — 세션이 실제로 멈춘 시각 기준으로 DASHBOARD_STALL_MS가 지난 시점부터, 다음 cron 실행까지 최대 1시간을 더 기다려야 stalled로 반영된다. 즉 실제 판정은 STALL_MS 후 ~ STALL_MS+60분 사이에 일어난다.",
+          "$note": "0001 시절의 STALE_MS 기반 stale:true 불린 플래그를 대체한다. 상태 자체가 되었으므로 전이 로그와 push를 탈 수 있다. stalled 판정은 서버 시계끼리만 비교한다. 클라이언트 occurred_at은 쓰지 않는다 — 느린 시계는 살아있는 세션을 즉시 stalled로, 빠른 시계는 죽은 세션을 영영 stalled 아님으로 만들기 때문."
+        }
+      }
+    },
+    "invariants": [
+      "ended 세션은 SessionStart 이벤트로만 다른 상태로 나간다. 늦게 도착한 이벤트가 상태를 되돌리지 못한다.",
+      "occurred_at이 세션의 last_occurred_at보다 과거인 이벤트는 기록만 하고 상태를 바꾸지 않는다(순서 역행 방어).",
+      "상태가 실제로 바뀔 때만 dashboard_transitions에 한 줄이 쌓인다. 같은 상태 재진입은 전이가 아니다.",
+      "occurred_at 비교는 같은 세션 안에서만 한다. 같은 세션의 이벤트는 같은 기계·같은 시계에서 나오므로 시계가 어긋나 있어도 자기들끼리의 순서는 보존된다. 순서 판정에는 원본을 쓰고 서버 시각으로 보정하지 않는다."
+    ]
+  },
+  "push_states": {
+    "description": "이 상태로 '전이'했을 때만 push를 보낸다. 전이 적재는 상태와 무관하게 항상 한다.",
+    "enum": [
+      "waiting_input",
+      "stalled"
+    ],
+    "$note": "Stop은 턴마다 발생하므로 '전이일 때만'이라는 조건이 없으면 알림이 시끄러워진다. 음소거(mute) 중에도 전이는 계속 쌓이고 push만 건너뛴다.",
+    "$note_done_excluded": "done은 턴 실행 종료를 나타내지만 백그라운드 작업의 heartbeat로 다시 working이 될 수 있다. 따라서 done 상태는 카드에 표시하고 push는 waiting_input과 stalled 전이에만 보낸다."
+  },
+  "heartbeat_events": {
+    "description": "상태를 바꾸지 않고 세션이 살아 있음만 알리는 이벤트. last_occurred_at과 last_progress_at을 갱신해 stalled 판정을 미룬다(stalled 판정 자체는 last_progress_at만 본다). 단 PostToolUse는 promote_from 가드를 모두 만족하면 예외적으로 working으로 조건부 승격한다(아래) — 그 밖의 경우는 여전히 상태 불변이다.",
+    "events": {
+      "PostToolUse": {
+        "sources": [
+          "claude-code",
+          "codex",
+          "devin"
+        ],
+        "throttle_ms": 60000,
+        "description": "도구 실행마다 발생하므로 hook이 60초에 한 번만 보낸다.",
+        "promote_from": [
+          "done",
+          "idle",
+          "stalled"
+        ],
+        "principle": "하트비트는 활동 방향으로만 상태를 움직인다(→working). 어떤 하트비트도 세션을 done/ended로 밀 수 없다.",
+        "promote_guards": [
+          "프로젝션(dashboard_sessions)에 해당 session_key 행이 없으면 승격하지 않는다 — 세션 생성은 SessionStart·UserPromptSubmit만의 몫이라, 지워진 세션을 하트비트가 되살리면 안 된다.",
+          "현재 상태가 ended면 어떤 경우에도 승격하지 않는다.",
+          "페이로드에 occurred_at이 명시된 이벤트만 승격 후보다 — 없으면 서버 수신 시각으로 대체되어 strict 비교가 무의미해진다(예: Stop 직전 발화의 하트비트가 늦게 도착하면 이미 끝난 턴이 되살아난다).",
+          "승격 판정은 클라이언트가 보낸 원본 occurred_at > dashboard_sessions.last_occurred_at(strict greater)일 때만 한다. last_occurred_at 자체의 갱신 규칙(기존 >=)은 그대로 둔다 — 승격 여부 판정과 last_occurred_at 갱신은 서로 다른 비교다.",
+          "현재 상태가 waiting_input이면 승격하지 않는다 — 백그라운드 서브에이전트의 하트비트가 부모 session_key로 도착하는 것이 정상 케이스인데, 하트비트가 승인 대기를 가리면 실질적 피해(놓친 승인)로 이어진다."
+        ],
+        "$note": "B: 백그라운드 서브에이전트의 도구 활동이 부모 session_key의 PostToolUse로 실제로 도착한다는 관측이 근거다 — done인 부모 세션이 실은 아직 작업 중일 수 있다. 상태 어휘를 늘리지 않고 기존 done/idle/stalled를 working으로만 되돌리는 조건부 승격으로 해결한다(Orca의 monitoring 승격과 같은 문제의식). F(Codex request_user_input)의 waiting_input 승격·해소와는 무관하다 — 5번째 가드가 그 경계다.",
+        "throttle_exception_devin_correlated": "source가 devin이고 prompt_id·tool_use_id·tool_name이 모두 유효한(비어있지 않은 200자 이하 문자열) PostToolUse는 대기 해소 후보이므로 hook이 스로틀 없이 매번 보낸다(0ms). 식별자가 불완전한 Devin PostToolUse와 다른 source의 PostToolUse는 기존 throttle_ms 60000 그대로다. Devin 완료 이벤트의 전송량이 늘어나는 것은 의도된 절충이다 — 대기 추적 소유자를 서버 하나로 두는 가장 작은 구현이고, 실제 해소는 event_state_map.devin_input_tracking의 정확한 상관 매칭에서만 일어난다. waiting_input의 무조건적 하트비트 승격 금지(promote_guards 5번째)는 그대로다.",
+        "throttle_reset": "PostToolUse가 아닌 상태 이벤트(Stop·UserPromptSubmit·Notification·SessionStart·SessionEnd 등)가 서버 전송에 성공하면(스풀로 빠지지 않고 2xx 응답을 받으면) hook이 해당 session_key의 하트비트 타임스탬프 파일을 삭제해 이 스로틀 창을 리셋한다. 근거: Stop 직후에도 백그라운드 서브에이전트가 도구를 계속 쓸 수 있고 그 활동은 위 promote_from 승격 대상인 부모 session_key의 PostToolUse로 도착하는데, 그 PostToolUse가 스로틀 창 한가운데 걸리면 전송 자체가 throttle_ms(60000ms)까지 억제되어 승격이 그만큼 늦어졌다(실측 지연 25~47초, 44분간 done 전이 9회 = 불필요한 푸시 9회). 스풀로 떨어진 경우는 리셋하지 않는다 — 서버가 아직 그 상태 전이를 모르는 채로 스로틀만 풀면 의미가 없고 순서 역행 위험만 커진다. throttle_ms 값(60000) 자체는 바뀌지 않는다."
+      }
+    },
+    "rule": "여기에도 event_state_map에도 없는 (source, event) 조합은 기록만 하고 상태를 바꾸지 않는다."
+  },
+  "client_actions": {
+    "description": "사람이 대시보드(PWA·앱)에서 직접 누르는 조작이 만드는 전이 또는 마커 갱신. hook이 보내는 event_state_map·heartbeat_events(둘 다 기계가 관찰한 신호)와는 출처가 다르므로 별도 블록에 정규화한다 — event_state_map에 섞으면 그 표가 갖는 '(source, event) 1:1'이라는 모양이 깨지고, POST /dashboard/events로 같은 이벤트 이름을 흉내 낸 위조 요청이 그 표를 타고 전이를 만들 수 있게 된다(아래 UserAck 항목의 위조 차단 설명 참고).",
+    "$note_effect": "각 액션의 최상위 effect는 이 조작이 시스템에 미치는 영향의 종류를 구분하는 판별자다. \"transition\": dashboard_events에 정식 이벤트로 적재되어 일반 전이 파이프라인(전이 판정·세션 프로젝션 갱신·dashboard_transitions 기록)을 타고, 상태 모델 안에서 실제 전이를 만들 수 있다(UserAck). \"marker\": 상태 모델 밖의 순수 마커 갱신이다 — dashboard_events에도 dashboard_transitions에도 어떤 줄도 남기지 않고 상태도 바꾸지 않는다(MarkSeen). effect:\"marker\" 액션은 to_state 필드를 갖지 않는다 — 애초에 전이가 아니므로 '전이할 상태'라는 개념 자체가 없다.",
+    "reserved_event_names": [
+      "UserAck"
+    ],
+    "$note_reserved_event_names": "여기 나열된 이름은 client_actions 중 effect:\"transition\"인 액션 전용 event 어휘다 — POST /dashboard/events(수집 엔드포인트)는 event가 이 목록에 있으면 어떤 source를 자칭하든 400으로 거절하고 dashboard_events에 아예 적재하지 않는다(routes.ts). event_state_map에 없다는 사실만으로는 위조를 막지 못한다: 그 이벤트가 일단 로그에 들어가고 나면 POST /dashboard/admin/rebuild(rebuild.ts)가 event 이름만 보고 client_actions 판정을 재적용하므로, 실시간 경로가 기록만 하고 넘어간 줄이 재생 때는 진짜 전이로 둔갑한다(A!=B) — 그래서 차단은 표 밖에 두는 것만으로는 부족하고 반드시 적재 이전에 있어야 한다. scripts/contract_check.py가 이 배열과 routes.ts의 거절 목록을 대조한다. MarkSeen(effect:\"marker\")은 여기 없다 — dashboard_events에 아무것도 적재하지 않으므로 흉내 낼 로그 자체가 없고, 따라서 위조 표면이 없다.",
+    "UserAck": {
+      "endpoint": "POST /dashboard/sessions/{key}/ack",
+      "auth": "CLIENT_TOKEN",
+      "effect": "transition",
+      "from_states": [
+        "waiting_input"
+      ],
+      "to_state": "working",
+      "description": "claude-code에는 '승인 완료' 신호가 없다 — hook 관점에서 waiting_input은 Stop이 올 때까지 계속된다. 사람이 대시보드에서 승인을 실제로 마쳤다는 의도적 클릭은 그 자체로 1:1(사람·세션)이 보장되는 해소 신호이므로, 이 클릭을 working 전이의 근거로 쓴다.",
+      "$note": "이것은 heartbeat_events가 지키는 '하트비트만으로는 상태를 확정하지 않는다'는 원칙의 예외가 아니라 별개의 규칙이다 — 하트비트는 기계가 자동으로 반복 발신하는 생존 신호라 무엇을 승인했는지 모르고, 이 클릭은 사람이 1회성으로 확정하는 의도 신호다. event:\"UserAck\"가 POST /dashboard/events(수집 엔드포인트)로 들어오면 client_actions.reserved_event_names에 있으므로 그 자리에서 400으로 거절되어 로그에도 남지 않는다 — 위조 차단은 이 endpoint 분리가 아니라 그 거절 자체가 장치다(위 reserved_event_names 참고).",
+      "guard": "세션이 존재하고 현재 상태가 waiting_input일 때만 동작한다. 그 밖에는 200 {ok:true, state:<현재 상태>, transition_id:null}로 응답하는 no-op이다 — 두 기기에서 동시에 눌러도 안전하도록 멱등이다.",
+      "pipeline": "UserAck는 dashboard_events에 정식 이벤트로 적재된 뒤 일반 파이프라인(전이 판정·세션 프로젝션 갱신·dashboard_transitions 기록·last_progress_at 갱신)을 그대로 탄다 — 세션 행을 직접 UPDATE하는 지름길은 쓰지 않는다. 그래야 POST /dashboard/admin/rebuild가 dashboard_events를 재생했을 때도 동일한 결과를 재현한다.",
+      "response": "ingest_responses.200_ok와 같은 모양: {ok:true, state:\"working\", transition_id:<id>}. working은 push_states에 없으므로 push는 발송되지 않는다.",
+      "$note_seen_interaction": "이 액션이 guard를 통과해 실제로 새 전이를 만들면 dashboard_seen도 그 transition_id로 함께 단조 갱신된다 — 승인 직후 방금 만든 자기 전이 때문에 카드가 다시 미확인으로 뜨는 것을 막는다. guard를 통과하지 못한 no-op이면 세션의 현재 last_transition_id로 갱신된다(사람이 이 세션을 조작했다는 사실 자체가 '봤다'는 신호이기 때문이다). 자세한 규칙은 MarkSeen.$note_ack_interaction 참고."
+    },
+    "MarkSeen": {
+      "endpoint": "POST /dashboard/sessions/{key}/seen",
+      "auth": "CLIENT_TOKEN",
+      "effect": "marker",
+      "description": "상태가 변한 카드 중 사용자가 이미 열어본 것을 구분하는 읽음/안읽음 표시. 상태 모델 밖에 있다 — 상태를 바꾸지 않고(전이가 아니다) dashboard_events에도 dashboard_transitions에도 어떤 줄도 남기지 않는다. 기준은 시각이 아니라 전이 id다: 미확인 = dashboard_sessions.last_transition_id > dashboard_seen.seen_transition_id.",
+      "$note_no_to_state": "effect:\"marker\"이므로 to_state 필드가 없다 — 이 액션은 상태를 바꾸지 않는다.",
+      "request": {
+        "body": {
+          "last_transition_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "optional": true,
+            "description": "클라이언트가 관찰한 last_transition_id. 본문이 없거나 이 필드가 정수가 아니면 서버가 그 시점 세션의 현재 last_transition_id를 대신 쓴다."
+          }
+        }
+      },
+      "guard": "세션 존재 여부를 gate하지 않는다 — 존재하지 않는 session_key로 호출해도 400으로 거절하지 않고 그대로 처리한다(explicit 값이 없으면 대상은 null). 실패해도 무해하다는 원칙에 따른 설계다.",
+      "monotonic_rule": "dashboard_seen.seen_transition_id는 항상 단조 증가로만 갱신된다 — INSERT ... ON CONFLICT(session_key) DO UPDATE SET seen_transition_id = MAX(excluded, existing) 형태로만 쓴다(직접 UPDATE로 값을 낮추는 경로는 없다). 여러 기기가 같은 세션을 동시에 보고 있을 때, 뒤처진 기기가 나중에 보내는 오래된 값이 앞선 기기가 이미 올려둔 값을 역행시키지 않게 한다.",
+      "response": "{ok:true, seen_transition_id:<정수 또는 null>} — 갱신 후 최종 값. 이 호출 자체는 dashboard_events에 어떤 이벤트도 남기지 않으므로 client_actions.reserved_event_names에 이름을 등록할 필요가 없다(등록할 로그 자체가 없다).",
+      "$note_ack_interaction": "POST /dashboard/sessions/{key}/ack가 실제로 새 전이를 만들면 dashboard_seen도 그 transition_id로 함께 단조 갱신된다(ack가 no-op이면 세션의 현재 last_transition_id로 갱신) — UserAck.$note_seen_interaction 참고.",
+      "invariants": [
+        "rebuild는 전이 id 공간을 새로 만든다. 그래서 재생 말미에 모든 세션의 seen_transition_id를 그 세션의 새 last_transition_id로 맞춘다 — 재생된 전이는 전부 사용자가 이미 지나온 사건이고, 옛 id 공간의 seen 값은 새 공간에서 비교할 수 없다. 이후의 진짜 변화는 새 id로 다시 미확인을 켠다.",
+        "seen(dashboard_seen 및 이 엔드포인트)은 push 발송 여부·내용에 어떤 영향도 주지 않는다 — push는 전이 시점에 고정되는 힌트이고 소급 불변이다. push 파이프라인(push_states 등)은 last_transition_id·seen_transition_id를 참조하지 않는다."
+      ]
+    }
+  },
+  "event_state_map": {
+    "description": "(source, event) 조합을 상태로 매핑하는 표. 표에 없는 조합은 상태를 바꾸지 않는다.",
+    "by_source": {
+      "claude-code": [
+        {
+          "event": "SessionStart",
+          "state": "idle",
+          "description": "세션 시작"
+        },
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "사용자가 프롬프트를 넣어 실행이 시작됨"
+        },
+        {
+          "event": "Notification",
+          "state": "waiting_input",
+          "description": "권한 요청 또는 입력 대기 알림"
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "턴 실행 마침"
+        },
+        {
+          "event": "SessionEnd",
+          "state": "ended",
+          "description": "세션 종료"
+        }
+      ],
+      "codex": [
+        {
+          "event": "SessionStart",
+          "state": "idle",
+          "description": "세션 시작"
+        },
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "사용자가 프롬프트를 넣어 실행이 시작됨"
+        },
+        {
+          "event": "PermissionRequest",
+          "state": "waiting_input",
+          "description": "승인 대기"
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "턴 실행 마침"
+        },
+        {
+          "event": "SessionEnd",
+          "state": "ended",
+          "description": "세션 종료"
+        },
+        {
+          "event": "agent-turn-complete",
+          "state": "done",
+          "description": "구버전 notify fallback (argv JSON, kebab-case 키)"
+        },
+        {
+          "event": "UserInputRequest",
+          "state": "waiting_input",
+          "description": "F: Codex request_user_input 도구(동기·비동기 모두)의 PreToolUse를 훅이 변환한 합성 이벤트. Plan 모드 질문 등에서 발동하며 스로틀 없이 즉시 보낸다."
+        },
+        {
+          "event": "UserInputResolved",
+          "state": "working",
+          "description": "F: request_user_input(동기 버전만)의 PostToolUse를 훅이 변환한 합성 이벤트 — 대기와 1:1로 대응하는 전용 해소 신호다. request_user_input_async의 PostToolUse는 이 이벤트로 바꾸지 않는다(아래 codex_request_user_input_translation)."
+        }
+      ],
+      "generic": [],
+      "devin": [
+        {
+          "event": "SessionStart",
+          "state": "idle",
+          "description": "세션 시작 (초기화 이벤트 무시)"
+        },
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "사용자 프롬프트 제출"
+        },
+        {
+          "event": "PermissionRequest",
+          "state": "waiting_input",
+          "description": "권한 요청"
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "턴 실행 마침"
+        },
+        {
+          "event": "SessionEnd",
+          "state": "ended",
+          "description": "세션 종료"
+        },
+        {
+          "event": "UserInputRequest",
+          "state": "waiting_input",
+          "description": "hook이 tool_name이 정확히 ask_user_question인 Devin PreToolUse를 번역해 보내는 합성 질문 대기 이벤트(devin_input_tracking 참고)."
+        }
+      ]
+    },
+    "generic_rule": {
+      "description": "generic source는 이벤트 어휘가 없다. 요청의 state 필드를 그대로 쓴다.",
+      "state_from": "payload.state",
+      "must_be_in": "states.enum",
+      "derived_states_rejected": [
+        "stalled"
+      ],
+      "$note": "stalled는 서버만 만든다. 클라이언트가 state:'stalled'를 보내면 400."
+    },
+    "codex_request_user_input_translation": {
+      "description": "F: Codex request_user_input 도구(Plan 모드 질문 등, v0.154 소스로 PreToolUse/PostToolUse 발동이 확인됨)를 훅이 UserInputRequest/UserInputResolved 두 합성 이벤트로 바꾸는 규칙.",
+      "tool_name_normalization": "PreToolUse·PostToolUse 페이로드의 tool_name을 영숫자만 남기고 소문자로 정규화한 뒤 완전 일치로만 판정한다. 부분 문자열 매칭은 금지한다(예: request_user_input_summary류의 다른 도구를 오인하지 않기 위해).",
+      "rules": [
+        "PreToolUse이고 정규화된 tool_name이 requestuserinput 또는 requestuserinputasync(동기·비동기 모두)와 완전히 같으면 UserInputRequest를 보낸다 — 스로틀 없음.",
+        "PostToolUse이고 정규화된 tool_name이 requestuserinput과 완전히 같으면(동기만) UserInputResolved를 보낸다.",
+        "PostToolUse이고 정규화된 tool_name이 requestuserinputasync면 UserInputResolved로 바꾸지 않고 일반 PostToolUse 하트비트 경로로 보낸다 — 비동기 도구는 질문 직후 PostToolUse가 오고 실제 응답은 다음 사용자 메시지이므로, 이걸 해소로 쓰면 아직 떠 있는 질문을 지워버리게 된다."
+      ],
+      "$note": "B(하트비트 조건부 승격)와의 구분을 명문화한다: 비특정 생존 신호(하트비트)는 waiting_input을 승격·해소할 수 없다. 해소는 대기와 1:1 근거를 가진 전용 이벤트만 가능하다(UserInputResolved). claude-code의 권한 승인(Notification→waiting_input)에는 이런 상류 해소 신호가 없어 codex와 비대칭이지만, 이는 수용한다."
+    },
+    "devin_input_tracking": {
+      "request_events": [
+        "PermissionRequest",
+        "UserInputRequest"
+      ],
+      "completion_event": "PostToolUse",
+      "question_tool": "ask_user_question",
+      "correlation_fields": [
+        "prompt_id",
+        "tool_use_id",
+        "tool_name"
+      ],
+      "pending_limit": 256,
+      "reset_events": [
+        "UserPromptSubmit",
+        "SessionStart",
+        "Stop",
+        "SessionEnd",
+        "UserAck"
+      ],
+      "description": "Devin의 대기를 세션·턴·도구 호출별로 추적한다. 현재 waiting_input에서 정확히 일치하는 완료만 해당 요청을 해제하고, 남은 요청과 식별 불가 대기가 모두 없을 때 working으로 전환한다. 새 프롬프트와 수명 주기·수동 응답 확인은 대기를 초기화한다. 다른 알려진 턴의 Stop은 현재 대기를 지우지 않는다. 누락·잘못된 식별자나 초과 요청은 자동 해소하지 않는다. 기존 occurred_at 역행 방어와 ended 불변식을 유지한다.",
+      "$note": "해소 시점은 승인 클릭이 아니라 도구 완료(PostToolUse)다 — 권한 승인도 실제 해소는 그 도구가 반환될 때 일어난다. 질문 거절·권한 거부 같은 정상 거부 경로는 PostToolUse가 나오지 않으므로 대기는 Stop·새 UserPromptSubmit·SessionEnd·사용자 ack까지 유지된다. 취소된 경우는 프로브하지 않았으므로 그 동작을 주장하지 않는다."
+    }
+  },
+  "event_payload": {
+    "description": "POST /dashboard/events JSON 객체. 기본 저장은 재생에 필요한 허용 필드이며, 상세 원문은 명시적 설정에서만 보존한다.",
+    "fields": {
+      "protocol_version": {
+        "type": "integer",
+        "required": true,
+        "description": "이 페이로드가 따르는 프로토콜 major. 현재 1. 정수가 아니거나 모르는 값이면 400."
+      },
+      "source": {
+        "type": "string",
+        "required": true,
+        "description": "에이전트 종류. sources.registered의 키면 정상 처리, 아니면 202로 기록만.",
+        "example": "claude-code"
+      },
+      "session_id": {
+        "type": "string",
+        "required": true,
+        "description": "에이전트가 준 세션 식별자. source와 합쳐 session_key가 된다.",
+        "max_length": 200
+      },
+      "project": {
+        "type": "string",
+        "required": true,
+        "description": "세션의 cwd 절대경로. 빈 문자열은 허용하지만 null·비문자열은 400. 알림 제목에는 마지막 경로 조각만 쓴다.",
+        "example": "/workspace/example"
+      },
+      "host": {
+        "type": "string",
+        "required": false,
+        "description": "이벤트를 낸 기계의 hostname. 알림 제목에 들어간다. 없으면 서버가 null로 두고 표시에서 생략한다.",
+        "example": "sol-macbook"
+      },
+      "event": {
+        "type": "string",
+        "required": true,
+        "description": "hook 이벤트 이름. event_state_map·heartbeat_events에 없으면 기록만 된다.",
+        "example": "Notification"
+      },
+      "state": {
+        "type": "string",
+        "required": false,
+        "description": "source가 generic일 때만 의미가 있는 직접 상태 신고. states.enum의 값이어야 하고 stalled는 거절한다. claude-code·codex가 보내면 무시한다(event_state_map이 정본).",
+        "enum_ref": "states.enum"
+      },
+      "event_id": {
+        "type": "string",
+        "required": false,
+        "recommended": true,
+        "description": "멱등 키. 전역 고유해야 한다(UUIDv4 권장). 같은 event_id가 다시 오면 200 {ok:true, duplicate:true}로 응답하고 아무것도 바꾸지 않는다. 스풀 재전송이 상태를 흔들지 않게 하는 장치다.",
+        "max_length": 200
+      },
+      "occurred_at": {
+        "type": "integer",
+        "required": false,
+        "description": "이벤트가 발생한 시각(epoch ms, 클라이언트 시계). 없으면 서버 수신 시각을 쓴다. 세션의 last_occurred_at보다 과거면 기록만 하고 상태는 그대로 둔다. 서버는 이 값을 고치지 않는다. 순서 판정에만 쓰이고 서버 시각과 비교되지 않는다. 정확한 순서 판정을 원하면 occurred_at은 사실상 필수다."
+      },
+      "notification_type": {
+        "type": "string",
+        "required": false,
+        "description": "claude-code Notification 이벤트의 원본 세부 타입(hook stdin의 notification_type 필드 그대로: permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/quota_* 등). additive 필드라 서버는 그대로 저장만 하고 상태 판단에는 쓰지 않는다 — 나중에 서버가 매핑을 재판정할 때 쓸 원장(source of truth)이다. sources.registered.claude-code의 notification_type_translation을 함께 본다. source가 claude-code가 아니면 의미가 없고, 모르는 값이 와도 거절하지 않는다.",
+        "example": "permission_prompt"
+      },
+      "message": {
+        "type": "string",
+        "required": false,
+        "description": "선택한 짧은 문구. hook MY_DASHBOARD_INCLUDE_CONTENT=1 및 서버 DASHBOARD_STORE_MESSAGE=1에서만 수집·저장·표시한다. 기본은 null이다.",
+        "max_length_stored": 300
+      },
+      "hook_rev": {
+        "type": "string",
+        "required": false,
+        "description": "이 hook 스크립트가 서버에서 내려받을 당시 새겨진 훅 묶음 버전(8자리 hex, hooks/routes.ts의 HOOK_REV — GET /setup.sh·GET /hooks/files/:name이 __MY_DASHBOARD_HOOK_REV__ 자리에 치환해 넣는다). additive 필드라 서버는 그대로 저장만 하고(dashboard_meta.hook_revs 원장) 상태 판단에는 전혀 쓰지 않는다 — '훅 구버전 배너'(sync.response.fields.hook_skew)가 이 값과 서버의 현재 HOOK_REV를 비교해 구버전 훅을 쓰는 기계를 찾아내는 데만 쓰인다. 없어도(구버전 훅이라 이 필드 자체를 모르는 경우) 거절하지 않는다 — 원장에는 그 호스트의 rev가 null로 남고, 읽는 쪽은 null도 '서버와 다르다'로 취급한다.",
+        "example": "a1b2c3d4"
+      },
+      "prompt_id": {
+        "type": "string",
+        "required": false,
+        "description": "Devin 상관 식별자(event_state_map.devin_input_tracking). 비어있지 않은 문자열만 유효하고 값을 정규화 없이 그대로 보존한다. 누락·비문자열·200자 초과는 식별자 없음으로 취급한다. raw는 4096바이트로 잘리므로 서버는 이 값들을 별도 컬럼에 영속한다.",
+        "max_length": 200
+      },
+      "tool_use_id": {
+        "type": "string",
+        "required": false,
+        "description": "Devin 상관 식별자(event_state_map.devin_input_tracking). 비어있지 않은 문자열만 유효하고 값을 정규화 없이 그대로 보존한다. 누락·비문자열·200자 초과는 식별자 없음으로 취급한다. raw는 4096바이트로 잘리므로 서버는 이 값들을 별도 컬럼에 영속한다.",
+        "max_length": 200
+      },
+      "tool_name": {
+        "type": "string",
+        "required": false,
+        "description": "Devin 상관 식별자(event_state_map.devin_input_tracking). 비어있지 않은 문자열만 유효하고 값을 정규화 없이 그대로 보존한다. 누락·비문자열·200자 초과는 식별자 없음으로 취급한다. raw는 4096바이트로 잘리므로 서버는 이 값들을 별도 컬럼에 영속한다.",
+        "max_length": 200
+      },
+      "raw": {
+        "type": "string",
+        "required": false,
+        "provided_by": "server",
+        "description": "서버의 재생 입력. 기본은 project·generic state·시각·source·상관 필드 등 허용된 메타데이터 envelope이며 임의 tool input이나 클라이언트 raw를 포함하지 않는다. DASHBOARD_STORE_MESSAGE=1을 명시하면 기존 최대 4096바이트 원문 저장을 사용한다.",
+        "max_bytes_stored": 4096,
+        "$note": "상세 모드 원문은 4096바이트까지 보존한다. 기본 정규화 envelope는 최대 16384바이트이며 자르지 않고 초과 시400으로 거절한다.",
+        "max_bytes_normalized": 16384
+      }
+    },
+    "required": [
+      "protocol_version",
+      "source",
+      "session_id",
+      "project",
+      "event"
+    ],
+    "optional": [
+      "host",
+      "state",
+      "event_id",
+      "occurred_at",
+      "message",
+      "notification_type",
+      "hook_rev",
+      "prompt_id",
+      "tool_use_id",
+      "tool_name"
+    ],
+    "server_filled": [
+      "raw"
+    ],
+    "example": {
+      "protocol_version": 1,
+      "source": "claude-code",
+      "session_id": "0f2c1a9e-7b31-4d55-9c2e-1a2b3c4d5e6f",
+      "project": "/workspace/example",
+      "host": "sol-macbook",
+      "event": "Notification",
+      "event_id": "6b1f4d7c-0a2e-4c39-9f81-2d3e4f5a6b7c",
+      "occurred_at": 1757300000000,
+      "message": "Bash 명령 실행 승인을 기다립니다"
+    }
+  },
+  "ingest_responses": {
+    "description": "POST /dashboard/events 응답. hook은 응답을 보고 스풀 재전송을 결정한다.",
+    "200_ok": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "state": "waiting_input",
+        "transition_id": 4213,
+        "push": "queued"
+      },
+      "description": "정상 수신. state는 반영 후 상태, transition_id는 전이가 생긴 경우의 커서 값(없으면 null), push는 none|queued|muted|skipped."
+    },
+    "200_duplicate": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "duplicate": true
+      },
+      "description": "같은 event_id가 이미 있다. 아무것도 바꾸지 않았다. hook은 성공으로 취급한다."
+    },
+    "202_logged": {
+      "status": 202,
+      "body": {
+        "accepted": "logged"
+      },
+      "description": "미등록 source. 이벤트 로그에만 남겼다."
+    },
+    "400_bad_request": {
+      "status": 400,
+      "body": {
+        "error": "설명 문구"
+      },
+      "description": "필수 필드 누락·형식 오류, 또는 모르는 protocol_version major."
+    },
+    "401_unauthorized": {
+      "status": 401,
+      "body": {
+        "error": "unauthorized"
+      },
+      "description": "INGEST_TOKEN(전환기에는 AUTH_TOKEN도) 불일치."
+    }
+  },
+  "hook_contract": {
+    "description": "이벤트를 보내는 쪽(hook 스크립트)이 지켜야 하는 규칙. 에이전트를 절대 방해하지 않는 것이 1순위다.",
+    "rules": [
+      "네트워크 호출은 --max-time 2로 제한하고, 무슨 일이 있어도 exit 0으로 끝낸다.",
+      "전송이 실패하면 페이로드를 ~/.local/state/my-dashboard/spool.ndjson에 한 줄씩 append한다.",
+      "스풀은 500행 FIFO다. 넘으면 오래된 줄을 버린다.",
+      "다음 성공 전송 때 스풀을 순서대로 재전송한다. event_id 멱등이 중복을 흡수한다.",
+      "rev(hook_rev)는 서버가 발급한다 — 그래서 hook은 자신이 내려받은 시점의 서버 rev보다 더 새로운(앞선) 값을 절대 가질 수 없다. 훅이 보고하는 hook_rev는 항상 '과거 어느 시점에 서버가 서빙하던 rev' 중 하나이거나(구버전) 서버의 현재 rev와 같다(최신) — 서버보다 앞선 rev는 존재할 수 없다.",
+      "설정 우선순위는 환경변수 > env 파일 > 기본값이다 — 호출 시점의 MY_DASHBOARD_* 환경변수가 env 파일의 같은 키를 누른다. MY_DASHBOARD_ENV(파일 선택자)만은 환경변수 전용이다."
+    ],
+    "spool": {
+      "path": "~/.local/state/my-dashboard/spool.ndjson",
+      "max_lines": 500,
+      "policy": "FIFO"
+    },
+    "timeout_seconds": 2
+  },
+  "push": {
+    "description": "push는 '깨워주는 힌트'다. 정합성은 언제나 GET /dashboard/sync 커서 재조회가 담보한다. 전달 실패는 정상 상황으로 취급한다.",
+    "channels": {
+      "$note": "여기 없는 채널 id는 서버가 모르는 채널이다 — 등록(POST /dashboard/devices)도 거절한다. 정본은 server/src/dashboard/push/transport.ts의 TRANSPORT_IDS다.",
+      "fcm": {
+        "description": "확정된 유일한 발송 채널. FCM HTTP v1. payload는 data 전용이다(notification 블록 없음) — 표시는 클라이언트(서비스 워커/앱)가 push.data_keys의 title/body/link로 직접 한다. Android 앱과 웹 기기 토큰이 여기에 있다.",
+        "status": "supported",
+        "payload": "data-only",
+        "target_table": "dashboard_devices"
+      },
+      "fcm-apns": {
+        "description": "같은 FCM HTTP v1 엔드포인트·자격증명을 쓰는 fcm 채널의 Apple 대상(macOS 상주 앱 등)이다 — 별도 채널이 아니라 fcm 트랜스포트가 이 transport 값도 맡는다(server/src/dashboard/push/fcm.ts의 supports()). data-only 원칙의 유일한 예외로, message에 apns.payload.aps.alert(title/body)·sound:'default'·'thread-id':session_key를 동봉하고 apns-priority 헤더를 10으로 보낸다 — data 블록은 그대로 유지한다(무회귀). '본문 숨기기'(DASHBOARD_STORE_MESSAGE=0) 시 alert.body도 data.body와 같은 규칙으로 message를 뺀 상태 문구만 담는다. 이 예외의 이유는 iOS/macOS가 종료·백그라운드 상태에서 배너를 띄우려면 OS가 직접 읽는 alert가 있어야 해서다(그 상태엔 우리 클라이언트 코드가 안 떠 있다) — 그 밖의 채널(웹 'fcm')은 지금처럼 data 전용이다.",
+        "status": "supported",
+        "payload": "data+apns-alert",
+        "target_table": "dashboard_devices",
+        "app_ownership": "앱(macOS 상주)은 APNs 등록에 성공하면 로컬 알림을 끈다(배너는 그 순간부터 전부 이 APNs 경로에서 온다) — 등록에 실패하면 로컬 알림으로 폴백한다. 포그라운드에서는 배너를 억제한다(presentation options 전부 false) — 앱이 떠 있는 동안은 화면 자체가 상태를 보여준다."
+      },
+      "vapid-web": {
+        "description": "표준 Web Push 직접 발송(RFC 8292 VAPID 인증 + RFC 8291 aes128gcm 본문 암호화). 자리만 예약되어 있고 아직 구현하지 않았다 — TRANSPORT_IDS에 없어 등록조차 받지 않는다.",
+        "status": "reserved-unimplemented",
+        "target_table": "dashboard_push_subscriptions"
+      }
+    },
+    "dispatch": {
+      "description": "채널 선택은 서버 내부 관심사다. 클라이언트는 채널을 모른다.",
+      "interface": "dispatchPush(env, transition, opts?)",
+      "location": "server/src/dashboard/dispatch.ts",
+      "log_table": "dashboard_push_log"
+    },
+    "data_keys": {
+      "description": "채널과 무관하게 동일한 data 페이로드. 값은 전부 문자열이다(FCM data와 Web Push JSON 공통 제약).",
+      "transition_id": {
+        "type": "string",
+        "description": "이 push를 만든 dashboard_transitions.id의 10진 문자열. 클라이언트는 이 값을 커서로 써서 sync를 당길 수 있다."
+      },
+      "session_key": {
+        "type": "string",
+        "description": "<source>:<session_id>. 알림 탭 시 열 세션."
+      },
+      "state": {
+        "type": "string",
+        "description": "전이한 상태(push_states 중 하나)."
+      },
+      "source": {
+        "type": "string",
+        "description": "에이전트 종류."
+      },
+      "project": {
+        "type": "string",
+        "description": "세션의 cwd 절대경로."
+      },
+      "host": {
+        "type": "string",
+        "description": "이벤트를 낸 기계 이름. 없으면 빈 문자열."
+      },
+      "title": {
+        "type": "string",
+        "description": "표시용 제목. 서버가 i18n 라벨로 완성해 보낸다."
+      },
+      "body": {
+        "type": "string",
+        "description": "표시용 본문. message가 있으면 그것, 없으면 상태 문구."
+      },
+      "link": {
+        "type": "string",
+        "description": "알림을 탭했을 때 열 클라이언트 상대 경로. 절대 URL이 아니다(배포 호스트가 달라도 같은 push가 동작해야 한다).",
+        "format": "/?session=<session_key>"
+      }
+    },
+    "required_data_keys": [
+      "transition_id",
+      "session_key",
+      "state",
+      "source",
+      "project",
+      "host",
+      "title",
+      "body",
+      "link"
+    ],
+    "mute": {
+      "description": "음소거 중에도 전이 적재는 계속되고 push만 건너뛴다.",
+      "endpoint": "POST /dashboard/mute",
+      "request": {
+        "minutes": {
+          "type": "integer",
+          "description": "지금부터 음소거할 분. 0이면 즉시 해제."
+        }
+      },
+      "state_location": "dashboard_settings.mute_until (epoch ms 문자열)",
+      "dispatch_result": "muted"
+    },
+    "test_push": {
+      "description": "기기 등록이 살아 있는지 확인하는 수동 발송. 음소거를 무시한다.",
+      "endpoint": "POST /dashboard/test-push",
+      "request": {
+        "label": {
+          "type": "string",
+          "required": false,
+          "description": "본문에 넣을 표시 문구."
+        }
+      }
+    },
+    "privacy": {
+      "description": "알림 본문에 코드·프롬프트 내용이 실릴 수 있다.",
+      "env": {
+        "name": "DASHBOARD_STORE_MESSAGE",
+        "default": "0",
+        "off_value": "0"
+      },
+      "rule": "명시적인 1에서만 메시지를 저장하고 push 본문에 포함한다. 기본과 0에서는 상태 문구만 사용한다. 기존 DB 내용은 자동으로 소급 삭제하지 않는다."
+    }
+  },
+  "settings": {
+    "description": "dashboard_settings 테이블에 사람이 저장하는 값들의 규범. mute_until의 규범은 여기가 아니라 push.mute에 있다(이 절로 옮기지 않는다) — 이 절은 mute_until 이후 추가되는 설정만 다룬다. 지금은 ui_lang 하나뿐이다.",
+    "ui_lang": {
+      "description": "클라이언트 표시 로케일의 서버측 확정값. 로컬 config의 uiLang(themeMode의 정확한 미러, 3값 'system'/'ko'/'en')과 달리 서버는 2값 'ko'/'en'과 null만 안다 — system은 기기 로컬 사실이라 서버에 저장하지 않는다. 로컬 system과 서버 null 사이의 매핑이 이 비대칭의 유일한 대응이다. non-null이면 그 값이 규범이고, null이면 서버는 규범을 갖지 않으며 각 기기가 자신의 플랫폼 로케일을 쓴다.",
+      "state_location": "dashboard_settings.ui_lang ('ko'|'en' 문자열 그대로 저장, enum 인덱스 아님. 행이 없거나 값이 NULL이면 미설정 = null)",
+      "endpoint": {
+        "get": {
+          "method": "GET /dashboard/ui-lang",
+          "auth": "CLIENT_TOKEN",
+          "response": {
+            "ui_lang": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "ko",
+                "en",
+                null
+              ]
+            }
+          }
+        },
+        "post": {
+          "method": "POST /dashboard/ui-lang",
+          "auth": "CLIENT_TOKEN",
+          "request": {
+            "lang": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "ko",
+                "en",
+                null
+              ],
+              "required": true,
+              "description": "확정할 값. 명시적 null은 '선택 해제'를 뜻하는 유효한 값이라 그대로 저장한다 — 요청 본문에 lang 키 자체가 없는 것(누락)과는 다르다."
+            }
+          },
+          "response": {
+            "ok": true,
+            "ui_lang": "<저장 후 확정값(요청값 그대로)>"
+          },
+          "errors": {
+            "400": "lang 키가 요청 본문에 없거나, 있어도 'ko'|'en'|null 중 어느 것도 아닐 때."
+          },
+          "write_rule": "mute의 writeMuteUntil과 같은 순수 LWW(last-write-wins)다 — 단조 가드·타임스탬프·병합 규칙이 없다. 요청이 확정값 그대로 저장되고 그대로 응답에 실린다(낙관 갱신 없음, POST 응답이 곧 확정값)."
+        }
+      },
+      "sync_field": "GET /dashboard/sync 응답의 ui_lang 필드가 이 값을 mute_until 옆에 동봉한다 — sync.response.fields.ui_lang 참고(무조건 대입, seen의 MAX 병합과는 다르다)."
+    }
+  },
+  "sync": {
+    "description": "클라이언트가 쓰는 유일한 조회 엔드포인트. 커서 하나로 스냅샷과 델타가 수렴한다.",
+    "endpoint": "GET /dashboard/sync",
+    "auth": "CLIENT_TOKEN",
+    "cache": "Cache-Control: no-store",
+    "query": {
+      "since": {
+        "type": "integer",
+        "required": false,
+        "description": "마지막으로 받은 dashboard_transitions.id. 없으면 스냅샷(reset:true)을 받는다."
+      },
+      "limit": {
+        "type": "integer",
+        "required": false,
+        "default": 200,
+        "max": 1000,
+        "description": "델타 한 번에 받을 전이 수 상한."
+      },
+      "include_ended": {
+        "type": "string",
+        "required": false,
+        "enum": [
+          "0",
+          "1"
+        ],
+        "default": "0",
+        "description": "스냅샷에 ended 세션을 포함할지. 델타에는 영향이 없다."
+      }
+    },
+    "reset_rules": [
+      "since가 없거나 음수면 reset:true.",
+      "since + 1 < pruned_below_id이면 다음에 받을 전이가 이미 정리되었다는 뜻이므로 reset:true. since 자체가 정리된 것은 손실이 아니다(이미 받아 본 값이다) - 여기서 +1을 빼면 전이 로그가 비는 순간 어떤 커서도 델타 조건을 만족하지 못해 reset이 무한 반복되고, 클라이언트가 매 폴링마다 스냅샷을 재생해 알림이 폭주한다.",
+      "since가 전이 로그의 끝(max(id), 로그가 비었으면 pruned_below_id - 1)을 넘으면 커서 파일 손상이나 DB 되돌림이므로 reset:true. 그대로 델타를 주면 id > since인 전이가 영원히 생기지 않아 조용히 아무것도 전달되지 않는다.",
+      "그 밖에는 reset:false + since 이후 전이 델타.",
+      "has_more가 true면 응답의 cursor로 즉시 한 번 더 요청한다."
+    ],
+    "response": {
+      "description": "reset 값에 따라 sessions와 transitions 중 한쪽이 채워진다. 두 키는 항상 존재한다(클라이언트 분기 단순화).",
+      "fields": {
+        "protocol_version": {
+          "type": "integer",
+          "description": "서버가 말하는 프로토콜 major. 클라이언트가 모르는 값이면 갱신을 안내한다."
+        },
+        "reset": {
+          "type": "boolean",
+          "description": "true면 sessions가 전체 스냅샷이고 로컬 상태를 버리고 갈아탄다. false면 transitions를 순서대로 적용한다."
+        },
+        "cursor": {
+          "type": "integer",
+          "description": "이 응답까지 반영한 최대 전이 id. 다음 요청의 since에 그대로 넣는다. 델타 응답에서 새 전이가 없으면 since 그대로다(커서는 절대 뒤로 가지 않는다). 스냅샷(reset) 응답에서 전이가 하나도 없으면 max(pruned_below_id-1, 0)이다 — AUTOINCREMENT id는 재사용되지 않으므로 다음 전이는 반드시 이 값보다 커서 델타를 건너뛰지 않는다."
+        },
+        "has_more": {
+          "type": "boolean",
+          "description": "limit에 걸려 잘렸다. cursor로 즉시 재요청."
+        },
+        "server_time": {
+          "type": "integer",
+          "description": "서버 시각(epoch ms). 클라이언트 시계 보정과 경과시간 표시에 쓴다."
+        },
+        "pruned_below_id": {
+          "type": "integer",
+          "description": "이 값보다 작은 전이 id는 보존 정리로 사라졌다. since가 이보다 작으면 reset을 받는다."
+        },
+        "stall_ms": {
+          "type": "integer",
+          "description": "서버가 쓰는 DASHBOARD_STALL_MS. 클라이언트가 '곧 멈춘 듯'을 미리 표시할 때 쓴다."
+        },
+        "mute_until": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "음소거 종료 시각(epoch ms). null이면 음소거 아님."
+        },
+        "ui_lang": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ko",
+            "en",
+            null
+          ],
+          "description": "settings.ui_lang의 확정값을 그대로 동봉한다 — mute_until과 같은 '절대값 서버 상태'로 reset 여부와 무관하게 매 응답(스냅샷·델타 공통)에 항상 무조건 대입된다(seen의 MAX 병합이 아니다). null이면 서버 규범이 없다는 뜻이고, 각 기기는 자신의 플랫폼 로케일을 쓴다."
+        },
+        "seen": {
+          "type": "array",
+          "items_ref": "sync.seen_object",
+          "description": "세션별 확인 처리 마커 — mute_until과 같은 '절대값 서버 상태'로 reset 값과 무관하게 매 응답(스냅샷·델타 공통)에 항상 전체가 동봉된다. 범위는 스냅샷의 sessions와 동일(비-ended 세션, include_ended 쿼리와 무관하게 항상 이 범위). 클라이언트는 수신 값을 로컬 값과 MAX로 멱등 병합한다 — 낙관 갱신 직후 비행 중이던 옛 응답이 뒤늦게 도착해 방금 올린 로컬 값을 되돌리는 깜빡임을 막는다."
+        },
+        "hook_skew": {
+          "type": "array",
+          "items_ref": "sync.hook_skew_object",
+          "description": "'훅 구버전 배너' — 서버의 현재 훅 rev(hooks/routes.ts의 HOOK_REV)와 다르거나 아직 한 번도 rev를 보고한 적 없는 호스트 목록. mute_until과 같은 '절대값 서버 상태'로 reset 값과 무관하게 매 응답에 항상 전체가 동봉되지만, seen과 달리 MAX-merge 대상이 아니다 — 클라이언트는 수신 값으로 로컬 값을 그대로 덮어쓴다(dashboard_meta.hook_revs 원장을 매번 다시 훑어 계산하는 절대값이라 병합할 이유가 없다). rev가 일치하는 호스트는 이 배열에 실리지 않는다 — '구버전인 것만' 담는 배너용 필드다."
+        },
+        "sessions": {
+          "type": "array",
+          "items_ref": "sync.session_object",
+          "description": "reset:true일 때 전체 스냅샷, reset:false일 때 빈 배열."
+        },
+        "transitions": {
+          "type": "array",
+          "items_ref": "sync.transition_object",
+          "description": "reset:false일 때 since 이후 델타(id 오름차순), reset:true일 때 빈 배열."
+        },
+        "sessions_touched": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "이번 델타가 건드린 session_key 목록(등장 순서, 중복 제거). reset:true면 빈 배열이다. 클라이언트가 transitions를 훑지 않고도 어느 카드를 다시 그릴지 바로 알 수 있게 얹은 편의 필드다 — 내용 자체는 transitions가 이미 다 담고 있다."
+        }
+      }
+    },
+    "session_object": {
+      "description": "프로젝션(dashboard_sessions) 한 줄.",
+      "fields": {
+        "key": {
+          "type": "string",
+          "description": "session_key."
+        },
+        "source": {
+          "type": "string",
+          "description": "에이전트 종류."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "에이전트가 준 세션 식별자."
+        },
+        "project": {
+          "type": "string",
+          "description": "세션의 cwd."
+        },
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "기계 이름."
+        },
+        "state": {
+          "type": "string",
+          "enum_ref": "states.enum",
+          "description": "현재 상태."
+        },
+        "last_event": {
+          "type": "string",
+          "description": "마지막으로 반영된 이벤트 이름."
+        },
+        "last_message": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "마지막 message(300자 이내). DASHBOARD_STORE_MESSAGE=0이면 항상 null."
+        },
+        "last_occurred_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "마지막 이벤트의 발생 시각(epoch ms, 클라이언트 시계). 순서 역행 방어와 하트비트 승격 판정에 쓴다. stalled 판정에는 쓰지 않는다(last_progress_at 참고)."
+        },
+        "last_progress_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "마지막 진척 신호를 서버가 받은 시각(epoch ms, 서버 시계). 상태를 바꾼 이벤트와 heartbeat_events만 민다 — 기록만 되는 이벤트는 밀지 않는다. stalled 판정과 클라이언트의 곧-멈춘-듯 표시가 둘 다 이 값을 쓰고 server_time과 비교한다."
+        },
+        "last_transition_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "이 세션에 대해 dashboard_transitions에 마지막으로 적재된 행의 id. appendTransition이 새 id를 받는 자리에서 기록한다. 이 세션에 전이가 한 번도 없었으면 null. seen(읽음/안읽음) 판정의 분자 쪽 기준값이다 — client_actions.MarkSeen 참고. 분모 쪽 기준값(seen_transition_id)은 이 객체가 아니라 응답 최상위 sync.response.fields.seen에서 온다 — 같은 사실(확인 처리 여부)의 표현을 한 곳으로 모으기 위해 session_object에는 더 이상 두지 않는다."
+        },
+        "created_at": {
+          "type": "integer",
+          "description": "세션 첫 이벤트 수신 시각."
+        },
+        "updated_at": {
+          "type": "integer",
+          "description": "프로젝션 마지막 갱신 시각."
+        }
+      }
+    },
+    "seen_object": {
+      "description": "응답 최상위 seen 배열의 원소 하나 — 세션 하나의 확인 처리 마커. mute_until과 같은 '절대값 서버 상태' 선례를 따라 reset 값과 무관하게 매 응답(스냅샷·델타 공통)에 항상 이 배열 전체가 절대값으로 동봉된다 — 두 응답 중 하나에만 실려 오는 sessions/transitions와는 성격이 다르다.",
+      "fields": {
+        "key": {
+          "type": "string",
+          "description": "session_key."
+        },
+        "seen_transition_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "dashboard_seen에서 온 값 — 사용자가 마지막으로 확인 처리한 전이 id. 아직 한 번도 MarkSeen/ack를 호출한 적이 없으면 null. 서버는 last_transition_id와 이 값을 비교해 '미확인' 여부를 계산해 내려주지 않는다 — 두 정수를 그대로 내려줄 뿐이고, null 처리(예: 첫 스냅샷 시점에 본 것으로 간주)는 클라이언트 규칙이다."
+        }
+      }
+    },
+    "hook_skew_object": {
+      "description": "응답 최상위 hook_skew 배열의 원소 하나 — 서버의 현재 훅 rev와 다른(또는 아직 한 번도 보고한 적 없는) 훅을 쓰는 기계 하나. seen_object와 달리 세션이 아니라 호스트 단위다 — dashboard_meta.hook_revs 원장이 session_key가 아니라 host를 키로 삼기 때문이다(같은 기계에서 여러 세션이 동시에 돌아도 훅 스크립트 자체는 그 기계에 하나만 설치되어 있다는 전제).",
+      "fields": {
+        "host": {
+          "type": "string",
+          "description": "훅 이벤트 payload의 host 필드(hostname)와 같다."
+        },
+        "rev": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "이 호스트가 마지막으로 보고한 hook_rev(8자리 hex). 한 번도 보고한 적 없으면(구버전 훅이라 필드 자체를 모르거나, 서버가 origin/rev를 아직 치환해 주지 못한 원본 그대로 실행) null. null도 '서버 현재 rev와 다르다'로 취급해 이 배열에 실린다 — rev 부재와 rev 낡음 사이에 우선순위는 없다."
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "이 host가 마지막으로 hook_rev를 신고한 이벤트의 project(cwd) 원문 그대로(session_object.project와 같은 규약, basename 추림 없음). devcontainer처럼 host(hostname)만으로는(예: 컨테이너 ID) 사람이 식별할 수 없는 환경을 배너에서 구분하기 위한 additive 힌트다 — rev·WHERE 가드와 무관하게 얹히는 값이라, project만 바뀌고 rev·24시간 갱신 조건이 전부 거짓이면 다음 갱신 타이밍까지는 옛 project가 그대로 남는다. 원장에 이 host가 없거나 project를 신고한 적 없으면 null."
+        }
+      }
+    },
+    "transition_object": {
+      "description": "전이 로그(dashboard_transitions) 한 줄. id가 곧 커서다.",
+      "fields": {
+        "id": {
+          "type": "integer",
+          "description": "AUTOINCREMENT 커서. 단조 증가한다."
+        },
+        "session_key": {
+          "type": "string",
+          "description": "어느 세션의 전이인지."
+        },
+        "from_state": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "직전 상태. 세션의 첫 전이면 null."
+        },
+        "to_state": {
+          "type": "string",
+          "enum_ref": "states.enum",
+          "description": "전이한 상태."
+        },
+        "source": {
+          "type": "string",
+          "description": "에이전트 종류."
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "전이 당시 cwd."
+        },
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "전이 당시 기계 이름."
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "전이를 만든 이벤트의 message."
+        },
+        "occurred_at": {
+          "type": "integer",
+          "description": "이벤트 발생 시각(epoch ms)."
+        },
+        "created_at": {
+          "type": "integer",
+          "description": "전이 기록 시각(서버 시각)."
+        }
+      },
+      "apply_rule": "클라이언트는 transitions를 id 오름차순으로 적용한다. session_key가 로컬에 없으면 새 카드로 만들고, 정보가 부족하면 reset을 한 번 받아 맞춘다."
+    },
+    "legacy_endpoints": {
+      "description": "0001 시절 엔드포인트. 앱이 sync로 옮겨가는 동안 남긴다.",
+      "GET /dashboard/sessions": {
+        "deprecated": true,
+        "$note": "응답의 stale 불린 필드는 stalled 상태로 대체되었다. 새 클라이언트는 sync를 쓴다."
+      },
+      "GET /dashboard/events": {
+        "deprecated": false,
+        "$note": "세션 상세 화면의 이벤트 이력 조회는 그대로 쓴다."
+      }
+    }
+  },
+  "i18n": {
+    "description": "표시 문구는 클라이언트가 키로 조회한다. 서버는 push 제목·본문을 만들 때 같은 라벨을 쓴다.",
+    "default_locale": "ko",
+    "state_keys": {
+      "description": "상태 값 -> i18n 키.",
+      "idle": "state.idle",
+      "working": "state.working",
+      "waiting_input": "state.waiting_input",
+      "done": "state.done",
+      "ended": "state.ended",
+      "stalled": "state.stalled"
+    },
+    "ko": {
+      "state.idle": "대기",
+      "state.working": "진행 중",
+      "state.waiting_input": "질문·승인 대기",
+      "state.done": "실행 마침",
+      "state.ended": "세션 종료",
+      "state.stalled": "멈춘 듯",
+      "push.title": "{project} · {host} · {label}",
+      "push.title_no_host": "{project} · {label}",
+      "push.body_fallback": "{source} 세션이 '{label}' 상태가 되었습니다.",
+      "push.test_body": "테스트 알림입니다. 이 문구가 보이면 기기 등록이 살아 있습니다."
+    },
+    "ui_lang_scope": "ui_lang은 클라이언트 표시 로케일이다. 서버 push 문구는 default_locale(ko) 고정이며 ui_lang을 따르지 않는다 — Sol이 이 다국어화는 하지 않기로 확정했다(2026-09-12). 알림을 열면 어차피 클라이언트가 표시하므로 push 문구 자체의 다국어화 가치가 낮다는 판단. 재고 시 선행 조건은 서버 라벨 정본화(i18n.en 신설 + state.ts/dispatch.ts 한국어 리터럴 통합)다.",
+    "placeholders": {
+      "host": "기계 이름(hostname).",
+      "project": "project 경로의 마지막 조각.",
+      "label": "state_keys로 찾은 상태 라벨.",
+      "source": "에이전트 종류."
+    },
+    "$note": "0001의 STATE_LABEL 5개 문구를 그대로 유지하고 stalled만 추가했다. push.title은 project를 맨 앞에 둔다(revision 2026-09-12): 알림 센터는 제목의 뒤쪽부터 잘라내는데 host는 한 기계의 모든 세션이 공유하는 값이라, 배너끼리 구분되는 유일한 조각인 project가 맨 앞에 있어야 잘리지 않는다 - push.title_no_host가 이미 쓰던 순서와도 맞는다. 앱 로컬 알림(app/flutter_app/lib/src/state/notify_provider.dart의 payloadForAlert)도 같은 이유로 project를 맨 앞에 두며, 그쪽은 제목을 project와 label에만 내주고 host는 본문 접두로 옮긴다."
+  },
+  "retention": {
+    "description": "시간별 cron이 stalled 전이와 함께 정리도 맡는다. 전부 env로 조정한다.",
+    "cron": "hourly",
+    "policies": {
+      "dashboard_events": {
+        "keep_days": 7,
+        "env": "DASHBOARD_RETAIN_EVENT_DAYS",
+        "user_prompt_policy": "event가 'UserPromptSubmit'인 행은 keep_days를 넘겨도 지우지 않는다 - 그 session_key의 세션이 살아있는 동안(state <> 'ended') 또는 ended 후 dashboard_sessions.keep_days 유예 기간 안(session.updated_at >= 세션 커트오프)이면 보존한다. 세션 행이 없는 고아 발언과 유예가 지난 ended 세션의 발언은 일반 규칙대로 지운다. 사용자가 DELETE /dashboard/sessions/{key}로 세션을 명시 삭제하면 이 예외 없이 이력이 함께 지워진다."
+      },
+      "dashboard_sessions": {
+        "keep_days": 7,
+        "scope": "state in (ended)",
+        "env": "DASHBOARD_RETAIN_SESSION_DAYS"
+      },
+      "dashboard_transitions": {
+        "keep_days": 7,
+        "env": "DASHBOARD_RETAIN_TRANSITION_DAYS"
+      },
+      "dashboard_push_log": {
+        "keep_days": 30,
+        "env": "DASHBOARD_RETAIN_PUSH_LOG_DAYS"
+      }
+    },
+    "cursor_hole": {
+      "description": "전이를 지우면 커서에 구멍이 난다. 지운 경계를 meta에 남겨 sync가 reset을 줄 수 있게 한다.",
+      "meta_key": "pruned_below_id",
+      "table": "dashboard_meta"
+    }
+  },
+  "event_history": {
+    "endpoint": "GET /dashboard/events",
+    "query": {
+      "session_key": "선택 세션 키. 생략하면 전체 세션.",
+      "limit": {
+        "default": 200,
+        "max": 1000,
+        "invalid": "양의 안전한 정수가 아니면 기본값."
+      },
+      "before_id": "선택 양의 안전한 정수. 이 id 미만을 조회하며 잘못된 값은 400.",
+      "kind": {
+        "default": "all",
+        "enum": [
+          "all",
+          "prompts"
+        ],
+        "prompts": "event가 UserPromptSubmit인 행만 조회하며 다른 값은 400."
+      }
+    },
+    "order": "id DESC (서버 삽입 순서)",
+    "response": {
+      "events": "id, session_key, source, event, message, received_at을 가진 행 배열.",
+      "has_more": "다음 페이지 존재 여부.",
+      "next_before_id": "다음 요청의 before_id. 더 없으면 null."
+    },
+    "rules": [
+      "기존 events 배열은 유지하고 페이지 정보를 추가한다.",
+      "사용자 발언은 전체 저장 이력에서 필터링한다. 최근 페이지에서만 추리지 않는다.",
+      "이 조회는 읽음 처리나 알림 확인 상태를 바꾸지 않는다.",
+      "message와 raw의 기존 길이 제한 및 DASHBOARD_STORE_MESSAGE 설정은 그대로 적용한다."
+    ]
+  },
+  "storage": {
+    "description": "정본 스키마는 server/migrations에 있다. 이 절은 프로토콜 필드가 어디에 앉는지 알려주는 지도다.",
+    "migrations": [
+      "0001_dashboard.sql",
+      "0002_dashboard_v2.sql",
+      "0003_dashboard_v3.sql",
+      "0004_dashboard_seen.sql",
+      "0005_devin_input_tracking.sql"
+    ],
+    "tables": {
+      "dashboard_events": "append-only 이벤트 로그. raw 원본 4096바이트 보존, event_id 부분 유니크 인덱스로 멱등. 0005부터 Devin 상관 식별자(prompt_id·tool_use_id·tool_name)를 별도 컬럼에 보존해 raw 절단과 무관하게 재생 가능하다.",
+      "dashboard_sessions": "이벤트에서 만든 현재 상태 프로젝션. 0004부터 last_transition_id, 0005부터 input_state(Devin 대기 추적 JSON)·projection_token(쓰기 CAS 토큰) 컬럼을 갖는다.",
+      "dashboard_transitions": "상태 전이 로그. AUTOINCREMENT id가 sync 커서.",
+      "dashboard_meta": "서버 내부 상태(pruned_below_id 등). key='hook_revs' 행은 '훅 구버전 배너' 원장이다 — value가 {host: {rev, at, project}} 모양의 JSON 하나이고(마이그레이션 없이 기존 범용 key-value 테이블에 얹었다), POST /dashboard/events가 host·occurred_at이 명시적으로 있을 때만 host별로 마지막 보고 rev·project를 절대값으로 덮어쓴다(seen처럼 MAX-merge가 아니다 — hook_contract.rules의 '서버보다 앞선 rev 없음' 규칙 참고). project는 devcontainer 등 host(hostname)만으로는 식별 불가능한 환경을 구분하기 위한 additive 힌트로, 그 host가 마지막으로 hook_rev를 신고한 이벤트의 project(cwd)를 그대로 얹은 값이다 — rev·at과 같은 WHERE 가드를 공유하므로 project만 바뀌어서는(rev·24시간 조건이 전부 거짓이면) 갱신되지 않는다. rebuild는 이 키를 절대 건드리지 않는다 — dashboard_seen과 같은 '재생 불가침' tier이지만 이유는 다르다: dashboard_seen은 재생 결과에 맞춰 다시 정의할 수 있는 파생값이라 리베이스 규칙이 있지만, hook_revs는 raw가 4096바이트로 잘리는 한계 때문에 dashboard_events에서 신뢰성 있게 복원할 수 없고, 애초에 재생해야 하는 과거 프로젝션이 아니라 '지금 이 순간의 사실'이다. 정리는 maintenance.ts의 pruneRetention이 30일 지난 항목 삭제 + 32개 초과 시 오래된 것부터 절단으로 전담한다. sync.response.fields.hook_skew가 이 원장을 읽는 쪽이다.",
+      "dashboard_settings": "사람이 바꾸는 설정(mute_until 등).",
+      "dashboard_push_subscriptions": "Web Push 구독(endpoint, p256dh, auth).",
+      "dashboard_devices": "FCM 기기 토큰(transport 컬럼으로 채널 구분).",
+      "dashboard_push_log": "전이별 발송 결과 감사 로그.",
+      "dashboard_seen": "세션별 '마지막으로 확인 처리된 전이 id' 마커(session_key PK, seen_transition_id). 0004에서 신설. 이벤트 로그가 아니고, rebuild가 유일하게 의도적으로 건드리는 파생 밖 테이블이다 — 재생 말미에 각 세션의 값을 그 세션의 새 last_transition_id로 무조건 리베이스하고, 재생 결과에 없는 세션의 행은 지운다(범주 오류가 된 옛 id 공간 값을 새 공간으로 들고 오지 않는다). client_actions.MarkSeen.invariants 참고."
+    }
+  },
+  "privacy": {
+    "hook_content_env": "MY_DASHBOARD_INCLUDE_CONTENT",
+    "hook_content_default": "0",
+    "server_content_env": "DASHBOARD_STORE_MESSAGE",
+    "server_content_default": "0",
+    "project_alias_env": "MY_DASHBOARD_PROJECT_LABEL",
+    "host_alias_env": "MY_DASHBOARD_HOST_LABEL",
+    "metadata_notice": "별칭을 설정하지 않으면 프로젝트 경로와 짧은 호스트명이 전송된다. ID·도구명·시각도 상태 추적을 위해 전송된다.",
+    "precedence": "송신과 서버 저장을 각각 opt-in해야 상세 내용이 남는다. hook은 spool 재전송에도 현재 수집 설정을 적용한다. 과거 DB나 디스크 spool은 자동 소급 삭제하지 않는다."
+  }
+}

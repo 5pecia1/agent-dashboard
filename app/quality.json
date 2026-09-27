@@ -1,0 +1,51 @@
+{
+  "dart_dirs": [
+    "flutter_app/lib",
+    "flutter_app/test",
+    "flutter_app/integration_test"
+  ],
+  "rust_dirs": [
+    "app-core/src",
+    "app-core/tests",
+    "app-frb/src",
+    "app-frb/tests"
+  ],
+  "generated": [
+    "app-frb/src/frb_generated.rs",
+    "flutter_app/lib/src/rust/*",
+    "*.g.dart",
+    "*.freezed.dart"
+  ],
+  "ffi_allowed": [
+    "flutter_app/lib/main.dart",
+    "flutter_app/lib/src/state/*",
+    "flutter_app/lib/src/i18n/*",
+    "flutter_app/test/*",
+    "flutter_app/integration_test/*"
+  ],
+  "theme_allowed": [
+    "flutter_app/lib/src/theme/*"
+  ],
+  "line_limit": 1000,
+  "pure_rust_crates": [
+    "app-core"
+  ],
+  "forbidden_core_dependencies": [
+    "flutter_rust_bridge",
+    "dart-sys"
+  ],
+  "constant_contracts": [
+    {
+      "rust_file": "app-core/src/capability.rs",
+      "rust_pattern": "\"([^\"\\n]+)\"\\s*=>",
+      "dart_file": "flutter_app/lib/src/state/capability_ids.dart",
+      "dart_pattern": "const String kCapability\\w+ = '([^']+)';"
+    },
+    {
+      "rust_file": "app-core/src/dashboard.rs",
+      "rust_pattern": "Self::\\w+\\s*=>\\s*\"([^\"\\n]+)\"",
+      "dart_file": "flutter_app/lib/src/state/capability_ids.dart",
+      "dart_pattern": "const String kSessionState\\w+ = '([^']+)';"
+    }
+  ]
+}

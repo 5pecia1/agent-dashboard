@@ -1,0 +1,14 @@
+Agent Dashboard
+Copyright (c) 2026 Sol and contributors.
+
+The application incorporates MIT-licensed sol-platform seed code.
+The original notice is retained in LICENSES/sol-platform-MIT.txt.
+Those portions remain available under their original license.
+
+Vendored cargokit and Firebase JavaScript retain their own license notices:
+- app/flutter_app/rust_builder/cargokit/LICENSE
+- app/flutter_app/web/vendor/NOTICE.md
+
+Dependency licenses are checked by the application and server build tooling.
+Sustainable Use License text provenance is recorded in
+LICENSES/Sustainable-Use-License-source.md.

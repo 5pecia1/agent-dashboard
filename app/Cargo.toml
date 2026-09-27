@@ -1,0 +1,265 @@
+[workspace]
+members = ["app-core", "app-frb"]
+resolver = "3"
+
+# 배포용 바이너리를 위한 release 프로파일. `strip = "symbols"`는 컴파일 타임
+# 비용이 거의 없이 바이너리 크기를 대략 절반으로 줄인다. `lto = "thin"`은
+# 약간의 컴파일 시간과 맞바꿔 크기를 추가로 ~20% 줄이고 콜드 스타트도 빨라진다.
+[profile.release]
+strip = "symbols"
+lto = "thin"
+
+[workspace.package]
+# 워크스페이스 멤버 버전의 단일 소스. 각 멤버는 자신의 [package] 블록에서
+# `version.workspace = true`로 옵트인한다. 릴리즈할 때는 여기 값만 올리고,
+# 멤버 Cargo.toml 파일들을 개별적으로 고치지 않는다.
+version = "0.1.0"
+edition = "2024"
+license-file = "LICENSE"
+
+[workspace.dependencies]
+# thiserror: 에러 열거형에 문장형 #[error("...")] 메시지를 붙이는 매크로.
+# MIT/Apache-2.0. app-core::error가 이 패턴을 쓴다. anyhow는 쓰지 않는다 —
+# 라이브러리 크레이트가 공개하는 에러 타입은 호출자가 매치할 수 있는 구체
+# 타입이어야 하는데(이 앱 코어는 여러 surface가 함께 소비할 대상이다),
+# anyhow::Error는 타입을 지워버려 그 계약을 깨뜨린다.
+thiserror = "2"
+# serde/serde_json: 카탈로그·DTO 직렬화. 둘 다 MIT/Apache-2.0. app-core는
+# optional 피처로만 물어 코어를 순수 도메인 크레이트로 유지하고, app-frb는
+# FRB DTO를 위해 derive 피처로 직접 문다.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# phf: i18n 카탈로그(app-core::i18n)를 컴파일타임 perfect-hash map으로 굽는다.
+# MIT/Apache-2.0. 런타임에 HashMap을 구성하는 대신 정적 조회 + 오타가 있으면
+# 컴파일 타임에 걸러지는 걸 선택했다.
+phf = { version = "0.14", features = ["macros"] }
+# flutter_rust_bridge: Flutter ↔ Rust FFI 브리지 런타임. MIT. codegen이 만드는
+# Dart 바인딩과 버전이 정확히 맞아야 하므로 캐럿(^)이 아닌 정확한 버전으로
+# 고정한다 — .mise.toml에 고정된 flutter_rust_bridge_codegen CLI 버전과
+# 반드시 같은 값을 유지한다.
+flutter_rust_bridge = "=2.13.0"
+
+# 워크스페이스 내부 크레이트. version은 로컬 path 참조와 별개로, 훗날 별도
+# 레지스트리에 게시할 경우를 대비한 선언이다(현재는 미게시 — 아래
+# workspace.lints.clippy의 cargo_common_metadata 주석 참고).
+app-core = { path = "app-core", version = "0.1" }
+
+[workspace.lints.rust]
+# 워크스페이스 전체 unsafe 정책. deny(forbid 아님)를 쓰는 이유는 단일
+# 크레이트가 문서화된 이유와 함께 특정 호출부에서 #[allow(unsafe_code)]로
+# opt-in할 수 있게 하기 위해서다. 크레이트별 forbid는 워크스페이스 clippy
+# 상속([lints] workspace = true를 쓰는 멤버는 로컬 [lints.rust] 블록을 따로
+# 둘 수 없다)과 맞바꿨다.
+unsafe_code = "deny"
+# flutter_rust_bridge 사용 repo에 필요: flutter_rust_bridge_codegen이
+# `cargo expand --cfg frb_expand`를 실행하는 동안 매크로가 이 cfg를 감지해
+# 확장된 표면을 방출한다. 일반 빌드에서는 이 cfg가 켜지지 않는다 — 무해하다.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+# ─── 워크스페이스 전체 강한 clippy ─────────────────────────────
+# L3 최고 강도. pedantic + nursery + cargo는 그룹째 켜고, restriction은
+# 그룹 안에 서로 배타적인 규칙이 섞여 있어 절대 통째로 켜지 않고 항목별로만
+# opt-in한다.
+#
+# 멤버는 [lints] workspace = true로 옵트인한다.
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery  = { level = "warn", priority = -1 }
+cargo    = { level = "warn", priority = -1 }
+
+# ── Restriction (선별: 안전성 / 정확성 / 명료성) ─────
+allow_attributes_without_reason  = "warn"
+as_underscore                    = "warn"
+clone_on_ref_ptr                 = "warn"
+dbg_macro                        = "warn"
+deref_by_slicing                 = "warn"
+empty_drop                       = "warn"
+empty_enum_variants_with_brackets = "warn"
+empty_structs_with_brackets      = "warn"
+exit                             = "warn"
+expect_used                      = "warn"
+filetype_is_file                 = "warn"
+float_cmp_const                  = "warn"
+fn_to_numeric_cast_any           = "warn"
+get_unwrap                       = "warn"
+iter_over_hash_type              = "warn"
+lossy_float_literal              = "warn"
+mem_forget                       = "warn"
+modulo_arithmetic                = "warn"
+multiple_unsafe_ops_per_block    = "warn"
+mutex_atomic                     = "warn"
+needless_raw_strings             = "warn"
+non_zero_suggestions             = "warn"
+panic                            = "warn"
+partial_pub_fields               = "warn"
+pathbuf_init_then_push           = "warn"
+print_stdout                     = "warn"
+pub_without_shorthand            = "warn"
+rc_buffer                        = "warn"
+rc_clone_in_vec_init             = "warn"
+rc_mutex                         = "warn"
+ref_patterns                     = "warn"
+rest_pat_in_fully_bound_structs  = "warn"
+string_add                       = "warn"
+string_lit_chars_any             = "warn"
+suspicious_xor_used_as_pow       = "warn"
+tests_outside_test_module        = "warn"
+todo                             = "warn"
+try_err                          = "warn"
+unimplemented                    = "warn"
+unnecessary_safety_doc           = "warn"
+unnecessary_self_imports         = "warn"
+unneeded_field_pattern           = "warn"
+unreachable                      = "warn"
+unseparated_literal_suffix       = "warn"
+unwrap_used                      = "warn"
+use_debug                        = "warn"
+
+# ── Pedantic / nursery / restriction 잡음 — 근거와 함께 침묵 처리 ───
+# 우리가 따르지 않는 네이밍 스타일 취향.
+module_name_repetitions          = "allow"
+similar_names                    = "allow"
+# 내부 크레이트라 모듈 수준 문서로 panic/error 설명이 충분하고, 함수마다
+# 문서를 갱신하는 비용이 그만한 가치가 없다.
+missing_errors_doc               = "allow"
+missing_panics_doc               = "allow"
+# u16/u32/usize 등 사이의 숫자 캐스팅은 흔한 값 변환 패턴이다; truncation·
+# sign-loss는 각 호출부에서 이미 검토되고 수용됐다고 가정한다.
+cast_possible_truncation         = "allow"
+cast_possible_wrap               = "allow"
+cast_precision_loss              = "allow"
+cast_sign_loss                   = "allow"
+# mise check/verify가 파일 크기 예산(scripts/file_size_budget.sh, ≤1000
+# LoC)을 강제한다; too_many_lines는 그보다 훨씬 먼저 걸린다.
+too_many_lines                   = "allow"
+# 공개 API 계약이 아닌 내부 헬퍼들이다.
+must_use_candidate               = "allow"
+return_self_not_must_use         = "allow"
+# 일부 구조체는 의도적으로 필드를 그대로 공개한다.
+struct_excessive_bools           = "allow"
+# 모듈 파일 배치 스타일(mod.rs vs 파일명 통일)을 강제하지 않는다.
+self_named_module_files          = "allow"
+mod_module_files                 = "allow"
+# 일상적인 Rust 관용구와 충돌하는 restriction 그룹 항목들.
+implicit_return                  = "allow"
+question_mark_used               = "allow"
+single_call_fn                   = "allow"
+absolute_paths                   = "allow"
+arbitrary_source_item_ordering   = "allow"
+big_endian_bytes                 = "allow"
+little_endian_bytes              = "allow"
+host_endian_bytes                = "allow"
+blanket_clippy_restriction_lints = "allow"
+default_numeric_fallback         = "allow"
+field_scoped_visibility_modifiers = "allow"
+impl_trait_in_params             = "allow"
+min_ident_chars                  = "allow"
+missing_docs_in_private_items    = "allow"
+missing_inline_in_public_items   = "allow"
+missing_trait_methods            = "allow"
+multiple_inherent_impl           = "allow"
+pattern_type_mismatch            = "allow"
+pub_use                          = "allow"
+ref_option                       = "allow"
+semicolon_outside_block          = "allow"
+shadow_reuse                     = "allow"
+shadow_same                      = "allow"
+shadow_unrelated                 = "allow"
+single_char_lifetime_names       = "allow"
+str_to_string                    = "allow"
+unwrap_in_result                 = "allow"
+# `let _ = best_effort()`는 관용적이고 흔하다(파일 정리, String에 대한
+# infallible 쓰기, best-effort 소켓 타임아웃 등). 이 lint는 진짜 신경 써야
+# 할 "에러 처리 누락" 케이스를 놓치는데, 그건 이미 `unused_must_use`가
+# 커버한다.
+let_underscore_must_use          = "allow"
+# 관련된 에러 variant를 서로 다른 match arm에 낱낱이 나열하면 결과가
+# 같아도 각 케이스를 문서화하는 효과가 있다. 합치면 가독성이 떨어지고
+# 향후 variant 추가에도 더 취약해진다.
+match_same_arms                  = "allow"
+# `s.push_str(&format!(...))`는 널리 쓰이고 읽기 쉽다; 이 lint가 권하는
+# `write!(s, ...).ok()`는 안전성 이득 없이 더 시끄럽다.
+format_push_string               = "allow"
+# trait `Display`/`From` impl과 나란히 있는 고유 `len()`/`is_empty()`는
+# 관용적인 Rust다; 이 lint는 표준 라이브러리 자신도 쓰는 패턴에서 대개
+# 발동한다.
+same_name_method                 = "allow"
+# CLI류 바이너리는 stderr를 페이로드가 아닌 출력(배너, 경고, 프롬프트)의
+# 주 채널로 쓴다. 워크스페이스 수준에서 `eprintln!`을 제한하면 정당한
+# 사용자 메시지 자리마다 걸린다.
+print_stderr                     = "allow"
+# 주변 소유권 모델과 맞는 파라미터(빌더로 move되는 Vec, 호출자가 반환하는
+# String 등)를 이 lint를 만족시키려고 바꾸지 않는다 — 추론된 &[T]/&str은
+# 대개 원래 작성자가 이미 검토하고 기각한 선택지다.
+needless_pass_by_value           = "allow"
+# `.collect::<Vec<_>>().into_iter()` 같은 패턴이 의도를 더 명확히 드러낼
+# 때가 있다; 이 lint의 "collect 제거" 제안은 가독성을 해치거나 borrow
+# lifetime을 바꿔버릴 수 있다.
+needless_collect                 = "allow"
+# 지역 헬퍼 함수를 감싸는 함수 맨 위가 아니라 쓰이는 자리 바로 옆에 두는
+# 게 가독성 이득이 크다 — "어차피 스코프 시작으로 끌어올려진다"는 이
+# lint의 불만보다 낫다.
+items_after_statements           = "allow"
+# 실질적 가치가 낮은 문서 스타일 지적들.
+too_long_first_doc_paragraph     = "allow"
+doc_markdown                     = "allow"
+doc_link_with_quotes             = "allow"
+# 형제 함수들과 형태를 맞추려고 `Result<T, E>`를 반환하는 함수들(그중
+# 일부는 실제로 실패할 수 있다) — T로 리팩터링하면 그 대칭성을 잃는다.
+unnecessary_wraps                = "allow"
+# SHA-256 테스트 벡터 같은 긴 리터럴은 RFC/테스트 코퍼스에서 그대로
+# 복사한 정규 형태로 일부러 남겨둔다.
+unreadable_literal               = "allow"
+# Nursery 그룹; PNG/폰트 애셋을 `include_bytes!`로 묻는 코드가 실질적인
+# 변동성 우려 없이 이 lint에 걸린다.
+volatile_composites              = "allow"
+# Nursery 그룹; `Vec::with_capacity` 등에 대해 보수적으로 판단한다.
+or_fun_call                      = "allow"
+# Nursery 그룹; 별 의미 없는 읽기에 대해 판정이 오락가락한다.
+mixed_read_write_in_expression   = "allow"
+# Nursery 그룹; 반환 타입이 실제로는 아직 const 평가가 안 되는 함수들
+# 에도 `const fn`을 강제하게 된다.
+missing_const_for_fn             = "allow"
+# 스타일 취향; 클로저 복잡도에 따라 `map().unwrap_or_else()`와
+# `map_or_else()` 둘 다 읽기 괜찮다.
+map_unwrap_or                    = "allow"
+# 스타일; `Eq` 없이 `derive(PartialEq)`만 쓰는 건 나중에 비-Eq 필드가
+# 붙을 수 있는 타입에서 흔하다.
+derive_partial_eq_without_eq     = "allow"
+# Pedantic; `Foo { foo, bar }`처럼 필드 이름이 타입 이름과 접두를
+# 공유해도 괜찮다 — 타입 이름은 주제, 필드는 역할이다.
+struct_field_names               = "allow"
+# Pedantic; trait 시그니처를 맞추려고 작은 `Copy` 타입을 참조로 넘기는
+# 경우.
+trivially_copy_pass_by_ref       = "allow"
+# Pedantic; `File::open().read_to_string()`가 더 맞는 모양일 때가
+# 있다(명시적 핸들, 커스텀 버퍼링 등).
+verbose_file_reads               = "allow"
+# Pedantic; 못 찾은 변수를 보간하는 문자열은 대개 진짜 format!()에서
+# 복붙된 것이지만, format 컨텍스트가 아닌 곳에서
+# `panic!("user_id={id}")` 스타일은 의도된 로깅이다.
+literal_string_with_formatting_args = "allow"
+# Restriction; 데몬/이벤트 루프처럼 infinite_loop에 걸리는 게 정상인
+# 코드가 있다.
+infinite_loop                    = "allow"
+# Restriction; 내부 헬퍼에는 무해하다.
+redundant_type_annotations       = "allow"
+# Restriction; 언더스코어 접두 필드가 사실상 공개 API일 때가 있다(예:
+# `_marker` 필드).
+used_underscore_items            = "allow"
+# Restriction; unsafe가 없는 코드에 safety 주석을 요구하는 건 의미가
+# 없다.
+unnecessary_safety_comment       = "allow"
+wildcard_enum_match_arm          = "allow"
+# Nursery 잡음.
+option_if_let_else               = "allow"
+significant_drop_tightening      = "allow"
+redundant_pub_crate              = "allow"
+future_not_send                  = "allow"
+# 워크스페이스 내부 크레이트는 아직 게시하지 않는다; readme/keywords/
+# categories 메타데이터를 지어내는 건 부질없다. 게시하기로 결정하면 이
+# allow를 해제한다.
+cargo_common_metadata            = "allow"
+# 전이 의존성 버전 중복(예: syn 1 + syn 2)은 우리 통제 밖이다 — 해석은
+# 우리가 아니라 `cargo update`가 결정한다.
+multiple_crate_versions          = "allow"

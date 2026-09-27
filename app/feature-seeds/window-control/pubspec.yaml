@@ -1,0 +1,6 @@
+name: sol_app_window_control_seed
+publish_to: none
+environment:
+  sdk: ^3.12.0
+dependencies:
+  window_manager: ^0.5.1

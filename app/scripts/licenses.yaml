@@ -1,0 +1,35 @@
+# license_checker scans the resolved Dart graph, including transitive dependencies.
+permittedLicenses:
+  - MIT
+  - MPL-2.0
+  - MIT-Modern-Variant
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - ISC
+  - Unicode-3.0
+  - Zlib
+  - CC0-1.0
+rejectedLicenses:
+  - GPL
+  - AGPL
+  - LGPL
+  - SSPL
+  - CC-BY-SA
+
+# These packages ship inside the pinned Flutter SDK under its root BSD license.
+# Source: https://github.com/flutter/flutter/blob/3.44.0/LICENSE
+# They omit a per-package LICENSE; this is inheritance, not a no-file approval.
+packageLicenseOverride:
+  flutter_driver: BSD-3-Clause
+  flutter_test: BSD-3-Clause
+  flutter_web_plugins: BSD-3-Clause
+  fuchsia_remote_debug_protocol: BSD-3-Clause
+  integration_test: BSD-3-Clause
+
+  # This local bridge is part of Agent Dashboard, not a third-party dependency.
+  my_dashboard_frb: LicenseRef-Sustainable-Use-1.0
+
+approvedPackages:
+  LicenseRef-Sustainable-Use-1.0:
+    - my_dashboard_frb

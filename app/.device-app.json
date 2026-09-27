@@ -1,0 +1,15 @@
+{
+  "name": "my_dashboard",
+  "display_name": "Agent Dashboard",
+  "org": "io.github.5pecia1",
+  "app_id": "io.github.5pecia1.mydashboard",
+  "crate": "my_dashboard_frb",
+  "targets": [
+    "macos",
+    "web"
+  ],
+  "license_policy": "enforce",
+  "features": [
+    "model-codegen"
+  ]
+}
