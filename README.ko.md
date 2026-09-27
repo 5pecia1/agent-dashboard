@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # 특정 사전 릴리스로 서버 프로젝트를 생성합니다.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.3 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.4 --dir ./my-agent-server
 ```
 
 `--dry-run`을 사용하면 설치하지 않고 선택된 릴리스와 설치 경로를 확인할 수 있습니다. 실행 전에 설치기를 살펴보려면 [install.sh](install.sh)를 읽거나, 내려받아 로컬에서 실행하세요. 스크립트는 GitHub Raw에서, 릴리스 압축 파일과 체크섬은 GitHub Releases에서 제공합니다. Pages는 웹 앱만 호스팅합니다.

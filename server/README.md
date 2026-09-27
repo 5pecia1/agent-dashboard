@@ -15,12 +15,12 @@ cd agent-dashboard-server
 npm ci
 ```
 
-The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.3`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
+The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.4`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
 
 For an existing Hono Worker, install an exact version of the verified package archive:
 
 ```sh
-npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.3/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz
+npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.4/5pecia1-agent-dashboard-server-0.1.0-alpha.4.tgz
 ```
 
 Commit the generated lockfile. [Releases](https://github.com/5pecia1/agent-dashboard/releases) include SHA256 checksums and package installation and upgrade verification results. The package is not yet published to the npm registry; install the GitHub Release archive.

@@ -9,7 +9,7 @@ cd agent-dashboard-server
 npm ci
 ```
 
-To select an exact version, replace `--prerelease` with `--version 0.1.0-alpha.3`. Follow the generated project's `README.md` or the [deployment instructions](STARTER.md) to sign in to Cloudflare, create D1, configure tokens, and deploy. You do not need to clone the source repository or build the server. The installer does not overwrite an existing server folder.
+To select an exact version, replace `--prerelease` with `--version 0.1.0-alpha.4`. Follow the generated project's `README.md` or the [deployment instructions](STARTER.md) to sign in to Cloudflare, create D1, configure tokens, and deploy. You do not need to clone the source repository or build the server. The installer does not overwrite an existing server folder.
 
 ## Generate a starter from source
 
@@ -20,7 +20,7 @@ npm --prefix server ci
 npm --prefix server run build
 (cd server && npm pack --pack-destination /tmp)
 node server/scripts/create-example.mjs \
-  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz \
+  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.4.tgz \
   --out /tmp/agent-dashboard-worker
 ```
 
@@ -32,7 +32,7 @@ The generator copies the package into the project's `vendor/` directory and refe
 
 ```sh
 node server/scripts/create-example.mjs \
-  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.3.tgz \
+  --package-tgz /tmp/5pecia1-agent-dashboard-server-0.1.0-alpha.4.tgz \
   --out /tmp/agent-dashboard-deploy --release
 ```
 

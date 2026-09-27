@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # Create a server project from an exact prerelease.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.3 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.4 --dir ./my-agent-server
 ```
 
 Use `--dry-run` to see the selected release and destination without installing. To inspect the installer first, [read install.sh](install.sh), or download it and run it locally. The script is served by GitHub Raw; release archives and checksums come from GitHub Releases. Pages hosts the web app only.

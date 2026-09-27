@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cp, mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -70,7 +71,15 @@ try {
   await api(worker.origin, '/dashboard/events', { token: 'test-ingest-token', body: { protocol_version: 1, event: 'Status', source: 'generic', session_id: 'button-install', event_id: 'button-1', state: 'working', project: '/workspace/example', host: 'example-host' } });
   const sync = await api(worker.origin, '/dashboard/sync');
   assert.equal(sync.sessions.find(row => row.key === 'generic:button-install')?.state, 'working');
-  console.log(JSON.stringify({ ok: true, published, checks: ['generated tree and locked integrity', 'detached clean-cache install', 'types and Worker bundle', 'D1 migrations and repeat', 'HTTP role isolation and ingestion'] }, null, 2));
+  const favicon = await fetch(worker.origin + '/favicon.png');
+  assert.equal(favicon.status, 200);
+  assert.equal(favicon.headers.get('content-type'), 'image/png');
+  const faviconBytes = Buffer.from(await favicon.arrayBuffer());
+  assert.equal(createHash('sha256').update(faviconBytes).digest('hex'), '239ae0048550773c0e21767570462af4b69bfb7f8fda5acbe14237477e493b3e');
+  const faviconIco = await fetch(worker.origin + '/favicon.ico');
+  assert.equal(faviconIco.status, 200);
+  assert.equal(Buffer.from(await faviconIco.arrayBuffer()).equals(faviconBytes), true);
+  console.log(JSON.stringify({ ok: true, published, checks: ['generated tree and locked integrity', 'detached clean-cache install', 'types and Worker bundle', 'D1 migrations and repeat', 'HTTP role isolation and ingestion', 'server favicon'] }, null, 2));
 } finally {
   await worker?.stop();
   console.log(`Deployment verification artifacts: ${workspace}`);

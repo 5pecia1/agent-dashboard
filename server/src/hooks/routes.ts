@@ -2,15 +2,19 @@ import { Hono } from "hono";
 import type { DashboardEnv } from "../env";
 import { corsMiddleware } from "../middleware/cors";
 import { HOOK_FILES, HOOK_REV } from "../generated/hooks";
+import { FAVICON_PNG } from "../favicon";
 
 export { HOOK_REV } from "../generated/hooks";
 const TEXT_HEADERS = { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } as const;
+const FAVICON_HEADERS = { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } as const;
 const ORIGIN_PLACEHOLDER = "__MY_DASHBOARD_ORIGIN__";
 const REV_PLACEHOLDER = "__MY_DASHBOARD_HOOK_REV__";
 
 /** Public assets only. No root wildcard middleware: the host owns all other paths. */
 export function createDashboardHooksApp(): Hono<{ Bindings: DashboardEnv }> {
   const app = new Hono<{ Bindings: DashboardEnv }>();
+  app.get("/favicon.png", (c) => c.body(FAVICON_PNG.slice(), 200, FAVICON_HEADERS));
+  app.get("/favicon.ico", (c) => c.body(FAVICON_PNG.slice(), 200, FAVICON_HEADERS));
   app.use("/setup.sh", corsMiddleware);
   app.use("/hooks/files/:name", corsMiddleware);
   app.get("/setup.sh", (c) => c.body(
