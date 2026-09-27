@@ -1,10 +1,10 @@
 # 웹 배포와 앱 릴리스
 
-Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudflare Pages에 배포합니다. 웹 주소는 [agent-dashboard-qgd.pages.dev](https://agent-dashboard-qgd.pages.dev)입니다. 브라우저에서 자신의 서버 주소와 클라이언트 토큰을 입력해 연결합니다. 웹 배포는 Worker 서버를 배포하거나 갱신하지 않습니다.
+Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudflare Pages에 배포합니다. 웹 주소는 [agent-dashboard.5pecia1.dev](https://agent-dashboard.5pecia1.dev)입니다. 브라우저에서 자신의 서버 주소와 클라이언트 토큰을 입력해 연결합니다. 웹 배포는 Worker 서버를 배포하거나 갱신하지 않습니다.
 
 ## 처음 한 번: Cloudflare 토큰 연결
 
-현재 저장소에는 Pages 프로젝트와 배포 변수가 설정되어 있습니다. 토큰만 GitHub에 등록하면 됩니다.
+현재 저장소에는 Pages 프로젝트, 배포 변수와 토큰이 설정되어 있습니다. 토큰을 교체하거나 새 저장소를 연결할 때 다음 순서로 등록합니다.
 
 1. [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)에서 **Create Token → Create Custom Token**을 선택합니다. 권한은 **Account / Cloudflare Pages / Edit**, Account Resources는 배포할 계정 하나로 제한합니다.
 2. 생성된 토큰을 복사한 뒤 [GitHub의 cloudflare-pages 환경](https://github.com/5pecia1/agent-dashboard/settings/environments/22852585188/edit)을 엽니다. **Add environment secret**으로 이름을 `CLOUDFLARE_API_TOKEN`으로 지정하고 토큰을 붙여 넣습니다. 토큰을 소스 코드나 이슈에 남기지 않습니다.
@@ -17,9 +17,22 @@ Agent Dashboard는 공개 저장소의 GitHub Actions에서 빌드하고 Cloudfl
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | Pages 프로젝트가 있는 계정 ID |
 | `CLOUDFLARE_PAGES_PROJECT` | `agent-dashboard` |
-| `CLOUDFLARE_PAGES_URL` | `https://agent-dashboard-qgd.pages.dev` |
+| `CLOUDFLARE_PAGES_URL` | `https://agent-dashboard.5pecia1.dev` |
 
-GitHub의 비밀값 `CLOUDFLARE_API_TOKEN`과 위 변수 세 개를 함께 사용합니다. 설정이 빠지면 배포 작업이 누락된 이름을 표시하며 실패합니다. Pages가 지정하는 도메인은 프로젝트 이름과 다를 수 있으므로 실제 주소를 사용합니다.
+GitHub의 비밀값 `CLOUDFLARE_API_TOKEN`과 위 변수 세 개를 함께 사용합니다. 설정이 빠지면 배포 작업이 누락된 이름을 표시하며 실패합니다. `CLOUDFLARE_PAGES_URL`은 배포 후 확인할 운영 주소입니다. 사용자 지정 도메인을 쓰지 않는다면 Pages가 실제로 발급한 `*.pages.dev` 주소를 넣습니다.
+
+## 사용자 지정 도메인 연결하기
+
+현재 `agent-dashboard.5pecia1.dev`는 같은 Pages 프로젝트에 연결되어 있습니다. 기존 [agent-dashboard-qgd.pages.dev](https://agent-dashboard-qgd.pages.dev) 주소도 계속 사용할 수 있습니다. 새 도메인을 추가하고 기본 접속 주소를 바꾸려면 다음을 한 번 설정합니다.
+
+1. Cloudflare에서 **Workers & Pages → agent-dashboard → Custom domains → Set up a domain**을 열어 새 호스트 이름을 등록합니다. DNS 레코드만 만들지 말고 Pages 프로젝트에도 도메인을 연결합니다.
+2. DNS 레코드를 확인합니다. 현재 설정은 **CNAME**, 이름 **agent-dashboard**, 대상 **agent-dashboard-qgd.pages.dev**, 프록시 **켜짐**, TTL **자동**입니다. 다른 호스트를 연결할 때는 레코드 이름을 해당 호스트로 바꿉니다. CNAME 대상에는 `https://`를 붙이지 않습니다.
+3. 도메인 상태가 **Active**가 되고 새 HTTPS 주소가 열리면 GitHub의 `cloudflare-pages` 환경에서 `CLOUDFLARE_PAGES_URL`을 새 주소로 바꿉니다.
+4. 연결할 서버의 CORS 허용 목록에도 새 웹 origin을 추가합니다. 새 주소의 `/release-manifest.json`에서 운영 버전을 확인합니다.
+
+Wrangler는 기존과 같이 같은 Pages 프로젝트에 파일을 배포합니다. 도메인을 CLI로 연결하려면 Pages API를 사용하고 DNS 레코드는 DNS API로 설정합니다. DNS까지 API로 변경하는 일회성 토큰에는 해당 zone의 **Zone / DNS / Edit** 권한이 필요합니다. 이후 GitHub Actions 배포 토큰은 기존 **Account / Cloudflare Pages / Edit**만 유지하면 됩니다. [Cloudflare 사용자 지정 도메인 문서](https://developers.cloudflare.com/pages/configuration/custom-domains/)에 연결 절차가 있습니다.
+
+브라우저 설정은 주소별로 저장됩니다. 새 도메인을 처음 열 때는 서버 주소와 토큰을 다시 입력합니다. 기존 주소의 설정은 그대로 남습니다.
 
 ## 버전을 올려 배포하기
 

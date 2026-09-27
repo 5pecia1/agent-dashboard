@@ -1,6 +1,6 @@
 # Agent Dashboard
 
-[Open the web app](https://agent-dashboard-qgd.pages.dev) · [Download the app](https://github.com/5pecia1/agent-dashboard/releases/latest)
+[Open the web app](https://agent-dashboard.5pecia1.dev) · [Download the app](https://github.com/5pecia1/agent-dashboard/releases/latest)
 
 Agent Dashboard collects coding-agent activity so you can see which sessions need your attention. It includes a web/macOS dashboard, agent hooks, and a Cloudflare Workers + D1 server that can also be embedded in another Worker.
 
