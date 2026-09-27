@@ -7,7 +7,9 @@ permissions:
   contents: read
 jobs:
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     defaults:
       run:
         working-directory: app
@@ -18,7 +20,8 @@ jobs:
           working_directory: app
       - run: mise run tools:rust
       - run: mise run tools:licenses
+      - run: xcodebuild -version
       - run: mise run deps
+      - run: mise run build
       - run: mise run check
       - run: mise run verify
-      - run: mise run build

@@ -2,7 +2,7 @@
 
 The common Flutter/Rust app displays session state, history, and notifications. Optional push uses your own Firebase configuration. It does not ship server credentials.
 
-On macOS, install Xcode and [mise](https://mise.jdx.dev), then run from this directory:
+On macOS, install Xcode 16.4 or newer (Swift 6.1 for Firebase) and [mise](https://mise.jdx.dev), then run from this directory:
 
 ```sh
 mise install
