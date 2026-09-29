@@ -65,6 +65,10 @@ pub enum EventSourceDto {
     Devin,
     /// 임의의 스크립트·CI가 직접 상태를 신고하는 통로.
     Generic,
+    /// Grok. 상태표는 Claude Code와 같다.
+    Grok,
+    /// Antigravity CLI(agy).
+    Antigravity,
 }
 
 impl From<EventSourceDto> for EventSource {
@@ -74,6 +78,8 @@ impl From<EventSourceDto> for EventSource {
             EventSourceDto::Codex => Self::Codex,
             EventSourceDto::Devin => Self::Devin,
             EventSourceDto::Generic => Self::Generic,
+            EventSourceDto::Grok => Self::Grok,
+            EventSourceDto::Antigravity => Self::Antigravity,
         }
     }
 }

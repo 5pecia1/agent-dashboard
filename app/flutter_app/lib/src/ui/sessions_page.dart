@@ -325,7 +325,7 @@ class SessionsPage extends ConsumerWidget {
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => const SetupPage()));
 
-  /// 새로고침 진입점(앱바 버튼과 pull-to-refresh 공용). 두 쿼터 갱신을 먼저
+  /// 새로고침 진입점(앱바 버튼과 pull-to-refresh 공용). 사용량 갱신을 먼저
   /// 시작하고 `triggerNow(force: true)`로 즉시 한 사이클을 깨운 뒤, 그
   /// 사이클이 끝날 때까지(최대 5초) 짧게 폴링해 스피너를 붙잡아 둔다 —
   /// 컨트롤러는 완료를 알리는 Future를 직접 노출하지 않는다.

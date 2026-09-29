@@ -54,6 +54,12 @@ enum EventSourceDto {
 
   /// 임의의 스크립트·CI가 직접 상태를 신고하는 통로.
   generic,
+
+  /// Grok. 상태표는 Claude Code와 같다.
+  grok,
+
+  /// Antigravity CLI(agy).
+  antigravity,
 }
 
 /// 화면 목록 정렬에 필요한 최소 필드의 브리지 표현.

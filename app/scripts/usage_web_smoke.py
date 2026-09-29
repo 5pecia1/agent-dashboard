@@ -50,7 +50,14 @@ def main():
         page.get_by_role('button', name=re.compile('^Devin ')).wait_for(timeout=60000)
         page.wait_for_load_state('networkidle')
         assert all(field.input_value() == '' for field in page.get_by_role('textbox').all())
-        assert not any(urlsplit(url).hostname in FIXTURE_HOSTS or '/teamclaude/' in url or 'SeatManagementService' in url for url in requests)
+        assert not any(
+            urlsplit(url).hostname in FIXTURE_HOSTS
+            or urlsplit(url).hostname == 'cli-chat-proxy.grok.com'
+            or urlsplit(url).hostname == 'api2.cursor.sh'
+            or '/teamclaude/' in url
+            or 'SeatManagementService' in url
+            for url in requests
+        )
         assert page.title() == 'Agent Dashboard'
         capture(page, args.output, 'setup')
 
@@ -100,7 +107,10 @@ def main():
         page.wait_for_timeout(300)
         capture(page, args.output, 'usage-narrow')
         assert not errors, errors
-        assert FIXTURE_HOSTS <= {urlsplit(url).hostname for url in requests}
+        hosts = {urlsplit(url).hostname for url in requests}
+        assert FIXTURE_HOSTS <= hosts
+        assert 'cli-chat-proxy.grok.com' not in hosts
+        assert 'api2.cursor.sh' not in hosts
         context.close()
         browser.close()
     print('Public app: empty first boot, preserved settings, and configured TeamClaude/Devin panels passed.')

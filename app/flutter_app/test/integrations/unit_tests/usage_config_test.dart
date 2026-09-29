@@ -38,6 +38,22 @@ void main() {
     expect(disconnected.devin!.apiKey, 'fixture-devin');
     expect(disconnected.clientToken, 'fixture-client');
     expect(disconnected.cursor, 10);
+    final withGrok = values.withGrok(true);
+    expect(withGrok.grokEnabled, isTrue);
+    expect(withGrok.teamClaude!.apiKey, 'fixture-team');
+    expect(withGrok.withGrok(false).grokEnabled, isFalse);
+    expect(withGrok.withGrok(false).extra.containsKey('grok'), isFalse);
+    expect(withGrok.withGrok(false).devin!.apiKey, 'fixture-devin');
+    final withBot = withGrok.withGrokBot(true);
+    expect(withBot.grokEnabled, isTrue);
+    expect(withBot.grokBotEnabled, isTrue);
+    expect(withBot.extra['grok'], {'enabled': true, 'bot': true});
+    expect((withBot.extra['grok']! as Map).containsKey('token'), isFalse);
+    final cliOff = withBot.withGrok(false);
+    expect(cliOff.grokEnabled, isFalse);
+    expect(cliOff.grokBotEnabled, isTrue);
+    expect(cliOff.withGrokBot(false).extra.containsKey('grok'), isFalse);
+    expect(cliOff.devin!.apiKey, 'fixture-devin');
   });
 
   test('연동 codec이 이해하지 못하는 연결도 저장 왕복에서 제거하지 않는다', () {

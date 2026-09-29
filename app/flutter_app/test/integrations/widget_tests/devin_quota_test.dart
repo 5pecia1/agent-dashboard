@@ -13,7 +13,8 @@ import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/devin_quota_panel.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/devin_setup.dart';
 
-import '../unit_tests/devin_usage_test.dart' show userStatusFixture, connection;
+import '../unit_tests/devin_usage_test.dart'
+    show userStatusFixture, userStatusExhaustedFixture, connection;
 
 class _FixedController extends DevinUsageController {
   _FixedController(this.initial);
@@ -87,6 +88,31 @@ void main() {
     // hideDailyQuota 플랜이라 일간 지표는 없다.
     expect(find.text('daily'), findsNothing);
     expect(find.text('overage'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('주간 한도 소진 응답은 잔량 키가 없어도 100%와 리셋을 보여준다', (tester) async {
+    tester.view.physicalSize = const Size(600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      _wrap(
+        state: DevinUsageState(
+          connection: connection,
+          quota: DevinQuota.fromUserStatus(userStatusExhaustedFixture()),
+          updatedAt: DateTime(2026, 9, 28),
+        ),
+        child: const SingleChildScrollView(child: DevinQuotaPanel()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('100%'), findsOneWidget);
+    expect(find.text('weekly'), findsOneWidget);
+    expect(find.text('reset_days'), findsOneWidget);
+    // 음수 overage(초과 사용 부채)도 숨기지 않고, 빈 카드 폴백도 뜨지 않는다.
+    expect(find.text('overage'), findsOneWidget);
+    expect(find.text('no_usage'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

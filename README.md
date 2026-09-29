@@ -53,7 +53,7 @@ After deploying your server, install its matching hooks on each agent machine. R
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-The hook installer needs `curl`, `jq`, and `python3`. Enter the ingest token when asked; in Codex, trust the new hooks through `/hooks`. Start an agent session and check it in the dashboard. [The hook guide](hooks/README.md) covers previewing changes, updates, and data handling. Push notifications are optional.
+The hook installer needs `curl`, `jq`, and `python3`. Enter the ingest token when asked; in Codex, trust the new hooks through `/hooks`. Start an agent session and check it in the dashboard. [The hook guide](hooks/README.md) covers previewing changes, updates, data handling, and what Antigravity CLI does and does not report. Push notifications are optional.
 
 ## Choose a version or update
 
@@ -77,7 +77,7 @@ Use `--dry-run` to see the selected release and destination without installing. 
 
 ## Usage integrations
 
-TeamClaude and Devin usage panels are included in the web and macOS apps. Configure your own endpoint and key in Settings; an unconfigured integration makes no requests. [Usage integration setup](docs/integrations.md) explains browser HTTPS/CORS requirements and local credential storage.
+TeamClaude and Devin usage panels are included in the web and macOS apps. The macOS app can also show Grok usage from the local Grok login, and Grok Bot weekly usage from the Grok Bot app on that Mac. Configure your own endpoint and key in Settings; an unconfigured integration makes no requests. [Usage integration setup](docs/integrations.md) explains browser HTTPS/CORS requirements, the macOS Grok switch, and local credential storage.
 
 ## Development and upgrades
 

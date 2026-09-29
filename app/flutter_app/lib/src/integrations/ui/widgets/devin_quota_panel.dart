@@ -66,49 +66,42 @@ class _DevinQuotaPanelState extends ConsumerState<DevinQuotaPanel>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height:
-                  MediaQuery.sizeOf(context).width > 600 &&
-                      MediaQuery.textScalerOf(context).scale(1) <= 1.2
-                  ? 32
-                  : null,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          t(ref, 'devin.title'),
-                          style: TextStyle(
-                            color: tokens.fg,
-                            fontWeight: FontWeight.w700,
-                          ),
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        t(ref, 'devin.title'),
+                        style: TextStyle(
+                          color: tokens.fg,
+                          fontWeight: FontWeight.w700,
                         ),
-                        if (quota?.planName != null)
-                          Text(
-                            quota!.planName!,
-                            style: TextStyle(color: tokens.fg2, fontSize: 12),
-                          ),
-                        if (state.updatedAt != null)
-                          Text(
-                            t(ref, 'devin.updated', {
-                              'time': MaterialLocalizations.of(context)
-                                  .formatTimeOfDay(
-                                    TimeOfDay.fromDateTime(state.updatedAt!),
-                                    alwaysUse24HourFormat: true,
-                                  ),
-                            }),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: tokens.fg2, fontSize: 11),
-                          ),
-                      ],
-                    ),
+                      ),
+                      if (quota?.planName != null)
+                        Text(
+                          quota!.planName!,
+                          style: TextStyle(color: tokens.fg2, fontSize: 12),
+                        ),
+                      if (state.updatedAt != null)
+                        Text(
+                          t(ref, 'devin.updated', {
+                            'time': MaterialLocalizations.of(context)
+                                .formatTimeOfDay(
+                                  TimeOfDay.fromDateTime(state.updatedAt!),
+                                  alwaysUse24HourFormat: true,
+                                ),
+                          }),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: tokens.fg2, fontSize: 11),
+                        ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
             if (state.loading && quota == null)
               Padding(
@@ -148,6 +141,11 @@ class _QuotaBody extends ConsumerWidget {
     final tokens = context.tokens;
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final width = kDevinMetricWidth * scale;
+    final showWeekly = quota.weeklyUsedPercent != null;
+    final showDaily = !quota.hideDailyQuota && quota.dailyUsedPercent != null;
+    final showAcu = quota.weeklyUsedPercent == null &&
+        quota.dailyUsedPercent == null &&
+        quota.acuConsumed != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -163,7 +161,7 @@ class _QuotaBody extends ConsumerWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            if (quota.weeklyUsedPercent != null)
+            if (showWeekly)
               SizedBox(
                 width: width,
                 child: _QuotaMetric(
@@ -172,7 +170,7 @@ class _QuotaBody extends ConsumerWidget {
                   resetAt: quota.weeklyResetAt,
                 ),
               ),
-            if (!quota.hideDailyQuota && quota.dailyUsedPercent != null)
+            if (showDaily)
               SizedBox(
                 width: width,
                 child: _QuotaMetric(
@@ -181,23 +179,28 @@ class _QuotaBody extends ConsumerWidget {
                   resetAt: quota.dailyResetAt,
                 ),
               ),
-            if (quota.weeklyUsedPercent == null &&
-                quota.dailyUsedPercent == null &&
-                quota.acuConsumed != null)
+            // 백분율이 하나도 없으면 ACU 누적/한도로 대체 (두 체계는 공존하지 않음).
+            if (showAcu)
               SizedBox(
                 width: width * 2,
                 child: _AcuMetric(quota: quota),
               ),
+            // 지표가 하나도 해석되지 않은 응답은 빈 공간 대신 명시한다.
+            if (!showWeekly && !showDaily && !showAcu)
+              Text(
+                t(ref, 'devin.no_usage'),
+                style: TextStyle(color: tokens.fg2, fontSize: 12),
+              ),
           ],
         ),
+        // 음수는 초과 사용 부채 — 소진 신호라 양수와 같이 표시한다.
         if (quota.overageBalanceMicros != null &&
-            quota.overageBalanceMicros! > 0)
+            quota.overageBalanceMicros! != 0)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               t(ref, 'devin.overage', {
-                'amount':
-                    '\$${(quota.overageBalanceMicros! / 1000000).toStringAsFixed(2)}',
+                'amount': formatDevinOverageUsd(quota.overageBalanceMicros!),
               }),
               style: TextStyle(color: tokens.fg2, fontSize: 11),
             ),

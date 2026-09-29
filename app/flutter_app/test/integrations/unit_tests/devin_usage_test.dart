@@ -43,6 +43,28 @@ Map<String, dynamic> userStatusFixture() => {
   },
 };
 
+// 주간 한도 소진 계정의 실측 응답 모양 — proto3는 기본값(0) 필드를 생략하므로
+// `weeklyQuotaRemainingPercent` 키 자체가 없고, 리셋 시각과 음수 overage
+// (초과 사용 부채)만 남는다.
+Map<String, dynamic> userStatusExhaustedFixture() => {
+  'userStatus': {
+    'planStatus': {
+      'planInfo': {
+        'planName': 'Max',
+        'billingStrategy': 'BILLING_STRATEGY_QUOTA',
+        'hideDailyQuota': true,
+        'devinInfo': {'accountDisplayName': 'tester'},
+      },
+      'planStart': '2027-09-14T14:21:06Z',
+      'planEnd': '2027-10-14T14:21:06Z',
+      'dailyQuotaRemainingPercent': 100,
+      'overageBalanceMicros': '-1714726',
+      'dailyQuotaResetAtUnix': '1821513600',
+      'weeklyQuotaResetAtUnix': '1821427200',
+    },
+  },
+};
+
 void main() {
   test('주소를 비우면 표준 서버로 접고 RPC 경로는 루트로 정규화한다', () {
     expect(
@@ -87,6 +109,73 @@ void main() {
       quota.weeklyResetAt,
       DateTime.fromMillisecondsSinceEpoch(1821427200000),
     );
+  });
+
+  test('윈도우가 있는데 잔량 키가 생략된 소진 응답은 0을 복원해 100%로 읽는다', () {
+    final quota = DevinQuota.fromUserStatus(userStatusExhaustedFixture());
+    expect(quota.weeklyRemainingPercent, 0);
+    expect(quota.weeklyUsedPercent, 100);
+    expect(quota.dailyUsedPercent, 0);
+    expect(quota.weeklyResetAt, isNotNull);
+    expect(quota.overageBalanceMicros, -1714726);
+  });
+
+  test('일간 윈도우만 남은 QUOTA 응답도 같은 규칙으로 0을 복원한다', () {
+    final quota = DevinQuota.fromUserStatus({
+      'userStatus': {
+        'planStatus': {
+          'planInfo': {'billingStrategy': 'BILLING_STRATEGY_QUOTA'},
+          'dailyQuotaResetAtUnix': '1821513600',
+        },
+      },
+    });
+    expect(quota.dailyUsedPercent, 100);
+    expect(quota.weeklyUsedPercent, isNull);
+  });
+
+  test('잔량과 리셋 시각이 둘 다 없는 QUOTA 응답은 null을 유지한다', () {
+    // 윈도우 자체가 없으면 0으로 복원하지 않는다 — 없는 쿼터를 소진으로 착각 금지.
+    final quota = DevinQuota.fromUserStatus({
+      'userStatus': {
+        'planStatus': {
+          'planInfo': {'billingStrategy': 'BILLING_STRATEGY_QUOTA'},
+        },
+      },
+    });
+    expect(quota.weeklyUsedPercent, isNull);
+    expect(quota.dailyUsedPercent, isNull);
+  });
+
+  test('QUOTA가 아닌 계정은 리셋 시각만 있어도 잔량을 추론하지 않는다', () {
+    final quota = DevinQuota.fromUserStatus({
+      'userStatus': {
+        'planStatus': {
+          'planInfo': {'billingStrategy': 'BILLING_STRATEGY_ACU'},
+          'weeklyQuotaResetAtUnix': '1821427200',
+        },
+      },
+    });
+    expect(quota.weeklyUsedPercent, isNull);
+  });
+
+  test('ACU 한도는 있는데 누적치 키가 없으면 0으로 읽는다', () {
+    // 신선한 ACU 계정의 실측 모양 — 누적치 0도 proto3가 생략한다.
+    final quota = DevinQuota.fromUserStatus({
+      'userStatus': {
+        'planStatus': {
+          'planInfo': {'planName': 'Enterprise'},
+          'acuLimit': '500',
+        },
+      },
+    });
+    expect(quota.acuConsumed, 0);
+    expect(quota.acuLimit, 500);
+  });
+
+  test('overage USD 서식은 음수 부채도 부호를 달러 밖에 유지한다', () {
+    expect(formatDevinOverageUsd(7462105), r'$7.46');
+    expect(formatDevinOverageUsd(-1714726), r'-$1.71');
+    expect(formatDevinOverageUsd(0), r'$0.00');
   });
 
   test('쿼터 필드가 없는 과금 방식도 파싱되고 ACU 값을 읽는다', () {

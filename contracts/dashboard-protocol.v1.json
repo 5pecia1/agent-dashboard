@@ -3,7 +3,7 @@
   "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
   "title": "Agent Dashboard protocol",
   "protocol_version": 1,
-  "revision": "2026-09-27",
+  "revision": "2026-09-29",
   "copies": {
     "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
     "package": "server/contracts/dashboard-protocol.v1.json"
@@ -90,11 +90,12 @@
         "event_vocabulary": "claude-code",
         "state_field_allowed": false,
         "notification_type_translation": {
-          "description": "A: Notification 이벤트는 stdin에 notification_type 필드를 동봉한다(permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/quota_* 등). hook은 이 값이 제외목록(exclude_exact) 3종과 정확히 일치할 때만 event 이름을 합성 이벤트로 바꿔 보낸다 — 부분 문자열 매칭은 금지다.",
+          "description": "A: Notification 이벤트는 stdin에 notification_type 또는 notificationType 필드를 동봉한다(permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/task_complete/quota_* 등). hook은 둘 중 있는 값을 읽고, 그 값이 제외목록(exclude_exact)과 정확히 일치할 때만 event 이름을 합성 이벤트로 바꿔 보낸다 — 부분 문자열 매칭은 금지다. claude-code와 grok이 이 표 하나를 같이 쓴다.",
           "exclude_exact": {
             "idle_prompt": "IdleNotification",
             "auth_success": "AuthNotification",
-            "agent_completed": "AgentCompletedNotification"
+            "agent_completed": "AgentCompletedNotification",
+            "task_complete": "AgentCompletedNotification"
           },
           "default": "제외목록에 없으면(모르는 타입 포함) event는 원래 그대로 Notification이다 — event_state_map.by_source.claude-code에 따라 waiting_input으로 이어진다.",
           "$note": "미탐(놓친 승인 대기)이 오탐보다 훨씬 비싼 비용 구조라 화이트리스트가 아니라 블랙리스트(제외목록)로 설계했다. 합성 이벤트 3종(IdleNotification/AuthNotification/AgentCompletedNotification)은 event_state_map.by_source.claude-code에 의도적으로 없다 — 현재는 기록만 되고 상태는 바뀌지 않는다. notification_type 원본 값 자체는 event_payload.fields.notification_type으로 raw와 함께 additive하게 동봉되어, 나중에 서버가 매핑을 재판정할 근거(원장)로 남는다."
@@ -117,6 +118,17 @@
         "state_field_allowed": false,
         "sessionstart_handling": "ignore_initialization",
         "$note": "SessionStart 이벤트는 source:'startup'일 때 초기화 이벤트로 간주하여 상태 변경 없음. 실제 작업 시작은 UserPromptSubmit부터. hook stdin에는 cwd가 없다(공식 문서상 공통 필드는 session_id·prompt_id + 이벤트별 필드뿐) — hook이 event_payload.project를 DEVIN_PROJECT_DIR env → hook 프로세스의 cwd → 'unknown' 순으로 채운다."
+      },
+      "grok": {
+        "description": "Grok. Claude 설정의 lifecycle hook을 실행한다. hook 프로세스에 GROK_HOOK_EVENT가 있으면 agent-event-hook.sh가 인자 claude-code를 source grok으로 바꿔 보낸다. 상태표는 claude-code와 같고, Notification 제외 목록도 claude-code.notification_type_translation.exclude_exact를 같이 쓴다. Grok은 notificationType을 보내고 hook이 그 값을 notification_type으로 실어 저장한다.",
+        "event_vocabulary": "grok",
+        "state_field_allowed": false
+      },
+      "antigravity": {
+        "description": "Google Antigravity CLI(agy). ~/.gemini/config/hooks.json의 lifecycle hook을 실행한다. stdin에 이벤트 이름이 없어서 hooks.json 명령이 agent-event-hook.sh의 두 번째 인자로 넘긴다. 상태표는 event_state_map.by_source.antigravity, hook 변환 규칙은 event_state_map.antigravity_hook_translation이 정본이다.",
+        "event_vocabulary": "antigravity",
+        "state_field_allowed": false,
+        "$note": "agy에는 SessionEnd에 해당하는 hook이 없어서 antigravity 세션은 ended로 가지 않고 done에 머문다(한계는 antigravity_hook_translation.limitations)."
       }
     },
     "unregistered": {
@@ -213,7 +225,9 @@
         "sources": [
           "claude-code",
           "codex",
-          "devin"
+          "devin",
+          "grok",
+          "antigravity"
         ],
         "throttle_ms": 60000,
         "description": "도구 실행마다 발생하므로 hook이 60초에 한 번만 보낸다.",
@@ -317,6 +331,33 @@
           "description": "세션 종료"
         }
       ],
+      "grok": [
+        {
+          "event": "SessionStart",
+          "state": "idle",
+          "description": "세션 시작. claude-code와 같은 표."
+        },
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "사용자가 프롬프트를 넣어 실행이 시작됨"
+        },
+        {
+          "event": "Notification",
+          "state": "waiting_input",
+          "description": "권한 요청 또는 입력 대기 알림. idle_prompt·auth_success·agent_completed·task_complete는 hook이 합성 이벤트로 바꾸므로 이 줄에 닿지 않는다."
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "턴 실행 마침"
+        },
+        {
+          "event": "SessionEnd",
+          "state": "ended",
+          "description": "세션 종료"
+        }
+      ],
       "codex": [
         {
           "event": "SessionStart",
@@ -391,6 +432,28 @@
           "state": "waiting_input",
           "description": "hook이 tool_name이 정확히 ask_user_question인 Devin PreToolUse를 번역해 보내는 합성 질문 대기 이벤트(devin_input_tracking 참고)."
         }
+      ],
+      "antigravity": [
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "hook이 PreInvocation을 번역한 턴 (재)시작 — invocationNum이 0이거나, Stop 뒤 처음 오는 PreInvocation이다(antigravity_hook_translation.rules). 사용자 입력뿐 아니라 agy가 스스로 시작한 턴(백그라운드 완료 등)도 포함한다."
+        },
+        {
+          "event": "UserInputRequest",
+          "state": "waiting_input",
+          "description": "hook이 ask_question·ask_permission 도구의 PreToolUse를 번역한 합성 질문 대기 이벤트(antigravity_hook_translation 참고). 스로틀 없이 즉시 보낸다."
+        },
+        {
+          "event": "UserInputResolved",
+          "state": "working",
+          "description": "hook이 같은 도구의 PostToolUse를 번역한 해소 이벤트 — 대기와 1:1로 대응하는 전용 해소 신호다."
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "Stop(턴 실행 마침). fullyIdle이 false여도 done이다 — 백그라운드 작업(서브에이전트 등)이 남아 있어도 턴 실행은 끝났고, agy가 다시 모델을 호출하면 Stop 뒤 처음 오는 PreInvocation이 working으로 되돌린다."
+        }
       ]
     },
     "generic_rule": {
@@ -434,6 +497,78 @@
       ],
       "description": "Devin의 대기를 세션·턴·도구 호출별로 추적한다. 현재 waiting_input에서 정확히 일치하는 완료만 해당 요청을 해제하고, 남은 요청과 식별 불가 대기가 모두 없을 때 working으로 전환한다. 새 프롬프트와 수명 주기·수동 응답 확인은 대기를 초기화한다. 다른 알려진 턴의 Stop은 현재 대기를 지우지 않는다. 누락·잘못된 식별자나 초과 요청은 자동 해소하지 않는다. 기존 occurred_at 역행 방어와 ended 불변식을 유지한다.",
       "$note": "해소 시점은 승인 클릭이 아니라 도구 완료(PostToolUse)다 — 권한 승인도 실제 해소는 그 도구가 반환될 때 일어난다. 질문 거절·권한 거부 같은 정상 거부 경로는 PostToolUse가 나오지 않으므로 대기는 Stop·새 UserPromptSubmit·SessionEnd·사용자 ack까지 유지된다. 취소된 경우는 프로브하지 않았으므로 그 동작을 주장하지 않는다."
+    },
+    "antigravity_hook_translation": {
+      "description": "Antigravity CLI(agy) hook을 hook이 계약 어휘로 번역하는 규칙. 근거(agy 1.2.12 실측과 다른 agy 연동 구현의 이슈 기록)는 .okf/antigravity-hooks.md에 있다.",
+      "registration": {
+        "file": "~/.gemini/config/hooks.json",
+        "bundle_key": "my-dashboard",
+        "events": [
+          "PreInvocation",
+          "PreToolUse",
+          "PostToolUse",
+          "Stop"
+        ],
+        "matchers": {
+          "PreToolUse": "^(ask_question|ask_permission)$",
+          "PostToolUse": "*"
+        },
+        "timeout_seconds": 10,
+        "command": "agent-event-hook.sh antigravity <event>. hook을 실행할 수 없으면(일반 파일이 아니거나, 읽을 수 없거나, 비어 있거나, 실행 권한이 없거나, PATH에 bash가 없으면) 명령 자체가 stdout_contract의 응답을 출력하고 stdin을 비운 뒤 0으로 끝난다. hook을 실행하기 전에 BASH_ENV를 지운다.",
+        "$note": "matcher는 전체 일치 정규식이다(agy 1.2.12 실측). PreToolUse는 질문 도구 두 개로만 제한한다 — 이 hook은 도구 승인 결정을 내리지 않는다."
+      },
+      "stdout_contract": {
+        "PreToolUse": {
+          "decision": "ask"
+        },
+        "Stop": {
+          "decision": ""
+        },
+        "default": {},
+        "$note": "agy는 hook stdout을 JSON으로 읽는다. PreToolUse 무응답은 도구 거부이고 allow는 모든 도구를 자동 승인하므로 ask만 쓴다. hook이 0이 아닌 코드로 끝나면 agy 실행이 중단된다."
+      },
+      "question_tools": [
+        "ask_question",
+        "ask_permission"
+      ],
+      "fields": {
+        "session_id": "conversationId → 환경변수 ANTIGRAVITY_CONVERSATION_ID → \"unknown\"",
+        "project": "workspacePaths[0] → \"unknown\". hook 프로세스의 cwd는 hooks.json이 있는 폴더이므로 폴백에 쓰지 않는다.",
+        "message": "UserInputRequest만 첫 질문 문장(toolCall.args.questions[0].question). 그 밖에는 null."
+      },
+      "print_mode": {
+        "flags": [
+          "p",
+          "print",
+          "prompt"
+        ],
+        "interactive_flags": [
+          "i",
+          "prompt-interactive"
+        ],
+        "include_env": "MY_DASHBOARD_ANTIGRAVITY_INCLUDE_PRINT",
+        "description": "hook의 조상 프로세스 중 agy 프로세스의 인자에 print 모드 플래그가 있으면 이벤트를 하나도 보내지 않는다. agy는 Go flag 문법을 따르므로 플래그는 이름으로 비교한다 — 이름 앞 대시는 하나든 둘이든 같고 =값이 붙을 수 있다(-p, --p, -p=…, -print, --print=…, -prompt, --prompt 모두 print 모드). 대화형 첫 프롬프트 플래그(interactive_flags: -i, --i, -prompt-interactive, --prompt-interactive와 =값 형태)가 먼저 나오면 그 뒤는 프롬프트 문장이라 더 보지 않고, -- 뒤도 플래그로 보지 않는다. include_env가 1이면 보낸다. 부모가 agy가 아닌 경우(IDE 등)는 판정하지 않고 보낸다."
+      },
+      "rules": [
+        "이벤트 이름은 stdin에 없다. hooks.json 명령이 두 번째 인자로 넘긴 이름을 쓴다.",
+        "PreInvocation: invocationNum이 0이거나 없으면 UserPromptSubmit을 보낸다. 1 이상이면 보내지 않는다 — PreInvocation은 모델 호출마다 오고 invocationNum은 턴마다 0부터 다시 센다. Stop을 처리한 뒤(래치가 걸린 동안) 오는 첫 PreInvocation은 invocationNum과 상관없이 턴 시작으로 보고 UserPromptSubmit을 보낸다(서브에이전트 시작 판정이 먼저다) — 한 실행 안에서 fullyIdle false Stop 뒤 모델 호출이 이어지는 경우(다른 agy 연동 구현에서 보고된 동작)에도 세션이 done에 머물지 않게 한다.",
+        "PreInvocation의 invocationNum이 0이고 initialNumSteps도 0이면 서브에이전트 대화의 시작이다. 그 conversationId를 서브에이전트로 표시하고 이후 그 대화의 이벤트는 하나도 보내지 않는다. 서브에이전트는 부모와 다른 conversationId를 쓰고 부모 식별자를 싣지 않는다. 부모 대화의 상태는 부모 자신의 이벤트로만 정해진다 — 부모의 턴이 서브에이전트를 남긴 채 끝나면 서브에이전트가 도는 동안에도 done으로 보인다.",
+        "PreToolUse: toolCall.name이 question_tools 중 하나와 정확히 같으면 UserInputRequest를 보낸다. 그 밖의 도구는 보내지 않는다.",
+        "PostToolUse: toolCall.name이 question_tools 중 하나와 정확히 같으면 UserInputResolved를 보낸다. 그 밖에는 PostToolUse 하트비트로 보낸다(heartbeat_events.events.PostToolUse.throttle_ms 스로틀).",
+        "모든 Stop(fullyIdle 값과 상관없이)을 처리한 뒤 다음 턴 시작(Stop 뒤 처음 오는 PreInvocation) 전까지 오는 PostToolUse(질문 도구 포함)는 기록용이므로 보내지 않는다.",
+        "Stop: fullyIdle 값과 상관없이 Stop을 보낸다. fullyIdle이 false면 백그라운드 작업(서브에이전트 등)이 남아 있다는 뜻이지만 턴 실행은 끝났으므로 done이다(push_states.$note_done_excluded). 백그라운드 결과로 agy가 다시 모델을 호출하면 Stop 뒤 처음 오는 PreInvocation이 UserPromptSubmit으로 working을 되돌린다. 실측(agy 1.2.12): 서브에이전트를 쓰는 턴은 마지막 Stop까지 fullyIdle false로 끝날 수 있어서, 이 Stop을 버리면 세션이 working에 멈추고 stalled 푸시가 잘못 나간다.",
+        "그 밖의 이벤트(PostInvocation·SessionStart 등)는 보내지 않는다.",
+        "hook은 stdout_contract의 응답을 가장 먼저 출력하고 그 뒤로 stdout에 아무것도 쓰지 않으며 항상 0으로 끝난다.",
+        "agy는 hook이 끝날 때까지 실행을 멈추므로, 스풀 재전송은 hook 한 번에 최대 4초 안에서만 한다. 재전송이 서버 응답을 하나도 받지 못했으면(연결 실패·시간 초과) 이번 이벤트도 스풀 끝에 넣는다 — 서버가 닿지 않는 동안 hook이 두 번 기다리지 않게 하기 위해서다. 서버가 응답했으면(2xx·4xx·5xx·429) 스풀에 줄이 남아 있어도 이번 이벤트는 바로 보낸다 — 서버는 더 오래된 occurred_at의 상태 이벤트를 무시하므로 최신 이벤트를 먼저 보내도 최종 상태는 맞다."
+      ],
+      "limitations": [
+        "SessionEnd에 해당하는 hook이 없다. antigravity 세션은 ended로 가지 않고 done에 머물며 stale 표시와 수동 삭제로 정리한다.",
+        "명령 승인 대기를 알리는 hook이 없다. PreToolUse는 이미 허용된 명령에도 오고 승인 화면 동안에는 아무 hook도 오지 않는다. 승인 대기는 working으로 보이다가 stalled로 드러난다.",
+        "Esc로 턴을 중단하면 Stop이 오지 않는다. claude-code와 같은 한계다.",
+        "서브에이전트의 질문은 부모 세션에 연결할 식별자가 없어 추적하지 않는다.",
+        "ask_permission은 다른 agy 연동 구현의 처리를 따라 포함했고 payload는 실측하지 못했다(ask_question은 실측).",
+        "서브에이전트 이벤트는 보내지 않으므로, 부모의 턴이 서브에이전트를 남긴 채 끝나면 그동안 부모 세션은 done으로 보인다(agy가 부모를 다시 호출하면 working으로 돌아온다)."
+      ]
     }
   },
   "event_payload": {
@@ -495,7 +630,7 @@
       "notification_type": {
         "type": "string",
         "required": false,
-        "description": "claude-code Notification 이벤트의 원본 세부 타입(hook stdin의 notification_type 필드 그대로: permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/quota_* 등). additive 필드라 서버는 그대로 저장만 하고 상태 판단에는 쓰지 않는다 — 나중에 서버가 매핑을 재판정할 때 쓸 원장(source of truth)이다. sources.registered.claude-code의 notification_type_translation을 함께 본다. source가 claude-code가 아니면 의미가 없고, 모르는 값이 와도 거절하지 않는다.",
+        "description": "claude-code·grok Notification 이벤트의 원본 세부 타입. hook이 stdin의 notification_type 또는 notificationType 중 있는 값을 읽어 이 필드에 싣는다(permission_prompt/idle_prompt/auth_success/elicitation_dialog/agent_needs_input/agent_completed/task_complete/quota_* 등). additive 필드라 서버는 그대로 저장만 하고 상태 판단에는 쓰지 않는다 — 나중에 서버가 매핑을 재판정할 때 쓸 원장(source of truth)이다. sources.registered.claude-code의 notification_type_translation을 함께 본다. 그 밖 출처에서는 의미가 없고, 모르는 값이 와도 거절하지 않는다.",
         "example": "permission_prompt"
       },
       "message": {

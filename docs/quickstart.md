@@ -75,13 +75,13 @@ For local development, upgrades, or custom origins, use the `README.md` inside t
 
 ## Connect agent hooks
 
-On each machine running Claude Code, Codex, or Devin, ensure `curl`, `jq`, and `python3` are installed. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
+On each machine running Claude Code, Codex, Devin, or Antigravity CLI, ensure `curl`, `jq`, and `python3` are installed. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
 
 ```sh
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-The script asks for `INGEST_TOKEN` through the terminal, so the prompt works when the script is piped to Bash. It installs the hooks served by that server and prints configuration backup paths. In Codex, open `/hooks` and trust the new hooks. Start an agent session and check that it appears in the dashboard.
+The script asks for `INGEST_TOKEN` through the terminal, so the prompt works when the script is piped to Bash. It installs the hooks served by that server and prints configuration backup paths. In Codex, open `/hooks` and trust the new hooks. For Antigravity CLI, `agy -p "/hooks" --output-format json` lists the `my-dashboard` bundle once the hooks are registered; runs started with `agy -p` and subagent conversations are deliberately not reported (see the [hook guide](../hooks/README.md#antigravity-cli)). Start an agent session and check that it appears in the dashboard.
 
 You can also use the common installer:
 

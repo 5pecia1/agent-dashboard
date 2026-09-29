@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented disposable RSA test vector; never registered with a service."
+paths = ['''server/test/fcm-test-key\.ts''']
+
+[[allowlists]]
+description = "Random UUID projection tokens in a test fixture and a made-up redaction canary; not credentials."
+targetRules = ["generic-api-key"]
+condition = "OR"
+paths = ['''server/test/fixtures/before-package/expected\.json''']
+regexes = ['''hunter2-plan-question-detail''']

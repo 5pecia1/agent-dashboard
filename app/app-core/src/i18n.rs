@@ -177,6 +177,8 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "session.source.codex"      => "Codex",
     "session.source.devin"      => "Devin",
     "session.source.generic"    => "Generic",
+    "session.source.grok"       => "Grok",
+    "session.source.antigravity" => "Antigravity",
 
     // ── time (T15: relative timestamps) ───────────────────────────────
     "time.just_now"    => "Just now",
@@ -443,6 +445,8 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "session.source.codex"      => "Codex",
     "session.source.devin"      => "Devin",
     "session.source.generic"    => "일반",
+    "session.source.grok"       => "Grok",
+    "session.source.antigravity" => "Antigravity",
 
     // ── time (T15) ───────────────────────────────────────────────────────
     "time.just_now"    => "방금 전",

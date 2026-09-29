@@ -5,7 +5,12 @@
 #
 # agent-event-hook.sh와 payload 스키마(event_id/occurred_at/protocol_version/host/raw)와
 # 스풀 로직을 그대로 공유한다 - notify 인자 파싱만 다르다.
-trap 'exit 0' EXIT
+# 스풀 락을 이 프로세스가 쥐고 있으면(LOCK_OWNED=1) 종료할 때 푼다. TERM·INT·HUP도 exit 0으로
+# 돌려 이 trap을 거치게 한다 - 락을 쥔 채 죽으면 30초 동안 다음 hook들이 락 대기로 지연된다.
+# SIGKILL은 trap이 못 막으므로 아래 stale 락 정리(LOCK_STALE_SECONDS)가 그 안전망이다.
+LOCK_OWNED=0
+trap '[ "${LOCK_OWNED:-0}" = 1 ] && rmdir "$LOCK_DIR" 2>/dev/null; exit 0' EXIT
+trap 'exit 0' TERM INT HUP
 
 # 설정 우선순위: 환경변수 > env 파일 > 기본값. `.`(source)는 같은 이름의 변수를
 # 무조건 덮어쓰므로, 호출 시점에 이미 있던 MY_DASHBOARD_* 환경변수를 통째로 담아 두고
@@ -65,8 +70,23 @@ epoch_ms() {
   esac
 }
 
+# mtime을 초 단위로. Linux(GNU stat)와 macOS(BSD stat) 둘 다 대응.
+# GNU stat의 -f는 --file-system이라 `stat -f %m`이 파일시스템 정보를 stdout에 여러 줄 찍고 실패한다.
+# 그 출력이 산술식(age=$((now - mtime)))에 들어가면 문법 오류로 stale 락이 영영 안 지워지므로,
+# GNU 형식을 먼저 시도하고 어느 쪽이든 숫자만 받아들인다. 못 읽으면 0이다.
 file_mtime() {
-  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+  local out
+  out="$(stat -c %Y "$1" 2>/dev/null)"
+  case "$out" in
+    ''|*[!0-9]*) ;;
+    *) printf '%s\n' "$out"; return 0 ;;
+  esac
+  out="$(stat -f %m "$1" 2>/dev/null)"
+  case "$out" in
+    ''|*[!0-9]*) ;;
+    *) printf '%s\n' "$out"; return 0 ;;
+  esac
+  echo 0
 }
 
 acquire_lock() {
@@ -88,11 +108,16 @@ acquire_lock() {
     fi
     sleep 0.05 2>/dev/null || sleep 1
   done
+  LOCK_OWNED=1
   return 0
 }
 
 release_lock() {
-  rmdir "$LOCK_DIR" 2>/dev/null
+  # 이 프로세스가 잡은 락만 푼다 - 남이 잡은 락을 지우면 뮤텍스가 깨진다.
+  if [ "$LOCK_OWNED" = 1 ]; then
+    rmdir "$LOCK_DIR" 2>/dev/null
+    LOCK_OWNED=0
+  fi
   return 0
 }
 
@@ -114,10 +139,10 @@ trim_spool() {
 # 상세 입력은 명시적으로 켠 경우만 전송한다. 별칭은 프로젝트·호스트 메타데이터를 대체한다.
 privacy_payload() {
   printf '%s' "$1" | jq -c \
-    --arg include "${MY_DASHBOARD_INCLUDE_CONTENT:-0}" \
+    --arg include_content "${MY_DASHBOARD_INCLUDE_CONTENT:-0}" \
     --arg project "${MY_DASHBOARD_PROJECT_LABEL:-}" \
     --arg host "${MY_DASHBOARD_HOST_LABEL:-}" \
-    'if $include == "1" then . else .message = null | del(.raw) end
+    'if $include_content == "1" then . else .message = null | del(.raw) end
      | if $project != "" then .project = $project else . end
      | if $host != "" then .host = $host else . end' 2>/dev/null
 }

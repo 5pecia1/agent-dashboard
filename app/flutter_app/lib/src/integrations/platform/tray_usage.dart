@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_dashboard/src/integrations/data/teamclaude_models.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
+import 'package:my_dashboard/src/integrations/data/grok_usage_models.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 
 const String _summarySeparator = ' · ';
@@ -12,12 +14,18 @@ List<String> buildTrayUsageLabels(
   WidgetRef ref, {
   TeamClaudeState teamClaude = const TeamClaudeState(),
   DevinUsageState devin = const DevinUsageState(),
+  GrokUsageState grok = const GrokUsageState(),
 }) {
-  if (teamClaude.connection == null && devin.connection == null) return [];
+  if (teamClaude.connection == null &&
+      devin.connection == null &&
+      !grok.enabled) {
+    return [];
+  }
   return [
     tRead(ref, 'tray.usage_title'),
     if (teamClaude.connection != null) ..._teamClaudeLabels(ref, teamClaude),
     if (devin.connection != null) ..._devinLabels(ref, devin),
+    if (grok.enabled) ..._grokLabels(ref, grok),
   ];
 }
 
@@ -141,6 +149,47 @@ List<String> _devinLabels(WidgetRef ref, DevinUsageState state) {
       errorKey: state.errorKey,
       hasCachedValue: quota != null,
     ),
+  ];
+}
+
+List<String> _grokLabels(WidgetRef ref, GrokUsageState state) {
+  final source = tRead(ref, 'grok.title');
+  final reading = state.cliEnabled ? state.reading : null;
+  final botReading = state.botEnabled ? state.botReading : null;
+  final metrics = <String>[];
+  if (reading != null) {
+    final window = reading.window == GrokUsageWindow.weekly
+        ? 'grok.weekly'
+        : 'grok.monthly';
+    metrics.add('${tRead(ref, window)} ${reading.usedPercent.round()}%');
+  }
+  if (botReading != null) {
+    metrics.add(
+      '${tRead(ref, 'grok.bot_metric')} ${botReading.usedPercent.round()}%',
+    );
+  }
+  return [
+    if (metrics.isEmpty)
+      _emptyLabel(ref, source, state.loading)
+    else
+      [
+        [source, if (reading?.plan != null) reading!.plan!].join(' '),
+        ...metrics,
+      ].join(_summarySeparator),
+    if (state.cliEnabled)
+      ..._statusLabels(
+        ref,
+        source: source,
+        errorKey: state.errorKey,
+        hasCachedValue: reading != null,
+      ),
+    if (state.botEnabled)
+      ..._statusLabels(
+        ref,
+        source: tRead(ref, 'grok.bot_metric'),
+        errorKey: state.botErrorKey,
+        hasCachedValue: botReading != null,
+      ),
   ];
 }
 
