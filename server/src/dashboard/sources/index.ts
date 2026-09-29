@@ -1,7 +1,9 @@
+import { antigravityAdapter } from "./antigravity";
 import { claudeCodeAdapter } from "./claude-code";
 import { codexAdapter } from "./codex";
 import { devinAdapter } from "./devin";
 import { genericAdapter } from "./generic";
+import { grokAdapter } from "./grok";
 import type { SessionState } from "../state";
 
 /**
@@ -58,10 +60,12 @@ export interface SourceAdapter {
  * (sources.unregistered).
  */
 export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
+  [antigravityAdapter.source]: antigravityAdapter,
   [claudeCodeAdapter.source]: claudeCodeAdapter,
   [codexAdapter.source]: codexAdapter,
   [devinAdapter.source]: devinAdapter,
   [genericAdapter.source]: genericAdapter,
+  [grokAdapter.source]: grokAdapter,
 };
 
 /**

@@ -15,7 +15,7 @@ Create your own Agent Dashboard server on Cloudflare Workers and D1. You need Cl
    curl -fsSL https://YOUR_SERVER/setup.sh | bash
    ```
 
-   Replace `https://YOUR_SERVER` with your Worker origin. This local Bash step supports Claude Code, Codex, and Devin, needs `curl`, `jq`, and `python3`, and asks for `INGEST_TOKEN`. Check prerequisites with `command -v curl jq python3`; install any missing tools using your machine's package manager. In the Codex terminal interface, enter `/hooks` and trust the installed hooks. Start an agent session and check that it appears in the dashboard. See the [hook guide](https://github.com/5pecia1/agent-dashboard/blob/main/hooks/README.md) for configuration and troubleshooting.
+   Replace `https://YOUR_SERVER` with your Worker origin. This local Bash step supports Claude Code, Codex, Devin, and Antigravity CLI, needs `curl`, `jq`, and `python3`, and asks for `INGEST_TOKEN`. Check prerequisites with `command -v curl jq python3`; install any missing tools using your machine's package manager. In the Codex terminal interface, enter `/hooks` and trust the installed hooks. Start an agent session and check that it appears in the dashboard. See the [hook guide](https://github.com/5pecia1/agent-dashboard/blob/main/hooks/README.md) for configuration and troubleshooting.
 
 Push notifications are optional. The default web origins allow the public web app and `http://localhost:8080`. To use another web app, update `ALLOWED_ORIGINS` and `DASHBOARD_APP_ORIGIN` in your copied repository's `wrangler.jsonc`.
 

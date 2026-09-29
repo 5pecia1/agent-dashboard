@@ -226,6 +226,8 @@ EVENT_SOURCE_VARIANT_TO_CODE = {
     "Codex": "codex",
     "Devin": "devin",
     "Generic": "generic",
+    "Grok": "grok",
+    "Antigravity": "antigravity",
 }
 
 
@@ -658,6 +660,375 @@ def check_devin_input_translation(contract: dict):
     return (
         "devin_input_tracking 규약이 소비 계약·agent-event-hook.sh(정확 일치 번역·상관 필드·"
         "스로틀 면제)·install.sh(^ask_user_question$ matcher)에 일치한다."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Antigravity(agy) hook 번역: 정본 event_state_map.antigravity_hook_translation이
+# agent-event-hook.sh의 antigravity 분기(bash 응답 case + jq $final_event 분기 + 필드)와 같은가.
+#
+# agy는 hook을 동기로 실행한다. 응답 JSON이 틀리면 도구가 거부되거나 모두 자동 승인되고,
+# 번역 규칙이 틀리면 모델 호출마다 턴이 시작되거나 서브에이전트가 떠돌이 세션이 된다.
+# 두 사본이 조용히 갈라지지 않도록 규칙 하나하나를 hook 코드와 대조한다.
+# ---------------------------------------------------------------------------
+
+
+def _antigravity_fail(what: str) -> CheckFailure:
+    return CheckFailure(
+        f"{AGENT_EVENT_HOOK_PATH}의 antigravity 번역이 정본 "
+        f"event_state_map.antigravity_hook_translation과 어긋난다 — {what}"
+    )
+
+
+def _balanced_parens(text: str, open_index: int) -> str | None:
+    """text[open_index]의 '('와 짝이 맞는 ')' 사이를 돌려준다. jq 문자열("...") 안의 괄호는 세지 않는다."""
+    depth = 0
+    in_string = False
+    index = open_index
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            if char == "\\":
+                index += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_index + 1:index]
+        index += 1
+    return None
+
+
+def check_antigravity_hook_translation(contract: dict):
+    translation = contract.get("event_state_map", {}).get("antigravity_hook_translation")
+    if translation is None:
+        if "antigravity" in contract.get("sources", {}).get("registered", {}):
+            raise CheckFailure(
+                "정본 sources.registered에 antigravity가 있는데 "
+                "event_state_map.antigravity_hook_translation이 없다 — hook 번역 규칙의 정본이 빠졌다."
+            )
+        return (
+            "소비 계약에 event_state_map.antigravity_hook_translation이 없다(구버전 pin) — "
+            "Antigravity hook 번역 검사는 계약이 갱신되면 자동으로 활성화된다.",
+            True,
+        )
+
+    if not AGENT_EVENT_HOOK_PATH.exists():
+        raise CheckFailure(f"{AGENT_EVENT_HOOK_PATH} 가 없다.")
+    hook_src = AGENT_EVENT_HOOK_PATH.read_text(encoding="utf-8")
+    norm = _normalize_ws(hook_src)
+
+    # --- 1. stdout 응답: bash case 블록 == 정본 stdout_contract($로 시작하는 주석 키 제외) ---
+    expected_answers = {
+        key: value for key, value in translation["stdout_contract"].items() if not key.startswith("$")
+    }
+    case_block = re.search(r'case "\$ANTIGRAVITY_EVENT" in (.*?) esac', norm)
+    if not case_block:
+        raise _antigravity_fail("응답을 고르는 'case \"$ANTIGRAVITY_EVENT\" in ... esac' 블록을 찾지 못했다.")
+    actual_answers = {}
+    for label, answer in re.findall(r"(\S+)\) ANTIGRAVITY_ANSWER='([^']*)' ;;", case_block.group(1)):
+        try:
+            actual_answers["default" if label == "*" else label] = json.loads(answer)
+        except json.JSONDecodeError as exc:
+            raise _antigravity_fail(f"{label} 응답 {answer!r}이 JSON이 아니다.") from exc
+    if actual_answers != expected_answers:
+        raise _antigravity_fail(
+            "stdout 응답이 stdout_contract와 다르다.\n"
+            f"  정본 = {expected_answers}\n"
+            f"  hook = {actual_answers}"
+        )
+    # 응답은 env 파일·stdin보다 먼저 한 번만 나가고, 그 뒤 stdout은 닫혀야 한다(rules).
+    answer_pos = hook_src.find("( printf '%s\\n' \"$ANTIGRAVITY_ANSWER\" )")
+    close_pos = hook_src.find("exec 1>/dev/null")
+    config_pos = hook_src.find('. "$CONFIG_FILE"')
+    stdin_pos = hook_src.find('INPUT="$(cat')
+    if answer_pos == -1 or close_pos == -1 or config_pos == -1 or stdin_pos == -1:
+        raise _antigravity_fail(
+            "응답 출력('( printf ... \"$ANTIGRAVITY_ANSWER\" )')·stdout 닫기('exec 1>/dev/null')·"
+            "env 파일 소싱·stdin 읽기 중 하나를 찾지 못했다."
+        )
+    if not answer_pos < close_pos < config_pos < stdin_pos:
+        raise _antigravity_fail(
+            "응답 출력 → exec 1>/dev/null → env 파일 소싱 → stdin 읽기 순서가 아니다 — agy는 응답이 "
+            "늦거나 섞이면 도구를 거부하거나 실행을 멈춘다."
+        )
+
+    # --- 2. 이벤트 이름은 stdin이 아니라 두 번째 인자다 ---
+    if 'ANTIGRAVITY_EVENT="${2:-}"' not in norm or not re.search(
+        r'\(if \$source == "antigravity" then \$antigravity_event else \(\.hook_event_name // "unknown"\) end\) as \$raw_event',
+        norm,
+    ) or '--arg antigravity_event "${ANTIGRAVITY_EVENT:-}"' not in norm:
+        raise _antigravity_fail("이벤트 이름을 두 번째 인자($2 → $antigravity_event → $raw_event)로 받지 않는다.")
+
+    # --- 3. question_tools: jq 배열 리터럴 == 정본(순서까지), toolCall.name 정확 일치 ---
+    tools_match = re.search(
+        r'\(\[([^\]]*)\] \| any\(\. == \$antigravity_tool\)\) as \$antigravity_question', norm
+    )
+    if not tools_match:
+        raise _antigravity_fail(
+            "question_tools 배열 리터럴('([...] | any(. == $antigravity_tool)) as $antigravity_question')을 찾지 못했다."
+        )
+    actual_tools = json.loads(f"[{tools_match.group(1)}]")
+    if actual_tools != translation["question_tools"]:
+        raise _antigravity_fail(
+            "question_tools가 다르다.\n"
+            f"  정본 = {translation['question_tools']}\n"
+            f"  hook = {actual_tools}"
+        )
+    if not re.search(r"\(try \.toolCall\.name catch null\) as \$antigravity_tool", norm):
+        raise _antigravity_fail(
+            "$antigravity_tool이 toolCall.name 원문이 아니다 — 정본은 정확 일치만 허용한다(정규화 금지)."
+        )
+
+    # --- 4. jq $final_event의 antigravity 분기(괄호 짝으로 통째로 잘라 낸다) ---
+    branch_head = 'elif $source == "antigravity" then ('
+    branch_start = norm.find(branch_head)
+    branch = _balanced_parens(norm, branch_start + len(branch_head) - 1) if branch_start != -1 else None
+    if branch is None:
+        raise _antigravity_fail("jq $final_event 체인에서 'elif $source == \"antigravity\" then (...)' 분기를 찾지 못했다.")
+    branch = branch.strip()
+
+    handled = re.findall(r'\$raw_event == "(\w+)"', branch)
+    if sorted(handled) != sorted(translation["registration"]["events"]):
+        raise _antigravity_fail(
+            "분기가 다루는 이벤트가 registration.events와 다르다.\n"
+            f"  정본 = {translation['registration']['events']}\n"
+            f"  hook = {handled}"
+        )
+    if "def antigravity_num: if type == \"number\" then . else null end;" not in norm:
+        raise _antigravity_fail(
+            "antigravity_num이 숫자만 받지 않는다 — jq는 문자열을 모든 숫자보다 크게 비교해서(\"0\" >= 1이 참) "
+            "invocationNum·initialNumSteps 규칙이 뒤집힌다."
+        )
+    rules = {
+        "서브에이전트(invocationNum 0이고 initialNumSteps 0이면 표시 후 버림, 가장 먼저 판정)":
+            r'\$raw_event == "PreInvocation" then \(if \(\.invocationNum \| antigravity_num\) == 0 and '
+            r'\(\.initialNumSteps \| antigravity_num\) == 0 then "AntigravitySubagentStart" elif',
+        "Stop 뒤 래치가 걸린 동안의 PreInvocation은 invocationNum과 상관없이 턴 (재)시작":
+            r'then "AntigravitySubagentStart" elif \$antigravity_latched == "1" then "UserPromptSubmit" elif',
+        "턴 시작(invocationNum이 0이거나 없으면 UserPromptSubmit, 1 이상이면 버림)":
+            r'elif \(\.invocationNum \| antigravity_num\) >= 1 then "AntigravityIgnored" '
+            r'else "UserPromptSubmit" end\)',
+        "PreToolUse(질문 도구만 UserInputRequest, 그 밖은 버림)":
+            r'\$raw_event == "PreToolUse" then \(if \$antigravity_question then "UserInputRequest" '
+            r'else "AntigravityIgnored" end\)',
+        "PostToolUse(질문 도구는 UserInputResolved, 그 밖은 하트비트)":
+            r'\$raw_event == "PostToolUse" then \(if \$antigravity_question then "UserInputResolved" '
+            r'else "PostToolUse" end\)',
+        "Stop(fullyIdle 값과 상관없이 모두 Stop)":
+            r'\$raw_event == "Stop" then "Stop" else',
+        "그 밖의 이벤트는 버림":
+            r'else "AntigravityIgnored" end$',
+    }
+    for label, pattern in rules.items():
+        if not re.search(pattern, branch):
+            raise _antigravity_fail(f"규칙 '{label}'에 해당하는 분기를 찾지 못했다.")
+
+    # Stop은 fullyIdle로 거르지 않는다. 서브에이전트를 쓰는 턴은 마지막 Stop까지 fullyIdle false로 끝날 수
+    # 있어서(agy 1.2.12 실측), 거르면 세션이 working에 멈추고 stalled 푸시가 잘못 나간다. jq든 bash든
+    # 코드 어디에서도 .fullyIdle을 읽지 않아야 한다(주석은 .fullyIdle 형태로 쓰지 않는다).
+    stop_rule = next((rule for rule in translation["rules"] if rule.startswith("Stop:")), "")
+    if "fullyIdle 값과 상관없이 Stop을 보낸다" not in stop_rule:
+        raise CheckFailure(
+            "정본 antigravity_hook_translation.rules의 Stop 규칙이 'fullyIdle 값과 상관없이 Stop을 보낸다'가 "
+            f"아니다(정본: {stop_rule!r}) — hook이 구현한 규칙과 다르다."
+        )
+    if ".fullyIdle" in norm:
+        raise _antigravity_fail(
+            "hook이 .fullyIdle을 읽는다 — 정본 Stop 규칙은 fullyIdle 값과 상관없이 Stop을 보낸다."
+        )
+
+    # Stop 뒤 래치: 모든 Stop이 걸고, 턴 시작(UserPromptSubmit)이 풀고, 하트비트 PostToolUse가 확인한다.
+    # 래치가 걸린 동안의 PreInvocation은 invocationNum과 상관없이 턴 (재)시작이다 - 한 실행 안에서
+    # fullyIdle false Stop 뒤 모델 호출이 이어져도(다른 agy 연동 구현에서 보고된 동작) 세션이 done에 머물지 않게 한다.
+    latch_rule = next((rule for rule in translation["rules"] if "기록용" in rule), "")
+    if "모든 Stop" not in latch_rule or "질문 도구 포함" not in latch_rule:
+        raise CheckFailure(
+            "정본 antigravity_hook_translation.rules의 래치 규칙이 모든 Stop(fullyIdle 값과 상관없이) 뒤에 걸리고 "
+            f"질문 도구의 PostToolUse도 버린다고 하지 않는다(정본: {latch_rule!r})."
+        )
+    turn_start_rule = next((rule for rule in translation["rules"] if rule.startswith("PreInvocation:")), "")
+    if "래치" not in turn_start_rule or "invocationNum과 상관없이 턴 시작" not in turn_start_rule:
+        raise CheckFailure(
+            "정본 antigravity_hook_translation.rules의 턴 시작 규칙이 래치가 걸린 동안의 PreInvocation을 "
+            f"invocationNum과 상관없이 턴 시작으로 보지 않는다(정본: {turn_start_rule!r})."
+        )
+    # 래치 여부는 대화 상태라 bash가 Stop이 거는 바로 그 파일로 보고 jq 번역에 입력으로 넘긴다.
+    if (
+        'ANTIGRAVITY_KEY="$(printf \'%s\' "$RAW_ID_SEED" | tr -c \'A-Za-z0-9_-\' \'_\')"' not in norm
+        or '[ -e "$ANTIGRAVITY_DIR/stopped/$ANTIGRAVITY_KEY" ] && ANTIGRAVITY_LATCHED=1' not in norm
+        or '--arg antigravity_latched "${ANTIGRAVITY_LATCHED:-0}"' not in norm
+    ):
+        raise _antigravity_fail(
+            "래치 여부(ANTIGRAVITY_LATCHED)를 Stop 래치 파일($ANTIGRAVITY_DIR/stopped/$ANTIGRAVITY_KEY)로 정해 "
+            "jq에 --arg antigravity_latched로 넘기는 경로를 찾지 못했다."
+        )
+    admit = re.search(r"^antigravity_admit\(\) \{\n(.*?)^\}", hook_src, re.MULTILINE | re.DOTALL)
+    admit_norm = _normalize_ws(admit.group(1)) if admit else ""
+    if 'local key="$ANTIGRAVITY_KEY"' not in admit_norm:
+        raise _antigravity_fail("antigravity_admit이 래치 여부를 본 것과 같은 대화 키($ANTIGRAVITY_KEY)를 쓰지 않는다.")
+    latch_arms = {
+        "Stop이 래치를 건다": (r"\bStop\) (.*?) ;;", ': > "$ANTIGRAVITY_DIR/stopped/$key"'),
+        "턴 시작이 래치를 푼다": (r"\bUserPromptSubmit\) (.*?) ;;", 'rm -f "$ANTIGRAVITY_DIR/stopped/$key"'),
+        # 질문 도구의 PostToolUse는 UserInputResolved로 번역된다 - 상태 이벤트라 버리지 않으면 끝난 턴을
+        # 하트비트 가드 없이 working으로 되살린다.
+        "래치가 걸린 PostToolUse(질문 도구의 UserInputResolved 포함)는 버린다":
+            (r"\bPostToolUse\|UserInputResolved\) (.*?) ;;", '[ -e "$ANTIGRAVITY_DIR/stopped/$key" ] && return 1'),
+    }
+    for label, (arm_pattern, needle) in latch_arms.items():
+        arm = re.search(arm_pattern, admit_norm)
+        if not arm or needle not in arm.group(1):
+            raise _antigravity_fail(f"antigravity_admit에서 '{label}' 갈래를 찾지 못했다.")
+
+    # 합성 이름은 bash에서 전송 전에 끝나야 한다(서버로 새면 안 된다): antigravity_admit의
+    # case 갈래가 return 1로 끝나고, 호출부가 'antigravity_admit || exit 0'이어야 한다.
+    for label in ("AntigravitySubagentStart", "AntigravityIgnored"):
+        arm = re.search(rf"{label}\) (.*?) ;;", norm)
+        if not arm or not arm.group(1).endswith("return 1"):
+            raise _antigravity_fail(f"antigravity_admit의 '{label})' 갈래가 return 1(버림)로 끝나지 않는다.")
+    if "antigravity_admit || exit 0" not in norm:
+        raise _antigravity_fail("'antigravity_admit || exit 0' 호출을 찾지 못했다 — 버리는 이벤트가 서버로 샌다.")
+
+    # --- 5. fields: session_id·project·message ---
+    fields = translation["fields"]
+    for name, needles in {
+        "session_id": ("conversationId", "ANTIGRAVITY_CONVERSATION_ID", '"unknown"'),
+        "project": ("workspacePaths[0]", '"unknown"'),
+        "message": ("UserInputRequest", "toolCall.args.questions[0].question"),
+    }.items():
+        missing = [needle for needle in needles if needle not in fields.get(name, "")]
+        if missing:
+            raise CheckFailure(
+                f"정본 antigravity_hook_translation.fields.{name}가 hook이 구현한 규칙과 다르다 "
+                f"(없는 부분: {missing}, 정본: {fields.get(name)!r})."
+            )
+    if (
+        "jq -r '.conversationId | strings'" not in norm
+        or 'RAW_ID_SEED="${ANTIGRAVITY_CONVERSATION_ID:-}"' not in norm
+        or 'session_id: (if $source == "antigravity" then $antigravity_session' not in norm
+    ):
+        raise _antigravity_fail("session_id가 conversationId → ANTIGRAVITY_CONVERSATION_ID → \"unknown\" 순서가 아니다.")
+    if not re.search(
+        r'project: \(if \$source == "antigravity" then \(\(try \.workspacePaths\[0\] catch null\) '
+        r'\| if type == "string" and \. != "" then \. else "unknown" end\) else',
+        norm,
+    ):
+        raise _antigravity_fail("project가 workspacePaths[0] → \"unknown\"이 아니다(hook cwd 폴백 금지).")
+    if not re.search(
+        r'if \$source == "antigravity" then \(\(if \$final_event == "UserInputRequest" then '
+        r'\(try \.toolCall\.args\.questions\[0\]\.question catch null\) else null end\)',
+        norm,
+    ):
+        raise _antigravity_fail("message가 UserInputRequest의 toolCall.args.questions[0].question이고 그 밖에 null이 아니다.")
+
+    # --- 6. print_mode: Go flag 문법(대시 하나·둘, =값, -- 종결)으로 이름을 비교한다 ---
+    print_mode = translation["print_mode"]
+    name_case = re.search(r'case "\$\{name%%=\*\}" in (\S+)\) return 0 ;; (\S+)\) return 1 ;; esac', norm)
+    if not name_case:
+        raise _antigravity_fail(
+            "print·대화형 플래그 이름을 고르는 'case \"${name%%=*}\" in <print>) return 0 ;; <대화형>) return 1 ;;'을 "
+            "찾지 못했다."
+        )
+    for label, actual, expected in (
+        ("print 모드 플래그(flags)", name_case.group(1).split("|"), print_mode["flags"]),
+        ("대화형 첫 프롬프트 플래그(interactive_flags)", name_case.group(2).split("|"),
+         print_mode.get("interactive_flags", [])),
+    ):
+        if sorted(actual) != sorted(expected):
+            raise _antigravity_fail(
+                f"{label} 이름이 다르다.\n  정본 = {sorted(expected)}\n  hook = {sorted(actual)}"
+            )
+    # 이름만 비교하려면 대시 하나·둘을 떼고(=값은 위 case가 ${name%%=*}로 뗀다) -- 에서 멈춰야 한다.
+    if not re.search(r'case "\$arg" in --\) return 1 ;; --\*\) name="\$\{arg#--\}" ;; -\*\) name="\$\{arg#-\}" ;; '
+                     r'\*\) continue ;; esac', norm):
+        raise _antigravity_fail(
+            "agy 인자를 Go flag 문법으로 읽지 않는다 — -- 에서 멈추고 대시 하나·둘을 모두 떼어 이름만 비교해야 한다."
+        )
+    include_env = print_mode["include_env"]
+    if f'[ "${{{include_env}:-}}" = "1" ] && return 1' not in norm:
+        raise _antigravity_fail(f"print 모드 포함 환경변수 {include_env}=1 분기를 찾지 못했다.")
+
+    # --- 7. 시간 예산: 재전송 예산 == 정본 규칙의 초, 최악 종료 시각 < registration.timeout_seconds ---
+    budget_rule = next((rule for rule in translation["rules"] if "스풀 재전송" in rule), None)
+    budget_seconds = re.search(r"최대 (\d+)초", budget_rule or "")
+    if not budget_seconds:
+        raise CheckFailure("정본 antigravity_hook_translation.rules에서 스풀 재전송 시간 예산('최대 N초')을 찾지 못했다.")
+
+    def hook_int(name: str) -> int:
+        found = re.search(rf"^{name}=(\d+)$", hook_src, re.MULTILINE)
+        if not found:
+            raise _antigravity_fail(f"{name}=<정수> 선언을 찾지 못했다.")
+        return int(found.group(1))
+
+    replay_budget = hook_int("ANTIGRAVITY_REPLAY_BUDGET_SECONDS")
+    send_deadline = hook_int("ANTIGRAVITY_SEND_DEADLINE_SECONDS")
+    curl_max = hook_int("CURL_MAX_TIME")
+    timeout = translation["registration"]["timeout_seconds"]
+    if replay_budget != int(budget_seconds.group(1)):
+        raise _antigravity_fail(
+            f"스풀 재전송 예산이 {replay_budget}초다(정본 규칙: {budget_seconds.group(1)}초)."
+        )
+    if not replay_budget <= send_deadline or send_deadline + curl_max >= timeout:
+        raise _antigravity_fail(
+            f"시간 예산이 agy 제한 안에 들지 않는다 — 재전송 {replay_budget}초 ≤ 전송 마감 {send_deadline}초, "
+            f"전송 마감 + curl 최대 {curl_max}초 < registration.timeout_seconds {timeout}초여야 한다."
+        )
+    # 예산·순서 규칙이 실제로 호출되는 자리까지 본다(함수 이름만 있어도 통과하지 않게).
+    def function_body(name: str) -> str:
+        found = re.search(rf"^{name}\(\) \{{\n(.*?)^\}}", hook_src, re.MULTILINE | re.DOTALL)
+        return _normalize_ws(found.group(1)) if found else ""
+
+    call_sites = {
+        "acquire_lock의 재시도 루프가 예산을 넘으면 기다리지 않는다":
+            ("acquire_lock", 'while ! mkdir "$LOCK_DIR" 2>/dev/null; do antigravity_budget_spent && return 1'),
+        "flush_spool이 예산을 넘으면 새 재전송을 시작하지 않는다":
+            ("flush_spool", 'if [ "$stop_on_failure" -eq 1 ] || antigravity_budget_spent; then'),
+        "send_payload가 마지막 응답 코드를 남긴다":
+            ("send_payload", 'LAST_SEND_CODE="$code"'),
+        "재전송이 서버 응답을 하나도 받지 못했을 때(000)만 이번 이벤트를 스풀 끝에 넣는다":
+            ("antigravity_spool_behind",
+             '[ "$SOURCE" = "antigravity" ] && [ -s "$SPOOL_FILE" ] && [ "${LAST_SEND_CODE:-}" = "000" ]'),
+        # 모든 source의 정합성: 재전송하는 동안 락 없이 append된 줄이 재작성(mv)에 덮이지 않게, 가져간 줄
+        # 다음은 전부 되돌린다(스풀 끝에 넣은 이벤트가 다른 hook의 flush에 사라지지 않는 근거이기도 하다).
+        "flush_spool이 실제로 가져간 줄(head_file) 다음 줄을 전부 되돌린다":
+            ("flush_spool",
+             'local taken taken="$(wc -l < "$head_file" 2>/dev/null | tr -d \' \')" case "$taken" in '
+             "''|*[!0-9]*) taken=0 ;; esac "
+             'tail -n +"$((taken + 1))" "$SPOOL_FILE" >> "$remaining_file" 2>/dev/null'),
+    }
+    for label, (function, needle) in call_sites.items():
+        if needle not in function_body(function):
+            raise _antigravity_fail(f"{function}에서 '{label}' 자리를 찾지 못했다.")
+    if not re.search(r'^LAST_SEND_CODE=""$', hook_src, re.MULTILINE):
+        raise _antigravity_fail(
+            "LAST_SEND_CODE를 전역에서 비워 두고 시작하지 않는다 — 환경변수로 물려받은 값이 스풀 판정에 샌다."
+        )
+    if (
+        'if [ "$SOURCE" != "antigravity" ] || [ "$SKIP_SEND" -eq 0 ]; then flush_spool fi' not in norm
+        or 'if ! antigravity_send_deadline_passed && ! antigravity_spool_behind && send_payload "$PAYLOAD"; then'
+        not in norm
+    ):
+        raise _antigravity_fail(
+            "본문에서 스로틀된 하트비트의 재전송 생략이나 이번 전송의 마감·스풀 순서 분기를 찾지 못했다."
+        )
+    if (
+        "응답을 하나도 받지 못했으면" not in budget_rule
+        or "스풀 끝에 넣는다" not in budget_rule
+        or "바로 보낸다" not in budget_rule
+    ):
+        raise CheckFailure(
+            "정본 antigravity_hook_translation.rules의 스풀 규칙이 '재전송이 응답을 하나도 받지 못했으면 스풀 끝에 "
+            f"넣고, 서버가 응답했으면 바로 보낸다'를 말하지 않는다(정본: {budget_rule!r})."
+        )
+
+    return (
+        "antigravity_hook_translation(stdout 응답·인자 이벤트 이름·question_tools·턴 시작·서브에이전트·"
+        "모든 Stop·Stop 뒤 래치(질문 도구 포함)와 래치 중 턴 재시작·필드·Go flag print 모드·시간 예산과 응답이 없을 때만 스풀 대기)이 agent-event-hook.sh와 일치한다."
     )
 
 
@@ -1216,6 +1587,7 @@ def main(argv=None) -> int:
         ("UI language wire keys", lambda: check_ui_lang_wire_keys(contract)),
         ("source adapters", lambda: check_source_adapters(contract)),
         ("Devin input correlation", lambda: check_devin_input_translation(contract)),
+        ("Antigravity hook translation", lambda: check_antigravity_hook_translation(contract)),
     ]
     if args.package_root:
         checks.append(("installed package assets", lambda: check_package_assets(args.package_root)))

@@ -26,6 +26,7 @@ import 'package:my_dashboard/src/state/config_provider.dart'
 import 'package:my_dashboard/src/state/dashboard_provider.dart'
     show isSessionStaleFnProvider, stateLabelKeyFnProvider;
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
 import 'package:my_dashboard/src/state/sync_controller.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
@@ -48,6 +49,7 @@ Future<void> _pumpSessionsPage(
   SyncController? syncController,
   TeamClaudeController? teamClaudeController,
   DevinUsageController? devinUsageController,
+  GrokUsageController? grokUsageController,
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
@@ -68,6 +70,8 @@ Future<void> _pumpSessionsPage(
         teamClaudeControllerProvider.overrideWith(() => teamClaudeController),
       if (devinUsageController != null)
         devinUsageControllerProvider.overrideWith(() => devinUsageController),
+      if (grokUsageController != null)
+        grokUsageControllerProvider.overrideWith(() => grokUsageController),
       // `HookSkewBanner`가 복사 아이콘 표시 여부를 판정하려고 자기 build()
       // 안에서 `dashboardConfigValuesProvider`를 직접 읽는다(`alert_banner.
       // dart` 문서 참고) — override 없이 읽으면 던지는 계약이라 이 화면을
@@ -163,6 +167,25 @@ class _CountingDevin extends DevinUsageController {
 
   void setLoading(bool loading) {
     state = DevinUsageState(connection: _devinConnection, loading: loading);
+  }
+}
+
+class _CountingGrok extends GrokUsageController {
+  var refreshes = 0;
+
+  @override
+  GrokUsageState build() => const GrokUsageState();
+
+  @override
+  void setActive(bool active) {}
+
+  @override
+  Future<void> refresh({bool userInitiated = false}) async {
+    refreshes++;
+  }
+
+  void setLoading(bool loading) {
+    state = GrokUsageState(enabled: true, loading: loading);
   }
 }
 
@@ -399,16 +422,18 @@ void main() {
   });
 
   group('통합 새로고침', () {
-    testWidgets('앱바의 유일한 새로고침 버튼이 프로젝트 동기화와 두 쿼터 갱신을 함께 부른다', (tester) async {
+    testWidgets('앱바의 유일한 새로고침 버튼이 프로젝트 동기화와 사용량 갱신을 함께 부른다', (tester) async {
       final sync = _CountingSyncController();
       final teamClaude = _CountingTeamClaude();
       final devin = _CountingDevin();
+      final grok = _CountingGrok();
       await _pumpSessionsPage(
         tester,
         _readySyncState,
         syncController: sync,
         teamClaudeController: teamClaude,
         devinUsageController: devin,
+        grokUsageController: grok,
       );
       await tester.pump();
 
@@ -426,19 +451,22 @@ void main() {
       expect(sync.forcedTriggers, 1);
       expect(teamClaude.refreshes, 1);
       expect(devin.refreshes, 1);
+      expect(grok.refreshes, 1);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('당겨서 새로고침도 같은 세 경로를 호출한다', (tester) async {
+    testWidgets('당겨서 새로고침도 같은 경로를 호출한다', (tester) async {
       final sync = _CountingSyncController();
       final teamClaude = _CountingTeamClaude();
       final devin = _CountingDevin();
+      final grok = _CountingGrok();
       await _pumpSessionsPage(
         tester,
         _readySyncState,
         syncController: sync,
         teamClaudeController: teamClaude,
         devinUsageController: devin,
+        grokUsageController: grok,
       );
       await tester.pump();
 
@@ -451,19 +479,22 @@ void main() {
       expect(sync.forcedTriggers, 1);
       expect(teamClaude.refreshes, 1);
       expect(devin.refreshes, 1);
+      expect(grok.refreshes, 1);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('세 원천 중 하나라도 갱신 중이면 새로고침 버튼이 비활성화된다', (tester) async {
+    testWidgets('사용량이나 동기화 중 하나라도 갱신 중이면 새로고침 버튼이 비활성화된다', (tester) async {
       final sync = _CountingSyncController();
       final teamClaude = _CountingTeamClaude();
       final devin = _CountingDevin();
+      final grok = _CountingGrok();
       await _pumpSessionsPage(
         tester,
         _readySyncState,
         syncController: sync,
         teamClaudeController: teamClaude,
         devinUsageController: devin,
+        grokUsageController: grok,
       );
       await tester.pump();
 
@@ -483,6 +514,10 @@ void main() {
       await tester.pump();
       expect(refreshButton().onPressed, isNull);
       devin.setLoading(false);
+      grok.setLoading(true);
+      await tester.pump();
+      expect(refreshButton().onPressed, isNull);
+      grok.setLoading(false);
       sync.setPhase(SyncPhase.syncing);
       await tester.pump();
       expect(refreshButton().onPressed, isNull);

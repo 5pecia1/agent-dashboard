@@ -53,7 +53,7 @@ npm ci
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-훅 설치기에는 `curl`, `jq`, `python3`가 필요합니다. 입력을 요청하면 수집용 토큰(`INGEST_TOKEN`)을 입력하고, Codex에서는 `/hooks`에서 새 훅을 신뢰하도록 설정합니다. 에이전트 세션을 시작한 뒤 대시보드에서 확인하세요. 변경 사항 미리 보기, 업데이트, 데이터 처리 방식은 [훅 안내](hooks/README.md)를 참고하세요. 푸시 알림은 선택 사항입니다.
+훅 설치기에는 `curl`, `jq`, `python3`가 필요합니다. 입력을 요청하면 수집용 토큰(`INGEST_TOKEN`)을 입력하고, Codex에서는 `/hooks`에서 새 훅을 신뢰하도록 설정합니다. 에이전트 세션을 시작한 뒤 대시보드에서 확인하세요. 변경 사항 미리 보기, 업데이트, 데이터 처리 방식, Antigravity CLI에서 보고되는 범위와 보고되지 않는 범위는 [훅 안내](hooks/README.md)를 참고하세요. 푸시 알림은 선택 사항입니다.
 
 ## 버전 선택과 업데이트
 
@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 ## 사용량 연동
 
-웹 앱과 macOS 앱에는 TeamClaude와 Devin 사용량 패널이 포함되어 있습니다. 설정에서 자신의 엔드포인트와 키를 입력하세요. 설정하지 않은 연동은 요청을 보내지 않습니다. 브라우저의 HTTPS·CORS 요구 사항과 인증 정보의 로컬 저장 방식은 [사용량 연동 설정 안내](docs/integrations.md)를 참고하세요.
+웹 앱과 macOS 앱에는 TeamClaude와 Devin 사용량 패널이 포함되어 있습니다. macOS 앱은 이 컴퓨터의 Grok 로그인으로 Grok 사용량을 표시할 수 있고, 이 Mac의 Grok Bot 앱으로 Grok Bot 주간 사용량도 표시할 수 있습니다. 설정에서 자신의 엔드포인트와 키를 입력하세요. 설정하지 않은 연동은 요청을 보내지 않습니다. 브라우저의 HTTPS·CORS 요구 사항, macOS의 Grok 스위치, 인증 정보의 로컬 저장 방식은 [사용량 연동 설정 안내](docs/integrations.md)를 참고하세요.
 
 ## 개발과 업그레이드
 

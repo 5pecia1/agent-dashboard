@@ -97,7 +97,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   else
     log "     없음 - 새로 생성 (MY_DASHBOARD_URL=$ORIGIN, MY_DASHBOARD_TOKEN=<입력값>, chmod 600)"
   fi
-  log "  3) $HOOKS_DIR/install.sh --claude --codex --devin 실행"
+  log "  3) $HOOKS_DIR/install.sh --claude --codex --devin --antigravity 실행"
   exit 0
 fi
 
@@ -111,10 +111,13 @@ for f in $ALL_FILES; do
     rm -f "$HOOKS_DIR/$f.download"
     exit 1
   fi
+  # 실행 파일은 실행 권한을 먼저 주고 나서 제자리로 옮긴다(mv는 원자적 교체다). 옮긴 뒤에 chmod하면
+  # 다음 파일을 받는 동안 hook이 실행 불가 상태로 놓여, 그 사이에 실행되는 hook이 exit 126으로
+  # 실패하거나(antigravity는 조용히 폴백 응답으로 대신) 이벤트가 사라진다.
+  case " $EXECUTABLE_FILES " in
+    *" $f "*) chmod +x "$HOOKS_DIR/$f.download" ;;
+  esac
   mv -f "$HOOKS_DIR/$f.download" "$HOOKS_DIR/$f"
-done
-for f in $EXECUTABLE_FILES; do
-  chmod +x "$HOOKS_DIR/$f"
 done
 log "설치 위치: $HOOKS_DIR/ (재실행하면 이 자리가 갱신된다 = 업데이트 방법과 동일)"
 
@@ -209,11 +212,13 @@ case "$VERIFY_HTTP_CODE" in
   *) log "서버 연결을 확인할 수 없습니다(HTTP $VERIFY_HTTP_CODE). 토큰은 검증되지 않았습니다." ;;
 esac
 
-# ---------- (d) Claude Code / Codex / Devin 등록 ----------
+# ---------- (d) Claude Code / Codex / Devin / Antigravity 등록 ----------
 
+# 에이전트가 설치돼 있는지는 확인하지 않는다 - 아직 없는 에이전트의 설정도 미리 만들어 두는
+# 것이 이 스크립트의 설계다(Sol 확정).
 log ""
-log "== $HOOKS_DIR/install.sh --claude --codex --devin =="
-"$HOOKS_DIR/install.sh" --claude --codex --devin
+log "== $HOOKS_DIR/install.sh --claude --codex --devin --antigravity =="
+"$HOOKS_DIR/install.sh" --claude --codex --devin --antigravity
 
 # ---------- (e) 마무리 안내 ----------
 

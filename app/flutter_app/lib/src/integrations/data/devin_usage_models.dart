@@ -27,6 +27,13 @@ const String kDevinClientVersion = '3000.10.27';
 /// 이 모듈이 별도로 들고 있는 이유: 두 데이터 원천이 서로를 모르게 두기 위해.
 const int kDevinPercentScale = 100;
 
+/// `planInfo.billingStrategy`가 이 값이면 계정이 일간/주간 잔량 % 쿼터로
+/// 과금된다. ACU 계정은 대신 `acuConsumed`/`acuLimit`을 보낸다.
+const String kDevinBillingStrategyQuota = 'BILLING_STRATEGY_QUOTA';
+
+/// USD micros → 달러 환산 분모 (`overageBalanceMicros`).
+const int kDevinMicrosPerUsd = 1000000;
+
 class DevinConnection {
   const DevinConnection({required this.baseUrl, required this.apiKey});
 
@@ -82,6 +89,13 @@ class DevinConnection {
 /// `userStatus.planStatus` 아래 쿼터 필드는 과금 방식(`billingStrategy`)마다
 /// 채워지는 칸이 다르다 — QUOTA 계정은 일간/주간 잔량 %를, ACU 계정은
 /// `acuConsumed`/`acuLimit`을 보낸다. 없는 칸은 null로 두고 화면이 건너뛴다.
+///
+/// 단 Connect/proto3 JSON은 기본값(0)인 필드를 직렬화에서 생략한다 — 잔량이
+/// 정확히 0%(소진)이면 키 자체가 응답에서 사라진다. `fromUserStatus`는
+/// 리셋 시각처럼 "윈도우가 존재한다"는 양의 증거가 있는데 값만 없는 경우를
+/// 0으로 복원해 "해당 없음"과 구별한다 (2026-09-28 실측: 주간 소진 계정은
+/// `weeklyQuotaResetAtUnix`만 남고 `weeklyQuotaRemainingPercent`가 사라져
+/// 카드가 빈 화면이 됐다).
 class DevinQuota {
   const DevinQuota({
     this.accountName,
@@ -108,6 +122,8 @@ class DevinQuota {
 
   /// 잔량 백분율(0-100). 서버는 남은 양을 내므로 화면의 사용률은
   /// [dailyUsedPercent]/[weeklyUsedPercent]처럼 `100 - 잔량`으로 환산한다.
+  /// QUOTA 계정에서 윈도우(리셋 시각)가 있는데 키가 생략된 0은 파서가
+  /// 복원해 둔 값이므로 여기서도 0이다.
   final int? dailyRemainingPercent;
   final int? weeklyRemainingPercent;
   final DateTime? dailyResetAt;
@@ -148,18 +164,34 @@ class DevinQuota {
     final devinMap = devinInfo is Map<String, dynamic>
         ? devinInfo
         : const <String, dynamic>{};
+    final billingStrategy = _string(infoMap['billingStrategy']);
+    var dailyRemaining = _int(planMap['dailyQuotaRemainingPercent']);
+    var weeklyRemaining = _int(planMap['weeklyQuotaRemainingPercent']);
+    final dailyResetAt = _unixSeconds(planMap['dailyQuotaResetAtUnix']);
+    final weeklyResetAt = _unixSeconds(planMap['weeklyQuotaResetAtUnix']);
+    var acuConsumed = _double(planMap['acuConsumed']);
+    final acuLimit = _double(planMap['acuLimit']);
+    // proto3 JSON은 기본값(0) 필드를 생략한다 — 리셋 시각은 있는데 잔량 키가
+    // 없으면 잔량이 실제 0%(소진)이다. 리셋 시각도 없으면 그 윈도우가 없는
+    // 것이므로 null을 유지해 "없는 쿼터를 소진으로 착각"하지 않는다.
+    if (billingStrategy == kDevinBillingStrategyQuota) {
+      dailyRemaining ??= dailyResetAt != null ? 0 : null;
+      weeklyRemaining ??= weeklyResetAt != null ? 0 : null;
+    }
+    // ACU 계정도 같은 생략 규칙 — 한도는 있는데 누적치 키가 없으면 0이다.
+    acuConsumed ??= acuLimit != null ? 0.0 : null;
     return DevinQuota(
       accountName: _string(devinMap['accountDisplayName']),
       planName: _string(infoMap['planName']),
-      billingStrategy: _string(infoMap['billingStrategy']),
-      dailyRemainingPercent: _int(planMap['dailyQuotaRemainingPercent']),
-      weeklyRemainingPercent: _int(planMap['weeklyQuotaRemainingPercent']),
-      dailyResetAt: _unixSeconds(planMap['dailyQuotaResetAtUnix']),
-      weeklyResetAt: _unixSeconds(planMap['weeklyQuotaResetAtUnix']),
+      billingStrategy: billingStrategy,
+      dailyRemainingPercent: dailyRemaining,
+      weeklyRemainingPercent: weeklyRemaining,
+      dailyResetAt: dailyResetAt,
+      weeklyResetAt: weeklyResetAt,
       hideDailyQuota: infoMap['hideDailyQuota'] == true,
       overageBalanceMicros: _int(planMap['overageBalanceMicros']),
-      acuConsumed: _double(planMap['acuConsumed']),
-      acuLimit: _double(planMap['acuLimit']),
+      acuConsumed: acuConsumed,
+      acuLimit: acuLimit,
     );
   }
 
@@ -187,3 +219,8 @@ class DevinQuota {
     );
   }
 }
+
+/// USD micros를 `$7.46`/`-$1.71` 형식으로 — 부호가 달러 기호 밖에 오게 한다.
+/// 음수는 초과 사용 부채(잔액 소진 뒤 추가 결제분)라 양수만큼 표시 가치가 있다.
+String formatDevinOverageUsd(int micros) =>
+    '${micros < 0 ? '-' : ''}\$${(micros.abs() / kDevinMicrosPerUsd).toStringAsFixed(2)}';

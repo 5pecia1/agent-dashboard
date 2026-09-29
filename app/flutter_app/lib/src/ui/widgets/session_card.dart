@@ -43,6 +43,8 @@ String sourceLabelKeyFor(String source) => switch (source) {
   'claude-code' => 'session.source.claude_code',
   'codex' => 'session.source.codex',
   'devin' => 'session.source.devin',
+  'grok' => 'session.source.grok',
+  'antigravity' => 'session.source.antigravity',
   _ => 'session.source.generic',
 };
 

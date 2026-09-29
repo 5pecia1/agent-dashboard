@@ -6,8 +6,12 @@ import 'package:my_dashboard/src/integrations/data/teamclaude_models.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/platform/tray_usage.dart';
 import 'package:my_dashboard/src/rust/api/i18n.dart';
+import 'package:my_dashboard/src/integrations/data/grok_usage_models.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
+
+import '../unit_tests/devin_usage_test.dart' show userStatusExhaustedFixture;
 
 const _teamConnection = TeamClaudeConnection(
   baseUrl: 'https://team.test',
@@ -36,12 +40,16 @@ const _labels = {
   'devin.weekly': 'Weekly',
   'devin.daily': 'Daily',
   'devin.acu': '{used} / {limit} ACU',
+  'grok.title': 'Grok',
+  'grok.weekly': 'Weekly',
+  'grok.bot_metric': 'Grok Bot',
 };
 
 Future<List<String>> _render(
   WidgetTester tester, {
   TeamClaudeState teamClaude = const TeamClaudeState(),
   DevinUsageState devin = const DevinUsageState(),
+  GrokUsageState grok = const GrokUsageState(),
 }) async {
   late List<String> result;
   await tester.pumpWidget(
@@ -68,6 +76,7 @@ Future<List<String>> _render(
             ref,
             teamClaude: teamClaude,
             devin: devin,
+            grok: grok,
           );
           return const SizedBox.shrink();
         },
@@ -99,6 +108,58 @@ TeamClaudeAccount _account({
 void main() {
   testWidgets('연결하지 않은 사용량 원천은 메뉴에 표시하지 않는다', (tester) async {
     expect(await _render(tester), isEmpty);
+  });
+
+  testWidgets('Grok 주간 사용률을 한 줄로 표시한다', (tester) async {
+    final labels = await _render(
+      tester,
+      grok: const GrokUsageState(
+        enabled: true,
+        reading: GrokUsageReading(
+          usedPercent: 75.4,
+          window: GrokUsageWindow.weekly,
+          plan: 'SuperGrok',
+        ),
+      ),
+    );
+    expect(labels, ['Usage', 'Grok SuperGrok · Weekly 75%']);
+  });
+
+  testWidgets('Grok Bot 사용률은 같은 줄에 붙고 실패는 따로 남긴다', (tester) async {
+    final labels = await _render(
+      tester,
+      grok: const GrokUsageState(
+        cliEnabled: true,
+        botEnabled: true,
+        reading: GrokUsageReading(
+          usedPercent: 75.4,
+          window: GrokUsageWindow.weekly,
+          plan: 'SuperGrok',
+        ),
+        botReading: GrokUsageReading(
+          usedPercent: 40,
+          window: GrokUsageWindow.weekly,
+          plan: 'SuperGrok',
+        ),
+        botErrorKey: 'grok.bot_unauthorized',
+      ),
+    );
+    expect(labels, [
+      'Usage',
+      'Grok SuperGrok · Weekly 75% · Grok Bot 40%',
+      'Grok Bot · Refresh failed · Last successful reading',
+    ]);
+    final botOnly = await _render(
+      tester,
+      grok: const GrokUsageState(
+        botEnabled: true,
+        botReading: GrokUsageReading(
+          usedPercent: 60,
+          window: GrokUsageWindow.weekly,
+        ),
+      ),
+    );
+    expect(botOnly, ['Usage', 'Grok · Grok Bot 60%']);
   });
 
   testWidgets('Claude는 요금제 용량 가중 사용률을 표시하고 없는 Fable 값은 만들지 않는다', (
@@ -183,6 +244,17 @@ void main() {
     );
     expect(labels, ['Usage', 'Devin Max · Weekly 30%']);
     expect(labels.join(), isNot(contains('private-')));
+  });
+
+  testWidgets('Devin 주간 소진은 잔량 키 생략 응답도 100%로 표시한다', (tester) async {
+    final labels = await _render(
+      tester,
+      devin: DevinUsageState(
+        connection: _devinConnection,
+        quota: DevinQuota.fromUserStatus(userStatusExhaustedFixture()),
+      ),
+    );
+    expect(labels, ['Usage', 'Devin Max · Weekly 100%']);
   });
 
   testWidgets('Devin 백분율 필드가 없으면 ACU 누적치와 한도를 표시한다', (tester) async {

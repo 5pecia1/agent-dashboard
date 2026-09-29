@@ -115,6 +115,13 @@ pub enum EventSource {
     /// 임의의 스크립트·CI가 직접 상태를 신고하는 통로. 고정된 이벤트
     /// 어휘가 없다 — [`EVENT_STATE_MAP`]에 이 소스의 행이 없는 이유다.
     Generic,
+    /// Grok. Claude 설정의 lifecycle hook을 실행하고, hook이 source를
+    /// `grok`으로 바꿔 보낸다. 상태표는 Claude Code와 같다.
+    Grok,
+    /// Antigravity CLI(agy). `~/.gemini/config/hooks.json`의 lifecycle hook을
+    /// 실행하고, hook이 이벤트를 계약 어휘로 번역해 보낸다. SessionEnd에
+    /// 해당하는 hook이 없어 `ended`로 가지 않고 `done`에 머문다.
+    Antigravity,
 }
 
 impl EventSource {
@@ -126,6 +133,8 @@ impl EventSource {
             Self::Codex => "codex",
             Self::Devin => "devin",
             Self::Generic => "generic",
+            Self::Grok => "grok",
+            Self::Antigravity => "antigravity",
         }
     }
 }
@@ -151,6 +160,15 @@ pub static EVENT_STATE_MAP: &[(EventSource, &str, SessionState)] = &[
     ),
     (EventSource::ClaudeCode, "Stop", SessionState::Done),
     (EventSource::ClaudeCode, "SessionEnd", SessionState::Ended),
+    (EventSource::Grok, "SessionStart", SessionState::Idle),
+    (EventSource::Grok, "UserPromptSubmit", SessionState::Working),
+    (
+        EventSource::Grok,
+        "Notification",
+        SessionState::WaitingInput,
+    ),
+    (EventSource::Grok, "Stop", SessionState::Done),
+    (EventSource::Grok, "SessionEnd", SessionState::Ended),
     (EventSource::Codex, "SessionStart", SessionState::Idle),
     (
         EventSource::Codex,
@@ -197,6 +215,22 @@ pub static EVENT_STATE_MAP: &[(EventSource, &str, SessionState)] = &[
         "UserInputRequest",
         SessionState::WaitingInput,
     ),
+    (
+        EventSource::Antigravity,
+        "UserPromptSubmit",
+        SessionState::Working,
+    ),
+    (
+        EventSource::Antigravity,
+        "UserInputRequest",
+        SessionState::WaitingInput,
+    ),
+    (
+        EventSource::Antigravity,
+        "UserInputResolved",
+        SessionState::Working,
+    ),
+    (EventSource::Antigravity, "Stop", SessionState::Done),
 ];
 
 /// `EVENT_STATE_MAP`에서 `(source, event)`를 조회한다. 표에 없는 조합은
@@ -326,6 +360,8 @@ mod tests {
             ("codex", EventSource::Codex),
             ("devin", EventSource::Devin),
             ("generic", EventSource::Generic),
+            ("grok", EventSource::Grok),
+            ("antigravity", EventSource::Antigravity),
         ] {
             let entries = contract["event_state_map"]["by_source"][source_code]
                 .as_array()

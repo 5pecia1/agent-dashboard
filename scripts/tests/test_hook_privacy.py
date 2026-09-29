@@ -10,10 +10,18 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CANARY = 'private-content-canary-8094'
+# agy 질문 도구 PreToolUse. 질문 문장·선택지·경로에 비밀 표식을 심는다.
+ANTIGRAVITY_QUESTION = {
+    'conversationId': 'privacy-antigravity', 'workspacePaths': ['/workspace/example'],
+    'transcriptPath': f'/tmp/{CANARY}.jsonl', 'stepIdx': 2,
+    'toolCall': {'name': 'ask_question',
+                 'args': {'questions': [{'question': CANARY, 'options': [CANARY]}]}},
+}
 
 
 class HookPrivacyTests(unittest.TestCase):
-    def run_hook(self, name, include=None, aliases=False, offline=False, backlog=False):
+    def run_hook(self, name, include=None, aliases=False, offline=False, backlog=False, antigravity=None):
+        """antigravity=(event, payload)면 agent-event-hook.sh를 agy처럼 부른다. stdout은 self.last_stdout."""
         received = []
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -53,7 +61,10 @@ class HookPrivacyTests(unittest.TestCase):
                                'cwd': '/workspace/example', 'prompt': CANARY,
                                'tool_input': {'command': CANARY}}
                     args = ['bash', str(ROOT / 'hooks' / name)]
-                    if name == 'agent-event-hook.sh':
+                    if antigravity is not None:
+                        event, payload = antigravity
+                        args.extend(['antigravity', event])
+                    elif name == 'agent-event-hook.sh':
                         args.append('devin')
                         payload.update(prompt_id='p1', tool_use_id='t1', tool_name='exec')
                     elif name == 'codex-notify.sh':
@@ -69,6 +80,7 @@ class HookPrivacyTests(unittest.TestCase):
                 thread.join()
         self.assertEqual(result.returncode, 0)
         self.assertNotIn(CANARY, result.stdout + result.stderr)
+        self.last_stdout = result.stdout
         return received, spool
 
     def test_기본값은_원문과_메시지를_보내지_않는다(self):
@@ -104,3 +116,29 @@ class HookPrivacyTests(unittest.TestCase):
         payloads, _ = self.run_hook('agent-event-hook.sh', aliases=True)
         self.assertEqual(payloads[0]['project'], 'public-project')
         self.assertEqual(payloads[0]['host'], 'public-host')
+
+    # agy는 hook stdout을 JSON 응답으로 읽는다 - stdout에는 응답 한 줄 말고 아무것도 없어야 한다.
+    def test_antigravity_stdout은_응답뿐이고_기본값은_원문을_보내지_않는다(self):
+        payloads, _ = self.run_hook('agent-event-hook.sh', antigravity=('PreToolUse', ANTIGRAVITY_QUESTION))
+        self.assertEqual(self.last_stdout, '{"decision":"ask"}\n')
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0]['event'], 'UserInputRequest')
+        self.assertEqual(payloads[0]['session_id'], 'privacy-antigravity')
+        self.assertIsNone(payloads[0]['message'])
+        self.assertNotIn('raw', payloads[0])
+        self.assertNotIn(CANARY, json.dumps(payloads))
+
+    def test_antigravity_명시적_선택이면_질문_문장을_보낸다(self):
+        payloads, _ = self.run_hook('agent-event-hook.sh', include=1,
+                                    antigravity=('PreToolUse', ANTIGRAVITY_QUESTION))
+        self.assertEqual(self.last_stdout, '{"decision":"ask"}\n')
+        self.assertEqual(payloads[0]['message'], CANARY)
+
+    def test_antigravity_오프라인_스풀에도_원문이_없다(self):
+        stop = {'conversationId': 'privacy-antigravity', 'workspacePaths': ['/workspace/example'],
+                'transcriptPath': f'/tmp/{CANARY}.jsonl', 'fullyIdle': True, 'error': CANARY}
+        payloads, spool = self.run_hook('agent-event-hook.sh', offline=True, antigravity=('Stop', stop))
+        self.assertEqual(self.last_stdout, '{"decision":""}\n')
+        self.assertEqual(payloads, [])
+        self.assertIn('"event":"Stop"', spool)
+        self.assertNotIn(CANARY, spool)

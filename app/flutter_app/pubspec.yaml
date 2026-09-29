@@ -136,6 +136,10 @@ dependencies:
   # 자리).
   tray_manager: ^0.5.2
 
+  # Grok Bot이 이 Mac에 저장한 로그인 암호문을 풀 때 쓰는 AES-CBC(MIT).
+  # 조회 순간에만 쓰고, 풀린 토큰은 설정과 로그에 남기지 않는다.
+  pointycastle: ^3.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
