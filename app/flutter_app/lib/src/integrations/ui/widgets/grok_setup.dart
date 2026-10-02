@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/usage_config.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/config_read_retry_row.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 
 class GrokSetup extends ConsumerStatefulWidget {
@@ -18,6 +19,10 @@ class _GrokSetupState extends ConsumerState<GrokSetup> {
   bool _busy = false;
   String? _message;
 
+  /// 저장된 설정을 읽지 못한 이유. 있는 동안 [_loading]을 풀지 않는다 —
+  /// 스위치가 잠겨 있어야 다음 저장이 저장된 설정을 지우지 못한다.
+  Object? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -28,12 +33,23 @@ class _GrokSetupState extends ConsumerState<GrokSetup> {
     try {
       final values = await ref.read(configLoadFnProvider)();
       if (!mounted) return;
-      _enabled = values.grokEnabled;
-      _botEnabled = values.grokBotEnabled;
-    } catch (_) {
-      if (mounted) _message = 'setup.save_error';
+      setState(() {
+        _enabled = values.grokEnabled;
+        _botEnabled = values.grokBotEnabled;
+        _loading = false;
+        _loadError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error);
+    }
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() => _busy = true);
+    try {
+      await _load();
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -89,6 +105,8 @@ class _GrokSetupState extends ConsumerState<GrokSetup> {
       title: Text(t(ref, 'grok.title')),
       subtitle: Text(t(ref, supported ? 'grok.setup_hint' : 'grok.macos_only')),
       children: [
+        if (_loadError != null)
+          ConfigReadRetryRow(onRetry: _busy ? null : _retryLoad),
         if (!supported)
           Align(
             alignment: Alignment.centerLeft,

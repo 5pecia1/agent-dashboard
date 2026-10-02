@@ -238,6 +238,22 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "session.delete.dialog_body"    => "The session record will be deleted from the server. A session that's still alive will reappear on its next event.",
     "session.delete.confirm_action" => "Delete",
 
+    // ── config read failure (ui/config_read_failure.dart, integration panels) ──
+    // Shown instead of an empty form when the saved settings exist but cannot
+    // be read; nothing is written until a read succeeds. Only access errors
+    // retry automatically, so the corrupt hint asks for an explicit Retry.
+    // An automatic retry that finds nothing stored stops and shows the
+    // nothing_stored hint: the user may be in the middle of restoring a file.
+    // A browser has no file to move, so web gets its own corrupt hint.
+    "config.read_failed.title"       => "Couldn't read saved settings",
+    "config.read_failed.body"        => "Nothing was changed or overwritten.",
+    "config.read_failed.access_hint" => "Check that the location below is accessible. Retrying automatically.",
+    "config.read_failed.corrupt_hint" => "The saved settings are damaged. Repair them or move them aside, then choose Retry.",
+    "config.read_failed.corrupt_hint_web" => "The settings saved in this browser are damaged. To start over, delete only the entry shown below from this site's local storage in the browser's developer tools, then choose Retry. Clearing all site data also deletes the backup copy.",
+    "config.read_failed.nothing_stored_hint" => "Nothing is saved at this location right now. If you are restoring your settings, put them back first, then choose Retry. If nothing is there when you choose Retry, the app starts without saved settings.",
+    "config.read_failed.boot_note"   => "Sync and notifications stay paused until the settings can be read.",
+    "config.read_failed.inline"      => "Couldn't read saved settings. Nothing was changed.",
+
     // ── setup (T15: setup_page.dart) ───────────────────────────────────
     "setup.title"                    => "Setup",
     "setup.section.server"           => "Server",
@@ -499,6 +515,16 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "session.delete.dialog_title"   => "세션을 삭제할까요?",
     "session.delete.dialog_body"    => "서버에서 세션 기록이 삭제됩니다. 살아있는 세션은 다음 이벤트에서 다시 나타납니다.",
     "session.delete.confirm_action" => "삭제",
+
+    // ── config read failure ───────────────────────────────────────────────
+    "config.read_failed.title"       => "저장된 설정을 읽을 수 없습니다",
+    "config.read_failed.body"        => "아무것도 바꾸거나 덮어쓰지 않았습니다.",
+    "config.read_failed.access_hint" => "아래 위치에 접근할 수 있는지 확인하세요. 자동으로 다시 시도합니다.",
+    "config.read_failed.corrupt_hint" => "저장된 설정이 손상되었습니다. 고치거나 다른 곳으로 옮긴 뒤 다시 시도를 누르세요.",
+    "config.read_failed.corrupt_hint_web" => "이 브라우저에 저장된 설정이 손상되었습니다. 처음부터 시작하려면 브라우저 개발자 도구에서 이 사이트의 로컬 저장소 중 아래 항목만 지운 뒤 다시 시도를 누르세요. 사이트 데이터를 모두 지우면 백업 사본도 함께 지워집니다.",
+    "config.read_failed.nothing_stored_hint" => "지금 이 위치에는 저장된 설정이 없습니다. 설정을 복구하는 중이면 먼저 제자리에 둔 뒤 다시 시도를 누르세요. 그때도 아무것도 없으면 저장된 설정 없이 시작합니다.",
+    "config.read_failed.boot_note"   => "설정을 읽을 수 있을 때까지 동기화와 알림은 멈춰 있습니다.",
+    "config.read_failed.inline"      => "저장된 설정을 읽을 수 없습니다. 아무것도 바꾸지 않았습니다.",
 
     // ── setup (T15) ───────────────────────────────────────────────────────
     "setup.title"                    => "설정",

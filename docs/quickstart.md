@@ -98,7 +98,7 @@ Hook versions come from your server, so `hooks` does not accept `--version`. The
 |---|---|
 | No component, or `app` | Installs the macOS app; defaults to the latest stable app release. |
 | `server` | Creates a server project from the latest stable server starter. |
-| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.1` or `0.1.1` for the app, and `server-v0.1.0-alpha.4` or `0.1.0-alpha.4` for the server. |
+| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.1` or `0.1.1` for the app, and `server-v0.1.0-alpha.5` or `0.1.0-alpha.5` for the server. |
 | `--prerelease` | Includes prereleases when resolving the latest version. Explicit prerelease versions do not need this flag. |
 | `--dir DIR` | Sets the app installation parent or the new server project directory. |
 | `--replace` | Allows replacing an existing app, retaining a backup and its settings. Does not overwrite server projects. |

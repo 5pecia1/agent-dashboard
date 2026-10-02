@@ -602,16 +602,22 @@ class SyncController extends Notifier<SyncControllerState> {
     if (cursor == null && seenWatermark == null) return;
     final patch = ref.read(configPatchFnProvider);
     try {
+      // 저장된 설정으로 부팅했는데 파일이 사라졌으면(사용자가 고치려고
+      // 옮긴 순간) 커서만 담긴 새 파일을 만들지 않는다.
       await patch(
-        (DashboardConfigValues current) => current.copyWith(
-          cursor: cursor,
-          seenWatermark: seenWatermark,
+        backgroundConfigPatch(
+          (DashboardConfigValues current) => current.copyWith(
+            cursor: cursor,
+            seenWatermark: seenWatermark,
+          ),
+          storedAtBoot: ref.read(storedConfigAtBootProvider),
         ),
       );
     } catch (_) {
       // 조용히 삼킨다 — config_provider.dart의 ConfigSaveFn 계약(저장
       // 실패는 예외)은 "화면이 알아야 한다"는 뜻이지, "동기화가 멈춰야
-      // 한다"는 뜻은 아니다. 다음 성공 때 다시 저장을 시도한다.
+      // 한다"는 뜻은 아니다. 다음 성공 때 다시 저장을 시도한다. 읽기 실패
+      // (ConfigReadException)면 패치 큐가 아무것도 쓰지 않은 채 던진 것이다.
     }
   }
 

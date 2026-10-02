@@ -28,8 +28,10 @@ Future<void> initializeSelectedFeatures({
 /// `~/.local/state/my-dashboard/`가 부팅 시점에 존재하도록 한다 —
 /// `config_store_io.dart`가 이 디렉터리에 `config.json`을 쓴다. 웹에는
 /// 해당하지 않는다([hasDesktopHost]가 false면 아무것도 하지 않는다).
-/// 실패해도(권한 없음 등) 부팅을 막지 않는다 — 각 시임 자신의 IO 계층이
-/// 이미 "없으면 empty/absent로 접는다"는 관용을 갖고 있다.
+/// 실패해도(권한 없음 등) 부팅을 막지 않는다 — 디렉터리를 만드는 일은
+/// 저장된 값을 바꾸지 않는다. 그 디렉터리를 읽지 못하면 설정 읽기가
+/// `ConfigReadException`으로 알리고 부팅은 실패 화면을 띄운다
+/// (`ui/config_read_failure.dart`). 읽지 못한 설정을 빈 값으로 접지 않는다.
 Future<void> _ensureDashboardStateDir() async {
   if (!hasDesktopHost) return;
   try {
@@ -39,6 +41,6 @@ Future<void> _ensureDashboardStateDir() async {
       await dir.create(recursive: true);
     }
   } on FileSystemException {
-    // best-effort — 각 시임이 스스로 없음/손상을 접는다.
+    // best-effort — 읽기 실패는 설정 읽기가 따로 알린다(위 문서).
   }
 }

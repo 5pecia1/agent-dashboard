@@ -18,7 +18,15 @@
 /// 반복한다. 읽기·쓰기가 파일/localStorage IO라 함수 모양이 `Future`를
 /// 돌리는 것만 `capabilityCheckFnProvider`(동기 FRB 호출)와 다르다 —
 /// `dashboard_api.dart`의 `HttpSendFn`과 같은 자리다.
+///
+/// **읽지 못한 저장소는 빈 값이 아니다.** 저장된 것이 없을 때만 빈 값을
+/// 돌려주고, 무언가 있지만 읽을 수 없으면 [ConfigReadException]을 던진다
+/// ([ConfigLoadFn] 계약). 모든 쓰기는 [configPatchFnProvider]가 "다시 읽고
+/// 자기 필드만 바꿔 통째로 쓰기"로 하므로, 읽기 실패를 빈 값으로 접으면
+/// 다음 커서 저장 한 번이 서버 주소·CLIENT_TOKEN·연동 설정을 지운다.
 library;
+
+import 'dart:convert' show jsonDecode;
 
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:collection/collection.dart' show DeepCollectionEquality;
@@ -182,20 +190,14 @@ class DashboardConfigValues {
       clientToken: json['client_token'] is String
           ? json['client_token'] as String
           : null,
-      cursor: rawCursor is int
-          ? rawCursor
-          : rawCursor is num
-          ? rawCursor.toInt()
-          : null,
-      // 손상된 값(문자열 등)은 "안 정했다"로 접는다 — 이 계층은 던지지
-      // 않는다는 [ConfigLoadFn] 계약 그대로다.
+      cursor: _finiteIntOrNull(rawCursor),
+      // 이미 읽은 객체 안에서 필드 하나의 타입이 어긋나면(문자열 등) 그
+      // 필드만 "안 정했다"로 접는다. 객체 자체를 읽지 못한 경우는 이
+      // 생성자에 닿기 전에 [decodeStoredDashboardConfig]가
+      // [ConfigReadException]으로 막는다 — 자격증명 필드도 거기서 막는다.
       resident: rawResident is bool ? rawResident : null,
       themeMode: rawThemeMode is String ? rawThemeMode : null,
-      seenWatermark: rawSeenWatermark is int
-          ? rawSeenWatermark
-          : rawSeenWatermark is num
-          ? rawSeenWatermark.toInt()
-          : null,
+      seenWatermark: _finiteIntOrNull(rawSeenWatermark),
       uiLang: rawUiLang is String ? rawUiLang : null,
       extra: Map<String, Object?>.unmodifiable(
         Map<String, Object?>.from(json)..removeWhere(
@@ -245,12 +247,109 @@ class DashboardConfigValues {
       'seenWatermark: $seenWatermark, uiLang: $uiLang)';
 }
 
+/// JSON 숫자를 정수로 접는다. `1e999`는 `Infinity`로 읽히고 `toInt()`가
+/// 던지므로(UnsupportedError), 유한하지 않은 값은 다른 필드처럼 null로 접는다.
+int? _finiteIntOrNull(Object? raw) =>
+    raw is num && raw.isFinite ? raw.toInt() : null;
+
 // ─── 1계층: 저장소 시임 ──────────────────────────────────────────────────
 
-/// 저장된 값을 읽는다. 아무것도 없거나 손상됐으면
-/// [DashboardConfigValues.empty] — 이 계층은 예외를 던지지 않는다(저장소가
-/// 아직 없는 첫 실행도, 다른 프로그램이 파일을 망가뜨린 경우도 "값이
-/// 없다"로 접는 게 안전한 기본값이다).
+/// 저장소를 읽지 못한 이유. 화면이 고르는 안내 문구와 자동 재시도 여부가
+/// 이 값으로 갈린다(`ui/config_read_failure.dart`).
+enum ConfigReadFailureKind {
+  /// 저장소 자체를 읽지 못했다 — 입출력 오류, 권한, 경로에 놓인 디렉터리,
+  /// 대상이 없는 링크, 브라우저가 막은 저장소.
+  access,
+
+  /// 바이트는 있지만 설정 JSON 객체가 아니다.
+  corrupt,
+}
+
+/// [ConfigLoadFn]이 "무언가 저장돼 있지만 읽을 수 없다"를 알리는 예외.
+///
+/// [detail]에는 OS나 파서의 메시지만 담는다. 저장된 내용(토큰 포함)은
+/// 넣지 않는다 — 화면이 이 값을 그대로 보여 준다.
+final class ConfigReadException implements Exception {
+  const ConfigReadException(
+    this.kind, {
+    required this.location,
+    required this.detail,
+  });
+
+  final ConfigReadFailureKind kind;
+
+  /// 파일 경로, 또는 웹의 `localStorage[my-dashboard.config.v1]`.
+  final String location;
+
+  final String detail;
+
+  @override
+  String toString() => 'ConfigReadException(${kind.name}) $location: $detail';
+}
+
+/// 타입이 어긋나면 손상으로 보는 자격증명 필드. 다른 필드처럼 null로 접으면
+/// 다음 저장이 그 값을 지운다.
+const Set<String> _kCredentialKeys = <String>{'server_url', 'client_token'};
+
+const String _kNotJsonObjectDetail = 'not a JSON object';
+const String _kNotStringDetail = 'is not a string';
+const String _kUninterpretableDetail = 'settings fields could not be read';
+
+/// [FormatException]을 저장 내용 없이 설명한다 — 파서 메시지와 위치만.
+/// `toString()`과 `source`는 원문(토큰 포함)을 싣기 때문에 쓰지 않는다.
+String describeConfigFormatFailure(FormatException error) {
+  final offset = error.offset;
+  return offset == null ? error.message : '${error.message} (offset $offset)';
+}
+
+/// io·web 브리지가 같이 쓰는 해석기. 저장된 텍스트 한 덩어리를 값으로
+/// 바꾸고, 설정 JSON 객체가 아니면 [ConfigReadFailureKind.corrupt]를 던진다.
+///
+/// 빈 텍스트도 손상이다 — 앱은 빈 파일을 쓰지 않고, "저장된 것이 없다"는
+/// 파일이나 키가 없을 때뿐이어야 한다.
+DashboardConfigValues decodeStoredDashboardConfig(
+  String text, {
+  required String location,
+}) {
+  ConfigReadException corrupt(String detail) => ConfigReadException(
+    ConfigReadFailureKind.corrupt,
+    location: location,
+    detail: detail,
+  );
+
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } on FormatException catch (error) {
+    throw corrupt(describeConfigFormatFailure(error));
+  }
+  if (decoded is! Map<String, Object?>) throw corrupt(_kNotJsonObjectDetail);
+  for (final key in _kCredentialKeys) {
+    final value = decoded[key];
+    if (value != null && value is! String) {
+      throw corrupt('"$key" $_kNotStringDetail');
+    }
+  }
+  try {
+    return DashboardConfigValues.fromJson(decoded);
+  } on Object {
+    // 방어선: 필드 해석은 던지지 않도록 짰지만, 던지면 형식 오류 대신
+    // 위치와 안내가 있는 읽기 실패로 보여 준다(원문은 싣지 않는다).
+    throw corrupt(_kUninterpretableDetail);
+  }
+}
+
+/// 저장된 값을 읽는다.
+///
+/// - 아무것도 저장돼 있지 않을 때만(파일이나 키가 없음)
+///   [DashboardConfigValues.empty]를 돌려준다.
+/// - 무언가 저장돼 있지만 읽을 수 없으면 [ConfigReadException]을 던진다.
+///   읽지 못한 저장소를 빈 값이나 일부 값으로 돌려주지 않는다 — 그 값을
+///   기준으로 한 다음 저장([configPatchFnProvider])이 저장된 서버 주소와
+///   CLIENT_TOKEN을 지운다.
+/// - 읽은 객체 안에서 필드 하나의 타입이 어긋난 경우만 그 필드를 null로
+///   접는다([DashboardConfigValues.fromJson]). 자격증명 필드는 예외다
+///   ([decodeStoredDashboardConfig]).
 typedef ConfigLoadFn = Future<DashboardConfigValues> Function();
 
 /// 값을 저장한다. 저장 실패(권한 없음 등)는 예외를 던진다 — 호출자(설정
@@ -311,6 +410,11 @@ typedef ConfigPatchFn =
 /// 다른 필드의 저장까지 막지 않는다(그 실패는 그 호출자에게만 예외로
 /// 전달된다 — [ConfigSaveFn] 문서의 "저장 실패는 예외" 계약이 호출자
 /// 하나에 대한 것이지, 큐 전체를 멈추라는 뜻이 아니다).
+///
+/// **읽기가 실패하면 아무것도 쓰지 않는다.** `load`가 던지면 `mutate`도
+/// `save`도 부르지 않고 그 예외를 이 호출자에게만 돌려준다. 읽지 못한 값을
+/// 빈 값으로 보고 덮어쓰면 자격증명이 지워진다([ConfigLoadFn] 계약) —
+/// 모든 작성자(커서 저장, 설정 화면, 연동 패널)가 이 한 곳에서 막힌다.
 class _SerializedConfigPatcher {
   _SerializedConfigPatcher(this._load, this._save);
 
@@ -346,6 +450,33 @@ final Provider<ConfigPatchFn> configPatchFnProvider = Provider<ConfigPatchFn>((
   return patcher.call;
 });
 
+/// 이 세션이 비어 있지 않은 저장 설정을 읽고 부팅했는가. `main.dart`의
+/// `buildDashboardRoot`가 빌드 기본값을 얹기 **전** 값으로 채운다 — 기본값은
+/// 저장된 것이 아니다. override가 없으면(첫 실행 조립, 화면 단위 테스트)
+/// false다.
+final Provider<bool> storedConfigAtBootProvider = Provider<bool>(
+  (ref) => false,
+);
+
+/// 백그라운드 작성자(동기화 커서·seen 워터마크 저장, 언어 캐시 되쓰기)의
+/// [ConfigPatchFn] 변경을 감싼다.
+///
+/// 이 세션이 저장된 설정으로 부팅했는데([storedAtBoot]) 지금 다시 읽은
+/// 값이 비어 있으면 아무것도 바꾸지 않는다. 패치 큐는 읽은 값과 같은 값을
+/// 쓰지 않으므로 사라진 설정 파일을 새로 만들지 않는다. 실행 중에 사용자가
+/// 설정 파일을 고치려고 옆으로 옮긴 순간 커서만 담긴 새 파일을 만들면,
+/// 원본을 되돌릴 때 이름이 부딪히고 다음 부팅은 저장된 설정 없이 뜬다.
+///
+/// 저장된 설정 없이 부팅한 세션(첫 실행)은 예전처럼 새 파일을 만든다 —
+/// 빌드에 서버를 구운 개인 빌드는 첫 실행부터 커서를 남겨야 한다. 사람이
+/// 누른 저장(설정 화면, 토글, 연동 패널)은 감싸지 않는다.
+DashboardConfigValues Function(DashboardConfigValues current)
+backgroundConfigPatch(
+  DashboardConfigValues Function(DashboardConfigValues current) change, {
+  required bool storedAtBoot,
+}) =>
+    (current) => storedAtBoot && current.isEmpty ? current : change(current);
+
 // ─── 부팅이 채우는 값 ────────────────────────────────────────────────────
 
 /// 부팅 시퀀스가 [configLoadFnProvider]로 읽은 값을 담아 override하는
@@ -373,17 +504,50 @@ final Provider<DashboardConfigValues> dashboardConfigValuesProvider =
 /// 서버 주소가 없는 동안은 그 계약대로 **아무도 읽지 않아야** 한다
 /// (`sync_controller.dart`의 unconfigured 게이팅, `app.dart`의 push 등록
 /// 게이팅 참고).
+///
+/// **저장된 문자열 때문에 던지지 않는다.** 설정 화면은 어떤 문자열이든
+/// 저장하고, `Uri.parse`는 `https://host:443x` 같은 값에서 던진다 — 그러면
+/// 부팅이 첫 화면도 못 띄운다. 해석할 수 없는 주소는 API를 override하지
+/// 않는다. 부팅은 [bootConfigValuesFor]로 같은 주소를 스냅샷에서도 비워
+/// "서버 주소가 있으면 API도 설정돼 있다"를 지킨다. 해석되는 주소는 예전과
+/// 똑같이 쓴다.
 Override? dashboardApiConfigOverrideFor(
   DashboardConfigValues values, {
   Duration timeout = const Duration(seconds: 10),
 }) {
   final serverUrl = values.serverUrl;
   if (serverUrl == null) return null;
+  final baseUrl = Uri.tryParse(serverUrl);
+  if (baseUrl == null) return null;
   return dashboardApiConfigProvider.overrideWithValue(
     DashboardApiConfig(
-      baseUrl: Uri.parse(serverUrl),
+      baseUrl: baseUrl,
       clientToken: values.clientToken,
       timeout: timeout,
     ),
+  );
+}
+
+/// [dashboardConfigValuesProvider]에 넣을 부팅 스냅샷. 저장된 서버 주소를
+/// 해석할 수 없으면(예: `https://host:443x`) 스냅샷에서만 주소를 비운다.
+///
+/// 앱 곳곳이 "`serverUrl != null`이면 API가 설정돼 있다"에 기댄다 — 동기화의
+/// 미설정 게이팅, `app.dart`의 push 등록 게이팅, 설정 화면의 언어 저장
+/// 분기. 주소는 남기고 API override만 빠지면 push 등록이 부팅마다
+/// `dashboardApiProvider`를 읽다 던진다. 주소를 비우면 첫 실행과 같은 길을
+/// 탄다: 홈이 설정 화면이고, 설정 화면은 디스크에서 다시 읽은 원래 문자열을
+/// 보여 주므로 사용자가 고칠 수 있다. 디스크의 값은 지우지 않는다 — 모든
+/// 쓰기는 패치 큐가 디스크를 다시 읽어 자기 필드만 바꾼다.
+DashboardConfigValues bootConfigValuesFor(DashboardConfigValues values) {
+  final serverUrl = values.serverUrl;
+  if (serverUrl == null || Uri.tryParse(serverUrl) != null) return values;
+  return DashboardConfigValues(
+    clientToken: values.clientToken,
+    cursor: values.cursor,
+    resident: values.resident,
+    themeMode: values.themeMode,
+    seenWatermark: values.seenWatermark,
+    uiLang: values.uiLang,
+    extra: values.extra,
   );
 }

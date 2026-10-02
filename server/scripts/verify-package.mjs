@@ -82,7 +82,7 @@ try {
   await writeFile(path.join(workspace,'hooks-test.log'),(hooks.stdout ?? '')+(hooks.stderr ?? ''));
   if (hooks.status !== 0) throw new Error(`Installed hook integration failed: ${hooks.stderr} ${hooks.stdout}`);
   assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'),verifiedHash,'tarball changed during verification');
-  const receipt = {ok:true,tarball,sha256:verifiedHash,consumer,checks:['archive','negative missing assets','strict consumer types','Worker dry-run','D1 first install and no-op','HTTP role isolation and default privacy','all seven hook assets','actual scheduled maintenance','installed hook integration']};
+  const receipt = {ok:true,tarball,sha256:verifiedHash,consumer,checks:['archive','negative missing assets','strict consumer types','Worker dry-run','D1 first install and no-op','HTTP role isolation and default privacy',`all ${hookNames.length} hook assets`,'actual scheduled maintenance','installed hook integration']};
   const receiptIndex = process.argv.indexOf('--receipt');
   if (receiptIndex !== -1) await writeFile(path.resolve(process.argv[receiptIndex+1]),JSON.stringify(receipt,null,2)+'\n');
   console.log(JSON.stringify(receipt,null,2));

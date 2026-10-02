@@ -5,6 +5,7 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/state/usage_config.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/config_read_retry_row.dart';
 
 class DevinSetup extends ConsumerStatefulWidget {
   const DevinSetup({super.key});
@@ -19,6 +20,10 @@ class _DevinSetupState extends ConsumerState<DevinSetup> {
   bool _busy = false;
   String? _message;
 
+  /// 저장된 설정을 읽지 못한 이유. 있는 동안 [_loading]을 풀지 않는다 —
+  /// 입력과 연결/해제가 잠겨 있어야 다음 저장이 저장된 연결을 지우지 못한다.
+  Object? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -30,12 +35,23 @@ class _DevinSetupState extends ConsumerState<DevinSetup> {
     try {
       final values = await ref.read(configLoadFnProvider)();
       if (!mounted) return;
-      _url.text = values.devin?.baseUrl ?? kDevinDefaultApiServer;
-      _key.text = values.devin?.apiKey ?? '';
-    } catch (_) {
-      if (mounted) _message = 'setup.save_error';
+      setState(() {
+        _url.text = values.devin?.baseUrl ?? kDevinDefaultApiServer;
+        _key.text = values.devin?.apiKey ?? '';
+        _loading = false;
+        _loadError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error);
+    }
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() => _busy = true);
+    try {
+      await _load();
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -82,6 +98,8 @@ class _DevinSetupState extends ConsumerState<DevinSetup> {
     title: Text(t(ref, 'devin.title')),
     subtitle: Text(t(ref, 'devin.setup_hint')),
     children: [
+      if (_loadError != null)
+        ConfigReadRetryRow(onRetry: _busy ? null : _retryLoad),
       TextField(
         key: const ValueKey('devin-url'),
         controller: _url,
