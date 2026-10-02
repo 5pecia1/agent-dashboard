@@ -35,7 +35,11 @@ import 'dart:async' show unawaited;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:my_dashboard/src/state/config_provider.dart'
-    show DashboardConfigValues, configPatchFnProvider;
+    show
+        DashboardConfigValues,
+        backgroundConfigPatch,
+        configPatchFnProvider,
+        storedConfigAtBootProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart'
     show SyncControllerState, syncControllerProvider;
 
@@ -137,6 +141,8 @@ final syncUiLangListenable = syncControllerProvider.select(
 /// 언어를 되돌리거나 배선을 멈출 이유가 없다. 매 폴링마다 같은 값을 다시
 /// 저장하지도 않는다: select가 실제 전이에서만 깨우고, 그 위에
 /// `_SerializedConfigPatcher`의 `next == current` 단락이 한 번 더 막는다.
+/// 백그라운드 쓰기라 커서 저장처럼 사라진 설정 파일을 새로 만들지 않는다
+/// (`config_provider.dart`의 [backgroundConfigPatch]).
 ProviderSubscription<UiLangSyncSnapshot> installUiLangSync(WidgetRef ref) {
   return ref.listenManual<UiLangSyncSnapshot>(
     syncUiLangListenable,
@@ -147,8 +153,11 @@ ProviderSubscription<UiLangSyncSnapshot> installUiLangSync(WidgetRef ref) {
       unawaited(
         ref
             .read(configPatchFnProvider)(
-              (DashboardConfigValues current) =>
-                  current.copyWith(uiLang: resolved),
+              backgroundConfigPatch(
+                (DashboardConfigValues current) =>
+                    current.copyWith(uiLang: resolved),
+                storedAtBoot: ref.read(storedConfigAtBootProvider),
+              ),
             )
             .catchError((Object _) {}),
       );

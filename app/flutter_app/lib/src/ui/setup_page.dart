@@ -45,6 +45,8 @@ import 'package:my_dashboard/src/state/sync_controller.dart'
 import 'package:my_dashboard/src/state/theme_mode_provider.dart';
 import 'package:my_dashboard/src/state/ui_lang_provider.dart';
 import 'package:my_dashboard/src/state/window_navigation_provider.dart';
+import 'package:my_dashboard/src/ui/config_read_failure.dart'
+    show ConfigReadFailurePane, holdEmptyAutomaticConfigRead;
 import 'package:my_dashboard/src/ui/window_connections_page.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/util/mute_time.dart' show formatMuteUntilClock;
@@ -87,6 +89,10 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   String _uiLang = 'system';
   String? _statusMessage;
 
+  /// 저장된 설정을 읽지 못한 이유. null이 아니면 폼 대신 읽기 실패 안내를
+  /// 그린다 — 빈 폼을 보여 주면 "저장"이 저장된 서버 주소와 토큰을 지운다.
+  Object? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -101,9 +107,26 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     super.dispose();
   }
 
-  Future<void> _loadConfig() async {
+  /// [automatic]은 읽기 실패 안내의 타이머가 부른 다시 읽기다. 그때 빈 값을
+  /// 읽으면 폼을 열지 않는다 — 접근 오류를 고치느라 파일이 잠시 없는
+  /// 순간에 빈 폼(또는 빌드 기본값)을 열고 "저장"을 켜 두지 않는다
+  /// (`ui/config_read_failure.dart`의 [holdEmptyAutomaticConfigRead]).
+  Future<void> _loadConfig({bool automatic = false}) async {
     try {
       final stored = await ref.read(configLoadFnProvider)();
+      final previous = _loadError;
+      if (previous != null) {
+        final held = holdEmptyAutomaticConfigRead(
+          stored,
+          automatic: automatic,
+          previous: previous,
+        );
+        if (held != null) {
+          if (!mounted) return;
+          setState(() => _loadError = held);
+          return;
+        }
+      }
       // TASK I-local (1): 저장값이 없는 필드는 컴파일 기본값으로 미리
       // 채워 보여준다 — 사용자는 그 값을 그대로 두거나 언제든 덮어써
       // 저장할 수 있다(define 없는 빌드는 항상 stored와 같다).
@@ -115,15 +138,23 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         _resident = values.residentOrDefault;
         _themeMode = parseThemeMode(values.themeMode);
         _uiLang = parseUiLang(values.uiLang);
+        _loadError = null;
         _loadingConfig = false;
       });
-    } catch (_) {
+    } catch (error) {
+      // 입력칸을 비우거나 기본값을 채우지 않는다 — 읽기 실패 안내만 남긴다.
       if (!mounted) return;
-      setState(() => _loadingConfig = false);
+      setState(() {
+        _loadError = error;
+        _loadingConfig = false;
+      });
     }
   }
 
   Future<void> _save() async {
+    // 버튼은 이 상태에서 그려지지 않는다. 그래도 읽지 못한 값 위에 쓰지
+    // 않도록 한 번 더 막는다.
+    if (_loadingConfig || _loadError != null) return;
     setState(() => _busy = true);
     try {
       final urlText = _serverUrlController.text.trim();
@@ -290,15 +321,21 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         ref.read(dashboardConfigValuesProvider).serverUrl == null;
     final needsSetup = ref.read(syncControllerProvider).needsSetup;
     if (unconfigured || needsSetup) {
+      // 선택과 화면 언어(컨트롤러)를 먼저 같은 값으로 바꾸고 그다음 로컬
+      // 캐시에 남긴다. 캐시 저장이 실패해도(디스크 권한, 읽지 못한 설정)
+      // 둘 다 그대로 두고 "설정을 바꾸지 못했다"만 알린다 — 테마와 달리
+      // 되돌리지 않는다. 되돌리면 읽을 수 없는 언어를 고른 사용자가 저장이
+      // 실패하는 동안 그 언어에 갇힌다. 예전에는 컨트롤러를 저장 성공 뒤에만
+      // 바꿔, 실패하면 선택은 새 언어인데 화면은 옛 언어로 어긋났다.
       setState(() {
         _uiLang = value;
         _busy = true;
       });
+      ref.read(uiLangControllerProvider.notifier).setUiLang(value);
       try {
         await ref.read(configPatchFnProvider)(
           (DashboardConfigValues current) => current.copyWith(uiLang: value),
         );
-        ref.read(uiLangControllerProvider.notifier).setUiLang(value);
         if (!mounted) return;
         setState(() => _busy = false);
       } catch (_) {
@@ -377,7 +414,10 @@ class _SetupPageState extends ConsumerState<SetupPage> {
               : 'setup.test_notification_error',
         );
       });
-    } on DashboardApiException {
+    } catch (_) {
+      // `DashboardApiException`만 잡으면 서버 주소 없이 부팅한 세션에서
+      // `dashboardApiProvider`를 읽는 순간의 오류가 새어 나가 `_busy`가
+      // 굳는다 — 이 잠금은 저장 버튼까지 공유하므로 어떤 실패든 푼다.
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -397,19 +437,31 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   /// 데스크톱에서는 이 버튼 자체가 그려지지 않는다(`_WebPushSection`).
   Future<void> _enableWebPush() async {
     setState(() => _busy = true);
-    final granted = await ref.read(webPushPermissionRequestProvider)();
-    if (!mounted) return;
-    if (!granted) {
+    final PushRegistrationResult result;
+    try {
+      final granted = await ref.read(webPushPermissionRequestProvider)();
+      if (!mounted) return;
+      if (!granted) {
+        setState(() {
+          _busy = false;
+          _statusMessage = tRead(ref, 'setup.web_push_permission_denied');
+        });
+        return;
+      }
+      final labelText = _deviceLabelController.text.trim();
+      result = await ref.read(pushRegistrarProvider)(
+        label: labelText.isEmpty ? null : labelText,
+      );
+    } catch (_) {
+      // 서버 주소 없이 부팅한 세션에서는 등록이 `dashboardApiProvider`를
+      // 읽다 던진다 — `_testNotification`과 같은 이유로 잠금을 푼다.
+      if (!mounted) return;
       setState(() {
         _busy = false;
-        _statusMessage = tRead(ref, 'setup.web_push_permission_denied');
+        _statusMessage = tRead(ref, 'setup.web_push_error');
       });
       return;
     }
-    final labelText = _deviceLabelController.text.trim();
-    final result = await ref.read(pushRegistrarProvider)(
-      label: labelText.isEmpty ? null : labelText,
-    );
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -443,7 +495,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         _busy = false;
         _statusMessage = tRead(ref, 'setup.mute_success');
       });
-    } on DashboardApiException {
+    } catch (_) {
+      // `_testNotification`과 같은 이유로 어떤 실패든 잠금을 푼다.
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -468,7 +521,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         _busy = false;
         _statusMessage = tRead(ref, 'setup.unmute_success');
       });
-    } on DashboardApiException {
+    } catch (_) {
+      // `_testNotification`과 같은 이유로 어떤 실패든 잠금을 푼다.
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -505,6 +559,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       appBar: AppBar(title: Text(t(ref, 'setup.title'))),
       body: _loadingConfig
           ? const Center(child: CircularProgressIndicator())
+          : _loadError != null
+          ? ConfigReadFailurePane(error: _loadError!, onRetry: _loadConfig)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

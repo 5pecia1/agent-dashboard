@@ -148,14 +148,15 @@ typedef TraySessionSelectFn = Future<void> Function(SessionViewDto session);
 
 void _quitProcess() => exit(0);
 
-/// 서버 미설정/오류는 크래시하지 않고 `debugPrint`만 한다(완료 기준 (4)) —
-/// `dashboard_api.dart`의 모든 실패는 [DashboardApiException] 하나로
-/// 모이므로 그 타입 하나만 잡으면 된다.
+/// 서버 미설정/오류는 크래시하지 않고 `debugPrint`만 한다(완료 기준 (4)).
+/// 서버 오류는 [DashboardApiException] 하나로 모이지만, 서버 주소 없이 부팅한
+/// 세션에서는 [dashboardApiProvider]를 읽는 순간 그 밖의 오류가 난다 — 둘 다
+/// 실패로 돌려줘 호출부가 실패 알림을 띄우게 한다.
 Future<bool> _setMute(Ref ref, {required int minutes}) async {
   try {
     await ref.read(dashboardApiProvider).mute(minutes: minutes);
     return true;
-  } on DashboardApiException catch (error) {
+  } on Object catch (error) {
     debugPrint('tray mute($minutes): 서버 호출 실패 ($error) — 무시하고 계속한다.');
     return false;
   }

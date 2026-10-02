@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:my_dashboard/src/data/window_connection.dart';
+import 'package:my_dashboard/src/state/dangling_link_io.dart';
 
 const _schemaVersion = 1;
+const _danglingLinkMessage = 'The link target does not exist';
 const _stateRelativePath = '.local/state/my-dashboard';
 const _rulesFilename = 'window-connections.json';
 const _privateDirectoryMode = '700';
@@ -32,9 +34,23 @@ class WindowConnectionsFileStore {
 
   final File file;
 
+  /// 파일이 없을 때(ENOENT)만 빈 목록이다. 존재 여부를 먼저 묻지 않는다 —
+  /// `exists()`는 경로가 디렉터리이거나 상위 디렉터리를 검색할 수 없을 때도
+  /// false라서, 읽을 수 없는 규칙을 빈 목록으로 보여 주고 다음 저장이
+  /// 덮어쓰게 된다. 경로 위의 대상 없는 링크(파일 자신이나 상위 디렉터리)도
+  /// 빈 목록이 아니다 — 빈 목록으로 보이면 다음 저장의 rename이 링크를 일반
+  /// 파일로 바꾼다(`dangling_link_io.dart`). 그때는 `PathNotFoundException`이
+  /// 아닌 [FileSystemException]을 던져 화면이 오류를 보이고 저장하지 않게 한다.
   Future<List<WindowConnectionRule>> load() async {
-    if (!await file.exists()) return const [];
-    final Object? decoded = jsonDecode(await file.readAsString());
+    final String text;
+    try {
+      text = await file.readAsString();
+    } on PathNotFoundException {
+      final link = await danglingLinkOnPath(file.path);
+      if (link != null) throw FileSystemException(_danglingLinkMessage, link);
+      return const [];
+    }
+    final Object? decoded = jsonDecode(text);
     if (decoded is! Map<String, Object?> ||
         decoded['version'] != _schemaVersion) {
       throw const FormatException('Unsupported window connections format');

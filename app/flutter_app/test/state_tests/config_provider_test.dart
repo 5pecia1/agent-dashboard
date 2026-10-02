@@ -116,6 +116,94 @@ void main() {
       const b = DashboardConfigValues(themeMode: 'dark');
       expect(a, isNot(b));
     });
+
+    test('fromJson은 유한하지 않은 커서와 워터마크를 던지지 않고 null로 접는다', () {
+      final restored = DashboardConfigValues.fromJson(<String, Object?>{
+        'client_token': 'kept-token',
+        'cursor': double.infinity,
+        'seen_watermark': double.negativeInfinity,
+      });
+      expect(restored.cursor, isNull);
+      expect(restored.seenWatermark, isNull);
+      expect(restored.clientToken, 'kept-token');
+    });
+  });
+
+  group('decodeStoredDashboardConfig (io·web 공통 해석)', () {
+    const location = '/fixture/config.json';
+    const token = 'fixture-secret-token-91c2';
+
+    Matcher corruptAt() => isA<ConfigReadException>()
+        .having((error) => error.kind, 'kind', ConfigReadFailureKind.corrupt)
+        .having((error) => error.location, 'location', location);
+
+    test('설정 JSON 객체면 값을 돌려준다', () {
+      final values = decodeStoredDashboardConfig(
+        '{"server_url":"https://a.test","client_token":"$token","cursor":3,'
+        '"teamclaude":{"url":"https://tc.test","api_key":"k"}}',
+        location: location,
+      );
+      expect(values.serverUrl, 'https://a.test');
+      expect(values.clientToken, token);
+      expect(values.cursor, 3);
+      expect(values.extra['teamclaude'], isA<Map<String, Object?>>());
+    });
+
+    test('JSON이 아니면 손상이고 안내 문구에 원문을 싣지 않는다', () {
+      for (final text in <String>[
+        '{"client_token":"$token"',
+        '{"client_token":"$token",}',
+        '{"client_token":"$token" x',
+        '',
+      ]) {
+        Object? caught;
+        try {
+          decodeStoredDashboardConfig(text, location: location);
+        } on Object catch (error) {
+          caught = error;
+        }
+        expect(caught, corruptAt(), reason: text);
+        expect(caught.toString(), isNot(contains(token)), reason: text);
+        expect(
+          (caught! as ConfigReadException).detail,
+          isNot(contains(token)),
+          reason: text,
+        );
+      }
+    });
+
+    test('JSON 객체가 아니면 손상이다', () {
+      for (final text in <String>['[]', 'null', '"x"', '42', 'true']) {
+        expect(
+          () => decodeStoredDashboardConfig(text, location: location),
+          throwsA(corruptAt()),
+          reason: text,
+        );
+      }
+    });
+
+    test('자격증명 필드가 문자열이 아니면 손상이다 — null로 접으면 다음 저장이 지운다', () {
+      for (final text in <String>[
+        '{"client_token":42}',
+        '{"server_url":["https://a.test"]}',
+      ]) {
+        expect(
+          () => decodeStoredDashboardConfig(text, location: location),
+          throwsA(corruptAt()),
+          reason: text,
+        );
+      }
+    });
+
+    test('1e999 커서와 -1e999 워터마크는 그 필드만 null로 접는다', () {
+      final values = decodeStoredDashboardConfig(
+        '{"client_token":"$token","cursor":1e999,"seen_watermark":-1e999}',
+        location: location,
+      );
+      expect(values.cursor, isNull);
+      expect(values.seenWatermark, isNull);
+      expect(values.clientToken, token);
+    });
   });
 
   group('dashboardApiConfigOverrideFor', () {
@@ -143,6 +231,119 @@ void main() {
       expect(config.baseUrl, Uri.parse('https://saved.example.dev'));
       expect(config.clientToken, 'saved-token');
       expect(config.timeout, const Duration(seconds: 3));
+    });
+
+    test('해석할 수 없는 저장 주소는 부팅을 죽이지 않고 API를 설정하지 않는다', () {
+      for (final serverUrl in <String>[
+        'https://api.example.test:443x',
+        'http://[::1',
+      ]) {
+        expect(
+          dashboardApiConfigOverrideFor(
+            DashboardConfigValues(serverUrl: serverUrl, clientToken: 't'),
+          ),
+          isNull,
+          reason: serverUrl,
+        );
+      }
+    });
+  });
+
+  group('bootConfigValuesFor (부팅 스냅샷)', () {
+    test('해석할 수 없는 주소는 스냅샷에서만 비우고 나머지 값은 그대로 둔다', () {
+      const stored = DashboardConfigValues(
+        serverUrl: 'https://api.example.test:443x',
+        clientToken: 'stored-token',
+        cursor: 41,
+        resident: false,
+        themeMode: 'dark',
+        seenWatermark: 40,
+        uiLang: 'ko',
+        extra: <String, Object?>{
+          'grok': <String, Object?>{'enabled': true},
+        },
+      );
+
+      final snapshot = bootConfigValuesFor(stored);
+
+      expect(snapshot.serverUrl, isNull);
+      expect(
+        snapshot,
+        const DashboardConfigValues(
+          clientToken: 'stored-token',
+          cursor: 41,
+          resident: false,
+          themeMode: 'dark',
+          seenWatermark: 40,
+          uiLang: 'ko',
+          extra: <String, Object?>{
+            'grok': <String, Object?>{'enabled': true},
+          },
+        ),
+      );
+      expect(
+        dashboardApiConfigOverrideFor(snapshot),
+        isNull,
+        reason: '주소가 없으면 API도 없다 — 둘이 어긋나지 않는다',
+      );
+    });
+
+    test('해석되는 주소와 주소가 없는 값은 그대로 돌려준다', () {
+      const parseable = DashboardConfigValues(
+        serverUrl: 'https://saved.example.dev',
+        clientToken: 'saved-token',
+      );
+      expect(bootConfigValuesFor(parseable), same(parseable));
+      expect(
+        bootConfigValuesFor(DashboardConfigValues.empty),
+        same(DashboardConfigValues.empty),
+      );
+    });
+  });
+
+  group('backgroundConfigPatch (백그라운드 작성자)', () {
+    DashboardConfigValues setCursor(DashboardConfigValues current) =>
+        current.copyWith(cursor: 7);
+
+    test('저장된 설정으로 부팅했는데 지금 비어 있으면 아무것도 바꾸지 않는다', () {
+      final patch = backgroundConfigPatch(setCursor, storedAtBoot: true);
+      expect(
+        patch(DashboardConfigValues.empty),
+        same(DashboardConfigValues.empty),
+      );
+    });
+
+    test('지금 저장된 값이 있으면 그대로 바꾼다', () {
+      final patch = backgroundConfigPatch(setCursor, storedAtBoot: true);
+      expect(
+        patch(const DashboardConfigValues(clientToken: 'stored-token')),
+        const DashboardConfigValues(clientToken: 'stored-token', cursor: 7),
+      );
+    });
+
+    test('저장된 설정 없이 부팅한 세션은 빈 저장소에도 쓴다(개인 빌드 첫 실행)', () {
+      final patch = backgroundConfigPatch(setCursor, storedAtBoot: false);
+      expect(
+        patch(DashboardConfigValues.empty),
+        const DashboardConfigValues(cursor: 7),
+      );
+    });
+
+    test('패치 큐를 거치면 사라진 설정 파일을 새로 만들지 않는다', () async {
+      final store = _MemoryConfigStore();
+      final container = ProviderContainer(
+        overrides: [
+          configLoadFnProvider.overrideWithValue(store.load),
+          configSaveFnProvider.overrideWithValue(store.save),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(configPatchFnProvider)(
+        backgroundConfigPatch(setCursor, storedAtBoot: true),
+      );
+
+      expect(store.saves, isEmpty);
     });
   });
 
@@ -340,8 +541,96 @@ void main() {
 
       expect(store.values.cursor, 5);
     });
+
+    test('읽기가 실패하면 mutate도 save도 부르지 않고 호출자에게만 알린 뒤 큐는 계속 돈다', () async {
+      final store = _MemoryConfigStore(
+        const DashboardConfigValues(serverUrl: 'https://a.test', cursor: 1),
+      );
+      var failNextLoad = true;
+      final container = ProviderContainer(
+        overrides: [
+          configLoadFnProvider.overrideWithValue(() async {
+            if (failNextLoad) {
+              failNextLoad = false;
+              throw _accessFailure;
+            }
+            return store.load();
+          }),
+          configSaveFnProvider.overrideWithValue(store.save),
+        ],
+      );
+      addTearDown(container.dispose);
+      final patch = container.read(configPatchFnProvider);
+      var mutateCalls = 0;
+
+      await expectLater(
+        patch((current) {
+          mutateCalls += 1;
+          return current.copyWith(cursor: 2);
+        }),
+        throwsA(same(_accessFailure)),
+      );
+      expect(mutateCalls, 0);
+      expect(store.saves, isEmpty);
+
+      await patch((current) => current.copyWith(cursor: 3));
+      expect(store.saves, hasLength(1));
+      expect(store.values.cursor, 3);
+      expect(store.values.serverUrl, 'https://a.test');
+    });
+
+    test('자격증명 소거 회귀: 읽기가 한 번 실패해도 커서 저장이 자격증명과 연동 설정을 지우지 않는다', () async {
+      const stored = DashboardConfigValues(
+        serverUrl: 'https://dash.test',
+        clientToken: 'dash-token',
+        cursor: 41,
+        themeMode: 'dark',
+        extra: <String, Object?>{
+          'teamclaude': <String, Object?>{
+            'url': 'https://tc.test',
+            'api_key': 'tc',
+          },
+          'devin': <String, Object?>{
+            'url': 'https://devin.test',
+            'api_key': 'dv',
+          },
+          'grok': <String, Object?>{'enabled': true},
+        },
+      );
+      final store = _MemoryConfigStore(stored);
+      var loads = 0;
+      final container = ProviderContainer(
+        overrides: [
+          configLoadFnProvider.overrideWithValue(() async {
+            loads += 1;
+            if (loads == 1) throw _accessFailure;
+            return store.load();
+          }),
+          configSaveFnProvider.overrideWithValue(store.save),
+        ],
+      );
+      addTearDown(container.dispose);
+      final patch = container.read(configPatchFnProvider);
+
+      // sync_controller의 커서 저장과 같은 모양의 패치.
+      Future<void> persistCursor(int cursor) =>
+          patch((current) => current.copyWith(cursor: cursor));
+
+      await expectLater(persistCursor(99), throwsA(isA<ConfigReadException>()));
+      expect(store.values, stored, reason: '읽지 못한 값 위에 아무것도 쓰지 않는다');
+      expect(store.saves, isEmpty);
+
+      await persistCursor(100);
+      expect(store.values, stored.copyWith(cursor: 100));
+    });
   });
 }
+
+const ConfigReadException _accessFailure = ConfigReadException(
+  ConfigReadFailureKind.access,
+  location: '/fixture/config.json',
+  detail: 'Cannot open file: Permission denied (errno 13)',
+);
 
 /// 메모리에만 남는 가짜 설정 저장소 — 실제 `~/.local/state/`를 건드리지
 /// 않는다(위 `dashboardConfigValuesProvider` 그룹의 override 관용과 같은

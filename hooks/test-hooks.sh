@@ -1035,9 +1035,12 @@ check22_antigravity_questions() {
   run_hook_ag PreToolUse "$(ag_input "$c" '"toolCall":{"name":"ask_permission","args":{}}')" "$SERVER_URL" "$state_dir"
   run_hook_ag PostToolUse "$(ag_input "$c" '"toolCall":{"name":"ask_permission","args":{}}')" "$SERVER_URL" "$state_dir"
   # 비슷한 이름은 번역하지 않는다: PreToolUse는 버리고 PostToolUse는 하트비트 그대로다.
-  local name
+  # 이름을 끼운 조각은 변수로 넘긴다. bash 3.2는 "$(...)" 안의 큰따옴표 인자에 든
+  # {...,...}를 중괄호 확장해서 JSON이 아닌 stdin을 만든다.
+  local name fragment
   for name in run_command ask_question_v2 Ask_Question ask_permissions; do
-    run_hook_ag PreToolUse "$(ag_input "$c" "\"toolCall\":{\"name\":\"$name\",\"args\":{}}")" "$SERVER_URL" "$state_dir"
+    fragment="\"toolCall\":{\"name\":\"$name\",\"args\":{}}"
+    run_hook_ag PreToolUse "$(ag_input "$c" "$fragment")" "$SERVER_URL" "$state_dir"
     if [ "$AG_OUT" != "$AG_ANSWER_ASK" ]; then
       ok=1; details="${details} PreToolUse($name) stdout='$AG_OUT'(기대 ask 응답);"
     fi
@@ -1070,9 +1073,11 @@ PostToolUse|null"
 
 check23_antigravity_heartbeat_throttle() {
   local state_dir="$WORK_DIR/state-ag-hb"
-  local i
+  # 체크 22와 같은 이유로 조각을 변수로 넘긴다(bash 3.2 중괄호 확장).
+  local i fragment
   for i in 1 2 3 4 5; do
-    run_hook_ag PostToolUse "$(ag_input ag-hb "\"toolCall\":{\"name\":\"view_file\",\"args\":{}},\"stepIdx\":$i")" "$SERVER_URL" "$state_dir"
+    fragment="\"toolCall\":{\"name\":\"view_file\",\"args\":{}},\"stepIdx\":$i"
+    run_hook_ag PostToolUse "$(ag_input ag-hb "$fragment")" "$SERVER_URL" "$state_dir"
   done
   local events
   events="$(d1_events antigravity:ag-hb)"

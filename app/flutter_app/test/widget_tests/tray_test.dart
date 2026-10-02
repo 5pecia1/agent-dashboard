@@ -169,6 +169,21 @@ void main() {
       expect(callCount, 1, reason: '실패해도 재시도 없이 정확히 1회만 부른다');
       expect(find.byType(SizedBox), findsOneWidget, reason: '예외가 위로 새지 않았다');
     });
+
+    testWidgets('서버 주소 없이 부팅해 API가 없어도 던지지 않고 실패를 돌려준다', (tester) async {
+      // `dashboardApiConfigProvider`를 override하지 않는다 — 첫 실행이나
+      // 해석할 수 없는 저장 주소로 부팅한 세션과 같다. 읽는 순간 나는 오류가
+      // `DashboardApiException`이 아니어도 트레이 동작은 실패 값으로 끝난다.
+      bool? muted;
+      bool? unmuted;
+      await _pumpProbe(tester, [], (ref) {
+        ref.read(tray_native.trayMuteProvider)().then((ok) => muted = ok);
+        ref.read(tray_native.trayUnmuteProvider)().then((ok) => unmuted = ok);
+      });
+
+      expect(muted, isFalse);
+      expect(unmuted, isFalse);
+    });
   });
 
   group(

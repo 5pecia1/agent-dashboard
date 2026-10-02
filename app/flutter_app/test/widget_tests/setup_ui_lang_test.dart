@@ -248,6 +248,11 @@ void main() {
             '테마 모드와 달리 되돌리지 않는다 — 이 경로는 애초에 낙관적 갱신이 '
             '아니라 로컬이 정본인 값을 곧바로 쓴 것이다',
       );
+      expect(
+        tester.container().read(uiLangControllerProvider),
+        'ko',
+        reason: '선택만 바뀌고 화면 언어는 옛 값으로 남으면 둘이 어긋난다',
+      );
       expect(find.text('setup.ui_lang_error'), findsOneWidget);
     });
   });

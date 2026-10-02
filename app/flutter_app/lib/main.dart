@@ -6,13 +6,22 @@ import 'package:my_dashboard/src/app.dart';
 import 'package:my_dashboard/src/platform/feature_setup.dart';
 import 'package:my_dashboard/src/rust/frb_generated.dart';
 import 'package:my_dashboard/src/rust/api.dart';
+import 'package:my_dashboard/src/state/capability_provider.dart'
+    show isWasmRuntimeProvider;
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/notification_click_inbox.dart';
 import 'package:my_dashboard/src/state/http_provider.dart';
 import 'package:my_dashboard/src/state/usage_integrations.dart';
+import 'package:my_dashboard/src/ui/config_read_failure.dart';
 
 typedef DashboardBootOverrides =
     List<Override> Function(DashboardConfigValues config);
+
+/// 대시보드 루트 `ProviderScope`의 키. 설정을 읽지 못해 실패 화면을 먼저
+/// 띄운 경우 두 번째 `runApp`이 이 루트를 이전 루트와 비교한다 — 키가
+/// 다르면 제자리 갱신(override 개수가 다른 컨테이너 재사용) 대신 새로
+/// 붙인다(`ui/config_read_failure.dart`의 `ConfigReadFailureApp` 참고).
+const Key kDashboardRootKey = ValueKey<String>('dashboard-root');
 
 Future<void> main() => runDashboard();
 
@@ -33,21 +42,58 @@ Future<void> runDashboard({
   );
   final greeting = greet(name: 'Agent Dashboard');
 
-  // T-wire: `dashboardConfigValuesProvider`/`dashboardApiConfigProvider`
-  // (`dashboard_api.dart`)/`httpSendProvider`는 override 없이 읽으면
-  // 던진다(각자 문서에 적힌 계약) — `runApp` 전에 이 세 자리를 실제 값으로
-  // 채운다. `configLoadFnProvider`를 일회용 `ProviderContainer`로 읽는 건
-  // 그 provider가 상태 없는 시임(저장소에서 읽는 함수 하나)이라 안전하다 —
+  // `configLoadFnProvider`를 일회용 `ProviderContainer`로 읽는 건 그
+  // provider가 상태 없는 시임(저장소에서 읽는 함수 하나)이라 안전하다 —
   // `main.dart`는 `ffi_allowed`(quality.json)에 있어 이 시임을 직접 다뤄도
-  // `quality_check.py boundary`에 걸리지 않는다.
+  // `quality_check.py boundary`에 걸리지 않는다. `isWasmRuntimeProvider`도
+  // 상태 없는 값(`kIsWeb`)이다.
   final bootContainer = ProviderContainer();
-  final DashboardConfigValues configValues;
+  final ConfigLoadFn load;
+  final bool webRuntime;
   try {
-    final stored = await bootContainer.read(configLoadFnProvider)();
-    configValues = configure?.call(stored) ?? stored;
+    load = bootContainer.read(configLoadFnProvider);
+    webRuntime = bootContainer.read(isWasmRuntimeProvider);
   } finally {
     bootContainer.dispose();
   }
+
+  // 읽기에 성공하면 예전처럼 첫 `runApp` 전에 대시보드를 조립한다. 읽지
+  // 못하면 실패 화면을 띄우고, 다시 읽기에 성공한 순간 대시보드 루트로
+  // 바꿔 끼운다(`runApp`을 다시 부르면 루트가 교체된다). 웹에서 브라우저가
+  // 저장소를 막았으면 예전처럼 저장된 설정 없이 시작한다(`buildBootRoot`).
+  runApp(
+    await buildBootRoot(
+      load: load,
+      webRuntime: webRuntime,
+      dashboard: (stored) => buildDashboardRoot(
+        stored,
+        app: SolApp(greeting: greeting),
+        configure: configure,
+        extensions: extensions,
+      ),
+      replaceRoot: runApp,
+    ),
+  );
+}
+
+/// 읽은 설정으로 대시보드 루트를 조립한다. FFI를 부르지 않으므로 테스트가
+/// 운영과 같은 조립을 그대로 쓸 수 있다.
+///
+/// T-wire: `dashboardConfigValuesProvider`/`dashboardApiConfigProvider`
+/// (`dashboard_api.dart`)/`httpSendProvider`는 override 없이 읽으면
+/// 던진다(각자 문서에 적힌 계약) — 이 세 자리를 실제 값으로 채운다.
+/// [configure](개인 빌드가 구운 기본값)는 읽기에 성공한 값에만 적용된다.
+/// 예외는 웹에서 브라우저가 저장소를 막아 빈 값으로 시작하는 부팅이다
+/// (`ui/config_read_failure.dart`의 `shouldBootWithoutStoredConfig`).
+/// 해석할 수 없는 서버 주소는 [bootConfigValuesFor]가 스냅샷에서 비운다 —
+/// 그래서 스냅샷에 주소가 있으면 API override도 있다.
+Widget buildDashboardRoot(
+  DashboardConfigValues stored, {
+  required Widget app,
+  DashboardConfigValues Function(DashboardConfigValues)? configure,
+  DashboardBootOverrides? extensions,
+}) {
+  final configValues = bootConfigValuesFor(configure?.call(stored) ?? stored);
 
   // T-wire 계약(U-fix): 서버 주소가 아직 없으면(첫 실행) placeholder URL로
   // 채워 넣지 않는다 — `dashboardApiConfigOverrideFor`가 이때 null을 돌려
@@ -58,16 +104,19 @@ Future<void> runDashboard({
   // 아예 읽지 않는다는 계약으로 "네트워크 0"을 지킨다.
   final apiConfigOverride = dashboardApiConfigOverrideFor(configValues);
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        dashboardConfigValuesProvider.overrideWithValue(configValues),
-        ?apiConfigOverride,
-        httpSendProviderOverride,
-        ...usageDashboardOverrides(configValues),
-        ...?extensions?.call(configValues),
-      ],
-      child: SolApp(greeting: greeting),
-    ),
+  return ProviderScope(
+    key: kDashboardRootKey,
+    overrides: [
+      dashboardConfigValuesProvider.overrideWithValue(configValues),
+      // 빌드 기본값이 아니라 저장소에서 읽은 값으로 정한다 — 실행 중에 이
+      // 파일이 사라지면 백그라운드 저장이 새 파일을 만들지 않는다
+      // (`config_provider.dart`의 `backgroundConfigPatch`).
+      storedConfigAtBootProvider.overrideWithValue(!stored.isEmpty),
+      ?apiConfigOverride,
+      httpSendProviderOverride,
+      ...usageDashboardOverrides(configValues),
+      ...?extensions?.call(configValues),
+    ],
+    child: app,
   );
 }

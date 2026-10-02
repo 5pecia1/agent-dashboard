@@ -5,6 +5,7 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/state/usage_config.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/config_read_retry_row.dart';
 
 class TeamClaudeSetup extends ConsumerStatefulWidget {
   const TeamClaudeSetup({super.key});
@@ -19,6 +20,10 @@ class _TeamClaudeSetupState extends ConsumerState<TeamClaudeSetup> {
   bool _busy = false;
   String? _message;
 
+  /// 저장된 설정을 읽지 못한 이유. 있는 동안 [_loading]을 풀지 않는다 —
+  /// 입력과 연결/해제가 잠겨 있어야 다음 저장이 저장된 연결을 지우지 못한다.
+  Object? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -29,12 +34,23 @@ class _TeamClaudeSetupState extends ConsumerState<TeamClaudeSetup> {
     try {
       final values = await ref.read(configLoadFnProvider)();
       if (!mounted) return;
-      _url.text = values.teamClaude?.baseUrl ?? '';
-      _key.text = values.teamClaude?.apiKey ?? '';
-    } catch (_) {
-      if (mounted) _message = 'setup.save_error';
+      setState(() {
+        _url.text = values.teamClaude?.baseUrl ?? '';
+        _key.text = values.teamClaude?.apiKey ?? '';
+        _loading = false;
+        _loadError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error);
+    }
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() => _busy = true);
+    try {
+      await _load();
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -83,6 +99,8 @@ class _TeamClaudeSetupState extends ConsumerState<TeamClaudeSetup> {
     title: Text(t(ref, 'teamclaude.title')),
     subtitle: Text(t(ref, 'teamclaude.setup_hint')),
     children: [
+      if (_loadError != null)
+        ConfigReadRetryRow(onRetry: _busy ? null : _retryLoad),
       TextField(
         key: const ValueKey('teamclaude-url'),
         controller: _url,
