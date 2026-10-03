@@ -54,7 +54,10 @@ import 'package:my_dashboard/src/platform/web_push.dart';
 import 'package:my_dashboard/src/platform/web_push_native.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/platform/web_push_web.dart'
     as bridge;
-import 'package:my_dashboard/src/state/capability_provider.dart' show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/capability_provider.dart'
+    show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show dashboardApiConfigControllerProvider;
 
 // ─── 값 ──────────────────────────────────────────────────────────────────
 
@@ -136,11 +139,11 @@ class PushRegistrationResult {
 /// 실제로 브라우저에서 FCM 등록 토큰을 받아 온다(서비스 워커 등록 ->
 /// 권한 확인 -> Firebase `getToken`). 데스크톱 브리지는 언제나
 /// [WebPushTokenStatus.unsupported]를 돌린다.
-typedef WebPushTokenFn = Future<WebPushTokenResult> Function(PushConfigDto config);
+typedef WebPushTokenFn =
+    Future<WebPushTokenResult> Function(PushConfigDto config);
 
-final Provider<WebPushTokenFn> webPushTokenFnProvider = Provider<WebPushTokenFn>(
-  (ref) => bridge.acquireWebPushToken,
-);
+final Provider<WebPushTokenFn> webPushTokenFnProvider =
+    Provider<WebPushTokenFn>((ref) => bridge.acquireWebPushToken);
 
 /// 알림 권한 프롬프트. **설정 화면의 명시적 버튼만 부른다** — 부팅 경로에서
 /// 부르면 앱이 뜨자마자 권한 팝업을 던지는 앱이 된다.
@@ -196,7 +199,12 @@ final Provider<PushSignalWatchFn> pushSignalWatchProvider =
 /// 아니면 false로 남고, 기존 로컬 알림 경로가 그대로 살아 있다.
 class ApnsOwnership extends Notifier<bool> {
   @override
-  bool build() => false;
+  bool build() {
+    // 새 주소/토큰을 적용하면 옛 서버의 등록 성공은 새 연결의 소유권이 아니다.
+    // 새 등록이 끝나기 전까지 로컬 배너가 맡는다.
+    ref.watch(dashboardApiConfigControllerProvider);
+    return false;
+  }
 
   /// [pushRegistrarProvider]의 결과 하나를 그대로 반영한다. 등록이 실패로
   /// 바뀌면(자격증명 회수, 권한 철회) 소유권도 곧바로 되돌아간다 —
@@ -213,7 +221,8 @@ final NotifierProvider<ApnsOwnership, bool> apnsRegisteredProvider =
 
 /// 토큰을 (필요하면) 받아 서버에 기기로 등록한다. [label]은 사람이 읽는 기기
 /// 이름이고, 모르면 생략한다 — 서버가 기존 이름을 유지한다.
-typedef PushRegisterFn = Future<PushRegistrationResult> Function({String? label});
+typedef PushRegisterFn =
+    Future<PushRegistrationResult> Function({String? label});
 
 /// 두 경로가 공유하는 앞단: `GET /dashboard/push-config`.
 ///
@@ -409,38 +418,48 @@ Future<PushRegistrationResult> _appleRegisterBridge({
 /// **소유권 갱신도 여기서 정확히 한 번.** 결과가 나오면 곧바로
 /// [apnsRegisteredProvider]에 반영한다 — 호출자(부팅 경로, 설정 저장)는
 /// 소유권 규칙을 몰라도 되고, `notify_provider.dart`는 그 값만 본다.
-final Provider<PushRegisterFn> pushRegistrarProvider = Provider<PushRegisterFn>((
-  ref,
-) {
-  return ({String? label}) async {
-    final PushRegistrationResult result;
-    if (ref.read(isWasmRuntimeProvider)) {
-      result = await _webRegisterBridge(
-        api: ref.read(dashboardApiProvider),
-        acquireToken: ref.read(webPushTokenFnProvider),
-        label: label,
+final Provider<PushRegisterFn> pushRegistrarProvider = Provider<PushRegisterFn>(
+  (ref) {
+    return ({String? label}) async {
+      final connection = ref.read(
+        dashboardApiConfigControllerProvider.notifier,
       );
-    } else if (ref.read(isApplePushHostProvider)) {
-      result = await _appleRegisterBridge(
-        api: ref.read(dashboardApiProvider),
-        acquireToken: ref.read(apnsTokenFnProvider),
-        label: label,
-      );
-    } else {
-      result = const PushRegistrationResult(
-        availability: PushAvailability.notApplicable,
-      );
-    }
-    // **소유권 갱신은 반드시 비동기 경계 뒤에서 한다.** 부팅 경로
-    // (`app.dart`의 `_AppHome.initState`)가 이 함수를 위젯 트리 빌드 중에
-    // 부르는데, 그 구간에서 provider를 수정하면 riverpod이 "Tried to modify
-    // a provider while the widget tree was building" 어서션으로 죽는다.
-    // 위 두 등록 경로는 네트워크를 타므로 이미 한 번 이상 suspend하지만,
-    // `notApplicable` 분기는 await가 하나도 없어 여기까지 동기로 도달한다 —
-    // 그래서 분기와 무관하게 여기서 한 번 양보한다(riverpod 문서가 안내하는
-    // "Delay your modification"과 같은 해법이다).
-    await Future<void>.value();
-    ref.read(apnsRegisteredProvider.notifier).applyResult(result);
-    return result;
-  };
-});
+      final revision = connection.revision;
+      final PushRegistrationResult result;
+      if (ref.read(isWasmRuntimeProvider)) {
+        result = await _webRegisterBridge(
+          api: ref.read(dashboardApiProvider),
+          acquireToken: ref.read(webPushTokenFnProvider),
+          label: label,
+        );
+      } else if (ref.read(isApplePushHostProvider)) {
+        result = await _appleRegisterBridge(
+          api: ref.read(dashboardApiProvider),
+          acquireToken: ref.read(apnsTokenFnProvider),
+          label: label,
+        );
+      } else {
+        result = const PushRegistrationResult(
+          availability: PushAvailability.notApplicable,
+        );
+      }
+      // **소유권 갱신은 반드시 비동기 경계 뒤에서 한다.** 부팅 경로
+      // (`app.dart`의 `_AppHome.initState`)가 이 함수를 위젯 트리 빌드 중에
+      // 부르는데, 그 구간에서 provider를 수정하면 riverpod이 "Tried to modify
+      // a provider while the widget tree was building" 어서션으로 죽는다.
+      // 위 두 등록 경로는 네트워크를 타므로 이미 한 번 이상 suspend하지만,
+      // `notApplicable` 분기는 await가 하나도 없어 여기까지 동기로 도달한다 —
+      // 그래서 분기와 무관하게 여기서 한 번 양보한다(riverpod 문서가 안내하는
+      // "Delay your modification"과 같은 해법이다).
+      await Future<void>.value();
+      if (connection.revision != revision) {
+        return const PushRegistrationResult(
+          availability: PushAvailability.failed,
+          detail: '연결이 바뀌어 이전 push 등록 결과를 버렸다',
+        );
+      }
+      ref.read(apnsRegisteredProvider.notifier).applyResult(result);
+      return result;
+    };
+  },
+);

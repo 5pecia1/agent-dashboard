@@ -17,14 +17,26 @@
 ///   4. 등록에 성공한 순간에만 [apnsRegisteredProvider]가 true가 된다.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/platform/apns_push.dart';
-import 'package:my_dashboard/src/state/capability_provider.dart' show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/platform/apns_push_native.dart'
+    show sameFirebaseMessagingIdentity;
+import 'package:my_dashboard/src/state/capability_provider.dart'
+    show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show
+        dashboardApiConfigControllerProvider,
+        dashboardApiConfigProviderOverride,
+        dashboardInitialApiConfigProvider;
+import 'package:my_dashboard/src/state/notify_provider.dart'
+    show NotifyPayload, localNotifyFnProvider, notifyProvider;
 import 'package:my_dashboard/src/state/push_provider.dart';
 
 final Uri _base = Uri.parse('https://dash.example.dev');
@@ -85,6 +97,131 @@ ProviderContainer _appleContainer({
 );
 
 void main() {
+  test('Firebase 기본 앱은 같은 메시징 프로젝트 설정에서만 재사용한다', () {
+    const current = FirebaseOptions(
+      apiKey: 'api-a',
+      appId: 'app-a',
+      messagingSenderId: 'sender-a',
+      projectId: 'project-a',
+    );
+    const same = FirebaseOptions(
+      apiKey: 'api-a',
+      appId: 'app-a',
+      messagingSenderId: 'sender-a',
+      projectId: 'project-a',
+    );
+    const other = FirebaseOptions(
+      apiKey: 'api-b',
+      appId: 'app-b',
+      messagingSenderId: 'sender-b',
+      projectId: 'project-b',
+    );
+
+    expect(sameFirebaseMessagingIdentity(current, same), isTrue);
+    expect(sameFirebaseMessagingIdentity(current, other), isFalse);
+  });
+
+  test('다른 Firebase 프로젝트로 바꾸면 새 토큰을 등록하지 않고 로컬 배너로 돌아간다', () async {
+    final requests = <ApiRequest>[];
+    final localAlerts = <NotifyPayload>[];
+    var project = 'project-a';
+    final container = ProviderContainer(
+      overrides: [
+        isWasmRuntimeProvider.overrideWithValue(false),
+        isApplePushHostProvider.overrideWithValue(true),
+        dashboardInitialApiConfigProvider.overrideWithValue(
+          DashboardApiConfig(baseUrl: Uri.parse('https://a.example.test')),
+        ),
+        dashboardApiConfigProviderOverride,
+        localNotifyFnProvider.overrideWithValue((payload) async {
+          localAlerts.add(payload);
+        }),
+        httpSendProvider.overrideWithValue((request) async {
+          requests.add(request);
+          if (request.url.path == kPushConfigPath) {
+            return ApiResponse(statusCode: 200, body: _appleReadyBody());
+          }
+          return const ApiResponse(statusCode: 204);
+        }),
+        apnsTokenFnProvider.overrideWithValue(
+          (_) async => project == 'project-a'
+              ? const ApnsTokenResult.acquired('a-token')
+              : const ApnsTokenResult.failed('Firebase 프로젝트가 다르다'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(pushRegistrarProvider)();
+    expect(container.read(apnsRegisteredProvider), isTrue);
+    final postsBeforeSwitch = requests
+        .where((request) => request.url.path == kDevicesPath)
+        .length;
+
+    project = 'project-b';
+    container
+        .read(dashboardApiConfigControllerProvider.notifier)
+        .apply(serverUrl: 'https://b.example.test');
+    expect(container.read(apnsRegisteredProvider), isFalse);
+    final result = await container.read(pushRegistrarProvider)();
+    expect(result.availability, PushAvailability.failed);
+    expect(container.read(apnsRegisteredProvider), isFalse);
+    expect(
+      requests.where((request) => request.url.path == kDevicesPath),
+      hasLength(postsBeforeSwitch),
+    );
+    await container.read(notifyProvider)(
+      const NotifyPayload(id: 6, title: '대기', body: '입력 필요'),
+    );
+    expect(localAlerts.map((payload) => payload.id), <int>[6]);
+  });
+
+  test('옛 서버의 늦은 push 등록은 새 서버의 배너 소유권을 되돌리지 않는다', () async {
+    final oldRegistration = Completer<ApiResponse>();
+    final oldStarted = Completer<void>();
+    final container = ProviderContainer(
+      overrides: [
+        isWasmRuntimeProvider.overrideWithValue(false),
+        isApplePushHostProvider.overrideWithValue(true),
+        dashboardInitialApiConfigProvider.overrideWithValue(
+          DashboardApiConfig(baseUrl: Uri.parse('https://a.example.test')),
+        ),
+        dashboardApiConfigProviderOverride,
+        httpSendProvider.overrideWithValue((request) async {
+          if (request.url.path == kPushConfigPath) {
+            return ApiResponse(statusCode: 200, body: _appleReadyBody());
+          }
+          if (request.url.host == 'a.example.test') {
+            oldStarted.complete();
+            return oldRegistration.future;
+          }
+          return const ApiResponse(
+            statusCode: 500,
+            body: '{"error":"unavailable"}',
+          );
+        }),
+        apnsTokenFnProvider.overrideWithValue(
+          (_) async => const ApnsTokenResult.acquired('old-project-token'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final oldAttempt = container.read(pushRegistrarProvider)();
+    await oldStarted.future;
+    container
+        .read(dashboardApiConfigControllerProvider.notifier)
+        .apply(serverUrl: 'https://b.example.test');
+    final newResult = await container.read(pushRegistrarProvider)();
+    expect(newResult.availability, PushAvailability.failed);
+    expect(container.read(apnsRegisteredProvider), isFalse);
+
+    oldRegistration.complete(const ApiResponse(statusCode: 204));
+    final stale = await oldAttempt;
+    expect(stale.availability, PushAvailability.failed);
+    expect(container.read(apnsRegisteredProvider), isFalse);
+  });
+
   test('토큰을 받으면 transport:fcm-apns · platform:macos로 등록한다', () async {
     final recorder = _Recorder((request) async {
       if (request.url.path == kPushConfigPath) {
@@ -169,8 +306,9 @@ void main() {
     );
     final container = _appleContainer(
       send: recorder.call,
-      acquireToken: (_) async =>
-          const ApnsTokenResult.permissionRequired('authorizationStatus=denied'),
+      acquireToken: (_) async => const ApnsTokenResult.permissionRequired(
+        'authorizationStatus=denied',
+      ),
     );
     addTearDown(container.dispose);
 

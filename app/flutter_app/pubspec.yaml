@@ -6,7 +6,7 @@ publish_to: 'none'
 # 버전/빌드 번호. 이 값은 sol-platform 자체의 SOL_PLATFORM_VERSION(레포
 # 앵커, .sol-platform.env 참고)과는 무관하다 — 이 필드는 이 템플릿에서
 # 새로 만든 개별 앱의 버전이다.
-version: 0.1.4+5
+version: 0.1.5+6
 
 environment:
   sdk: ^3.12.0
@@ -174,7 +174,7 @@ msix_config:
   publisher_display_name: sol-platform contributors
   identity_name: io.github.5pecia1.mydashboard
   publisher: CN=sol-platform contributors
-  msix_version: 0.1.4.0
+  msix_version: 0.1.5.0
   logo_path: web/icons/Icon-512.png
   capabilities: internetClient
 

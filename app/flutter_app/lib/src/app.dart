@@ -204,10 +204,10 @@ class SolApp extends ConsumerWidget {
 /// 한 번 읽어 override되는 스냅샷이다(`config_provider.dart` 문서 참고) —
 /// [SetupPage]에서 저장해도 이 provider 자체는 갈아끼워지지 않는다. 그래서
 /// "서버 주소가 있는가"는 이 위젯의 로컬 상태로만 판단하고, 저장이 끝나면
-/// [SetupPage.onSaved] 콜백이 그 로컬 상태를 뒤집어 세션 목록으로 넘어간다
-/// (재시작 없이도 화면은 바뀐다 — 다만 새로 저장한 서버 주소로 실제
-/// 요청이 나가는 건 다음 앱 재시작부터다. 이 한계는 `dashboardApiConfigProvider`
-/// 도 같은 부팅 스냅샷이라 이 파일 범위에서 고칠 수 없다).
+/// [SetupPage.onSaved] 콜백이 그 로컬 상태를 뒤집어 세션 목록으로 넘어간다.
+/// 새로 저장한 서버 주소로 요청이 나가는 것도 재시작이 필요 없다 — 앱이 지금
+/// 쓰는 API 설정은 부팅 스냅샷이 아니라 `DashboardApiConfigController`
+/// (`config_provider.dart`)이고, 저장이 그 값을 먼저 바꾼 뒤 동기화를 연다.
 ///
 /// `needsSetup`(401/403로 멈춘 상태, `sync_controller.dart`의
 /// `SyncControllerState.needsSetup`)과는 다른 조건이다 — 그건

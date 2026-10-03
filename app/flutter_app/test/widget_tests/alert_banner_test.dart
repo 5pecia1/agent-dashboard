@@ -13,7 +13,10 @@ import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/rust/api/i18n.dart' show LocaleDto;
 import 'package:my_dashboard/src/state/config_provider.dart'
-    show DashboardConfigValues, dashboardConfigValuesProvider;
+    show
+        DashboardConfigValues,
+        dashboardApiConfigControllerProvider,
+        dashboardConfigValuesProvider;
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/widgets/alert_banner.dart';
 
@@ -243,6 +246,57 @@ void main() {
       // 체크 표시로 되돌리는 타이머가 남은 채로 테스트가 끝나면
       // "Timer가 still pending"으로 실패한다 — 끝까지 흘려보낸다.
       await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('이 세션에서 주소를 바꿔 저장했다면 복사하는 명령은 바꾼 서버를 가리킨다', (tester) async {
+      // 배너는 지금 동기화하는 서버가 준 `hook_skew`를 그린다. 부팅 스냅샷의
+      // 옛 주소를 쓰면 복사한 명령이 옛 서버의 setup.sh를 받는다.
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            calls.add(call);
+            return null;
+          });
+      await _pumpBanner(tester, const <HookSkewDto>[
+        HookSkewDto(host: 'dev-mac'),
+      ], serverUrl: serverUrl);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(HookSkewBanner)),
+      );
+
+      container
+          .read(dashboardApiConfigControllerProvider.notifier)
+          .apply(serverUrl: 'https://moved.example', clientToken: 'token');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.copy_outlined));
+      await tester.pump();
+
+      final setDataCall = calls.singleWhere(
+        (call) => call.method == 'Clipboard.setData',
+      );
+      expect(
+        (setDataCall.arguments as Map)['text'],
+        'curl -fsSL https://moved.example/setup.sh | bash',
+      );
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('첫 실행에서 주소를 저장하면 복사 아이콘이 나타난다', (tester) async {
+      await _pumpBanner(tester, const <HookSkewDto>[
+        HookSkewDto(host: 'dev-mac'),
+      ], serverUrl: null);
+      expect(find.byIcon(Icons.copy_outlined), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(HookSkewBanner)),
+      );
+
+      container
+          .read(dashboardApiConfigControllerProvider.notifier)
+          .apply(serverUrl: serverUrl, clientToken: 'token');
+      await tester.pump();
+
+      expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('복사 후 체크 아이콘으로 잠깐 바뀌었다가 되돌아온다', (tester) async {

@@ -39,6 +39,8 @@ import 'package:my_dashboard/src/state/config_provider.dart'
         DashboardConfigValues,
         backgroundConfigPatch,
         configPatchFnProvider,
+        dashboardApiConfigControllerProvider,
+        parseServerUrl,
         storedConfigAtBootProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart'
     show SyncControllerState, syncControllerProvider;
@@ -56,6 +58,13 @@ String parseUiLang(String? raw) => switch (raw) {
 /// 값을 watch해 `'ko'`/`'en'`이면 그대로 쓰고, `'system'`이면 플랫폼
 /// 로케일로 내려간다.
 class UiLangController extends Notifier<String> {
+  bool _pendingServerWrite = false;
+
+  /// 서버에 쓸 수 없을 때 사용자가 고른 값이다. 첫 연결이나 인증 복구 때
+  /// 확인 응답을 받을 때까지 서버의 이전/null 언어가 이 선택을 덮지 않는다.
+  bool get pendingServerWrite => _pendingServerWrite;
+  String get currentChoice => state;
+
   @override
   String build() => 'system';
 
@@ -65,6 +74,16 @@ class UiLangController extends Notifier<String> {
   /// 않는다** — 위 클래스 문서의 낙관적 갱신 금지 계약 참고.
   void setUiLang(String value) {
     state = parseUiLang(value);
+  }
+
+  void setLocalChoice(String value) {
+    _pendingServerWrite = true;
+    setUiLang(value);
+  }
+
+  void confirmServerChoice(String value) {
+    _pendingServerWrite = false;
+    setUiLang(value);
   }
 }
 
@@ -98,10 +117,8 @@ typedef UiLangSyncSnapshot = ({bool everSynced, String? uiLang});
 /// 바로 그 필드이고, `sync_controller.dart`의 `_afterSuccess`가 `sync`와 **같은
 /// 쓰기에서** 함께 갱신하므로 둘이 어긋난 중간 상태가 관측되지 않는다.
 final syncUiLangListenable = syncControllerProvider.select(
-  (SyncControllerState state) => (
-    everSynced: state.lastSuccessAtMs != null,
-    uiLang: state.sync.uiLang,
-  ),
+  (SyncControllerState state) =>
+      (everSynced: state.lastSuccessAtMs != null, uiLang: state.sync.uiLang),
 );
 
 /// 부팅 이후(위젯 트리가 뜬 다음) 한 번 부른다 — `app.dart`의
@@ -144,24 +161,33 @@ final syncUiLangListenable = syncControllerProvider.select(
 /// 백그라운드 쓰기라 커서 저장처럼 사라진 설정 파일을 새로 만들지 않는다
 /// (`config_provider.dart`의 [backgroundConfigPatch]).
 ProviderSubscription<UiLangSyncSnapshot> installUiLangSync(WidgetRef ref) {
-  return ref.listenManual<UiLangSyncSnapshot>(
-    syncUiLangListenable,
-    (UiLangSyncSnapshot? previous, UiLangSyncSnapshot next) {
-      if (!next.everSynced) return;
-      final resolved = parseUiLang(next.uiLang);
-      ref.read(uiLangControllerProvider.notifier).setUiLang(resolved);
-      unawaited(
-        ref
-            .read(configPatchFnProvider)(
-              backgroundConfigPatch(
-                (DashboardConfigValues current) =>
-                    current.copyWith(uiLang: resolved),
-                storedAtBoot: ref.read(storedConfigAtBootProvider),
-              ),
-            )
-            .catchError((Object _) {}),
-      );
-    },
-    fireImmediately: true,
-  );
+  return ref.listenManual<UiLangSyncSnapshot>(syncUiLangListenable, (
+    UiLangSyncSnapshot? previous,
+    UiLangSyncSnapshot next,
+  ) {
+    if (!next.everSynced ||
+        ref.read(uiLangControllerProvider.notifier).pendingServerWrite) {
+      return;
+    }
+    final resolved = parseUiLang(next.uiLang);
+    ref.read(uiLangControllerProvider.notifier).setUiLang(resolved);
+    final connection = ref.read(dashboardApiConfigControllerProvider.notifier);
+    final revision = connection.revision;
+    final serverUrl = ref.read(dashboardApiConfigControllerProvider)?.baseUrl;
+    unawaited(
+      ref
+          .read(configPatchFnProvider)(
+            backgroundConfigPatch((DashboardConfigValues current) {
+              if (connection.revision != revision ||
+                  (serverUrl != null &&
+                      current.serverUrl != null &&
+                      parseServerUrl(current.serverUrl) != serverUrl)) {
+                return current;
+              }
+              return current.copyWith(uiLang: resolved);
+            }, storedAtBoot: ref.read(storedConfigAtBootProvider)),
+          )
+          .catchError((Object _) {}),
+    );
+  }, fireImmediately: true);
 }

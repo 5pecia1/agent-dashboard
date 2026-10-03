@@ -155,6 +155,26 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "session.list.empty.body"   => "Sessions will appear here once an agent starts.",
     "session.list.error.title"  => "Couldn't sync",
 
+    // ── sync error detail (sessions_page.dart: syncErrorDetailText) ───
+    // Shown under `session.list.error.title` and in the stale-data banner.
+    // {method} and {path} name the request. {cause} and {detail} are the
+    // runtime's own error text (for example `SocketException: ...`) and are
+    // shown as is, untranslated. transport_failed also covers failures after
+    // the server started answering (a body that is not UTF-8, a connection
+    // closed mid-body), so it does not claim the server was unreachable.
+    // The app accepts only its own protocol major, so the protocol sentence
+    // names the side that is behind.
+    // unexpected is the sentence for a failure that is not an API failure (a
+    // bug, a type mismatch while reading a response, a provider error). The
+    // runtime's own text for it is a developer dump, so it takes no
+    // placeholders and the app only logs it.
+    "sync.error.transport_failed" => "Request failed: {method} {path} ({cause})",
+    "sync.error.timeout" => "No response within {timeout_ms} ms: {method} {path}",
+    "sync.error.malformed_response" => "The response wasn't a JSON object: {method} {path} ({detail})",
+    "sync.error.protocol_update_app" => "The server and this app use different protocol versions (server: {server_version}, app: {supported_version}). Update the app.",
+    "sync.error.protocol_update_server" => "The server and this app use different protocol versions (server: {server_version}, app: {supported_version}). Update the server.",
+    "sync.error.unexpected" => "Syncing failed unexpectedly. Try again.",
+
     // ── session.card (T15: widgets/session_card.dart) ─────────────────
     "session.card.host_unknown" => "Unknown host",
     "session.card.no_message"   => "No messages yet",
@@ -261,6 +281,10 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "setup.client_token_label"       => "Client token",
     "setup.save_success"             => "Saved.",
     "setup.save_error"               => "Couldn't save settings.",
+    // Shown instead of setup.save_success when the saved server address can't
+    // be read as a URL (for example `https://host:443x`). The text is saved,
+    // but the app doesn't connect to it.
+    "setup.server_url_invalid"       => "Saved, but the server address can't be read. Check the address and save again.",
     "setup.section.notifications"    => "Notifications",
     "setup.notifications_enabled_label" => "Enable notifications",
     "setup.hide_content_label"       => "Hide message content in notifications",
@@ -448,6 +472,14 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "session.list.empty.body"   => "에이전트가 시작되면 여기에 세션이 나타납니다.",
     "session.list.error.title"  => "동기화할 수 없습니다",
 
+    // ── sync error detail ────────────────────────────────────────────────
+    "sync.error.transport_failed" => "요청이 실패했습니다: {method} {path} ({cause})",
+    "sync.error.timeout" => "{timeout_ms}ms 안에 응답이 없습니다: {method} {path}",
+    "sync.error.malformed_response" => "응답이 JSON 객체가 아닙니다: {method} {path} ({detail})",
+    "sync.error.protocol_update_app" => "서버와 앱의 프로토콜 버전이 다릅니다(서버: {server_version}, 앱: {supported_version}). 앱을 업데이트하세요.",
+    "sync.error.protocol_update_server" => "서버와 앱의 프로토콜 버전이 다릅니다(서버: {server_version}, 앱: {supported_version}). 서버를 업데이트하세요.",
+    "sync.error.unexpected" => "동기화 중 예상하지 못한 오류가 발생했습니다. 다시 시도하세요.",
+
     // ── session.card (T15) ──────────────────────────────────────────────
     "session.card.host_unknown" => "호스트 알 수 없음",
     "session.card.no_message"   => "아직 메시지가 없습니다",
@@ -533,6 +565,7 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "setup.client_token_label"       => "클라이언트 토큰",
     "setup.save_success"             => "저장했습니다.",
     "setup.save_error"               => "설정을 저장할 수 없습니다.",
+    "setup.server_url_invalid"       => "저장했지만 서버 주소를 읽을 수 없습니다. 주소를 확인하고 다시 저장하세요.",
     "setup.section.notifications"    => "알림",
     "setup.notifications_enabled_label" => "알림 사용",
     "setup.hide_content_label"       => "알림 본문에서 메시지 내용 숨기기",
@@ -719,6 +752,94 @@ mod tests {
         assert_eq!(
             t_args(Locale::Ko, "error.unknown_item", &[("id", "42")]),
             "알 수 없는 항목입니다: 42",
+        );
+    }
+
+    #[test]
+    fn 동기화_오류_문구는_로케일별_문장에_요청과_런타임_원문을_그대로_끼운다() {
+        // sessions_page.dart의 syncErrorDetailText가 넘기는 인자 그대로다 —
+        // 위젯 테스트(sync_error_detail_test.dart)의 가짜 카탈로그도 같은
+        // 문장을 쓴다.
+        struct Case {
+            key: &'static str,
+            args: &'static [(&'static str, &'static str)],
+            en: &'static str,
+            ko: &'static str,
+        }
+        let cases = [
+            Case {
+                key: "sync.error.transport_failed",
+                args: &[
+                    ("method", "GET"),
+                    ("path", "/dashboard/sync"),
+                    ("cause", "SocketException: Connection refused"),
+                ],
+                en: "Request failed: GET /dashboard/sync (SocketException: Connection refused)",
+                ko: "요청이 실패했습니다: GET /dashboard/sync (SocketException: Connection refused)",
+            },
+            Case {
+                key: "sync.error.timeout",
+                args: &[
+                    ("method", "GET"),
+                    ("path", "/dashboard/sync"),
+                    ("timeout_ms", "10000"),
+                ],
+                en: "No response within 10000 ms: GET /dashboard/sync",
+                ko: "10000ms 안에 응답이 없습니다: GET /dashboard/sync",
+            },
+            Case {
+                key: "sync.error.malformed_response",
+                args: &[
+                    ("method", "GET"),
+                    ("path", "/dashboard/sync"),
+                    ("detail", "FormatException: Unexpected character"),
+                ],
+                en: "The response wasn't a JSON object: GET /dashboard/sync (FormatException: Unexpected character)",
+                ko: "응답이 JSON 객체가 아닙니다: GET /dashboard/sync (FormatException: Unexpected character)",
+            },
+            Case {
+                key: "sync.error.protocol_update_app",
+                args: &[("server_version", "2"), ("supported_version", "1")],
+                en: "The server and this app use different protocol versions (server: 2, app: 1). Update the app.",
+                ko: "서버와 앱의 프로토콜 버전이 다릅니다(서버: 2, 앱: 1). 앱을 업데이트하세요.",
+            },
+            Case {
+                key: "sync.error.protocol_update_server",
+                args: &[("server_version", "1"), ("supported_version", "2")],
+                en: "The server and this app use different protocol versions (server: 1, app: 2). Update the server.",
+                ko: "서버와 앱의 프로토콜 버전이 다릅니다(서버: 1, 앱: 2). 서버를 업데이트하세요.",
+            },
+        ];
+        for case in cases {
+            let key = case.key;
+            assert_eq!(t_args(Locale::En, key, case.args), case.en, "key={key}");
+            assert_eq!(t_args(Locale::Ko, key, case.args), case.ko, "key={key}");
+        }
+    }
+
+    #[test]
+    fn 예상하지_못한_동기화_오류_문구는_런타임_원문을_받지_않는다() {
+        // 이 문구가 대신 보이는 원문은 스택 트레이스를 담은 개발자용 덤프일 수
+        // 있다. 문장이 자리표시자를 갖지 않으므로 호출자가 원문을 넘겨도
+        // 화면에 닿지 않는다(sessions_page.dart의 syncErrorDetailText).
+        let dump = [("cause", "Bad state: dump"), ("detail", "StateError")];
+        let en = "Syncing failed unexpectedly. Try again.";
+        let ko = "동기화 중 예상하지 못한 오류가 발생했습니다. 다시 시도하세요.";
+        assert_eq!(t(Locale::En, "sync.error.unexpected"), en);
+        assert_eq!(t(Locale::Ko, "sync.error.unexpected"), ko);
+        assert_eq!(t_args(Locale::En, "sync.error.unexpected", &dump), en);
+        assert_eq!(t_args(Locale::Ko, "sync.error.unexpected", &dump), ko);
+    }
+
+    #[test]
+    fn 읽을_수_없는_서버_주소를_저장한_뒤의_문구는_양쪽_로케일에_있다() {
+        assert_eq!(
+            t(Locale::En, "setup.server_url_invalid"),
+            "Saved, but the server address can't be read. Check the address and save again.",
+        );
+        assert_eq!(
+            t(Locale::Ko, "setup.server_url_invalid"),
+            "저장했지만 서버 주소를 읽을 수 없습니다. 주소를 확인하고 다시 저장하세요.",
         );
     }
 

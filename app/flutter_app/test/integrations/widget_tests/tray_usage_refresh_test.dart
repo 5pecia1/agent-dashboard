@@ -152,6 +152,7 @@ void main() {
     );
     await tester.pump();
     await menu.apply(
+      serverRevision: 0,
       muted: true,
       muteUntil: 123,
       labels: ref.read(dashboardTrayLabelsProvider),

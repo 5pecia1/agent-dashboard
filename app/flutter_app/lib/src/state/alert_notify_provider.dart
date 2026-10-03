@@ -28,8 +28,9 @@
 /// 큐가 다시 도착한다 — 큐를 그대로 발신에 넘기면 폴링 주기마다 같은
 /// 배너가 다시 뜬다. [AlertNotifier]는 리듀서가 쓰는 것과 같은 모양의
 /// 워터마크(이미 발신한 최대 전이 id)를 들고 그 위쪽만 내보낸다. 전이
-/// id는 서버에서 단조 증가하고 재사용되지 않으므로(`TransitionDto.id`
-/// 문서) 이 한 정수가 "이미 알린 것"을 전부 표현한다.
+/// id는 서버 안에서 단조 증가하고 재사용되지 않으므로(`TransitionDto.id`
+/// 문서) 서버마다 이 한 정수가 "이미 알린 것"을 전부 표현한다. 서버 주소가
+/// 바뀌면 이 워터마크도 초기화한다.
 library;
 
 import 'dart:async' show unawaited;
@@ -39,6 +40,8 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:my_dashboard/src/data/dashboard_dto.dart' show TransitionDto;
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show dashboardApiConfigControllerProvider;
 import 'package:my_dashboard/src/state/notify_provider.dart'
     show alertStateLabelProvider, notifyForAlerts, notifyProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart'
@@ -80,28 +83,45 @@ class AlertNotifier {
   final Ref _ref;
 
   int _watermark = 0;
+  int? _serverRevision;
 
   /// 마지막으로 발신한 전이 id. 테스트가 "중복 재전송 0회"의 이유를
   /// 값으로 확인할 수 있게 노출한다.
   @visibleForTesting
   int get debugWatermark => _watermark;
 
-  /// [pendingAlerts]에서 워터마크 위쪽만 발신한다. 큐 전체가 다시 와도
+  /// [pendingAlerts]에서 같은 서버의 워터마크 위쪽만 발신한다. 큐 전체가 다시 와도
   /// (폴링 주기마다 그렇다) 이미 알린 전이는 다시 나가지 않는다.
   ///
   /// 워터마크를 `await` **전에** 올린다 — 발신 중에 다음 sync 결과가
   /// 도착해도(폴링은 발신을 기다려 주지 않는다) 같은 전이를 두 번 집지
   /// 않는다.
   Future<void> dispatchNew(List<TransitionDto> pendingAlerts) async {
+    final connection = _ref.read(dashboardApiConfigControllerProvider.notifier);
+    final serverRevision = connection.serverRevision;
+    if (_serverRevision != serverRevision) {
+      _serverRevision = serverRevision;
+      _watermark = 0;
+    }
     final fresh = unnotifiedAlerts(pendingAlerts, watermark: _watermark);
     if (fresh.isEmpty) return;
+    final serverUrl = _ref
+        .read(dashboardApiConfigControllerProvider)
+        ?.baseUrl
+        .toString();
     for (final alert in fresh) {
       _watermark = math.max(_watermark, alert.id);
     }
     await notifyForAlerts(
       fresh,
-      dispatch: _ref.read(notifyProvider),
+      dispatch: (payload) {
+        if (connection.serverRevision != serverRevision) {
+          return Future<void>.value();
+        }
+        return _ref.read(notifyProvider)(payload);
+      },
       stateLabel: _ref.read(alertStateLabelProvider),
+      serverUrl: serverUrl,
     );
   }
 }

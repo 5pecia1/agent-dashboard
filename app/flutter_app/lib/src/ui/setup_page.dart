@@ -15,6 +15,13 @@
 ///    웹·macOS 공통이고, 대상이 아닌 호스트에서는 그 provider가
 ///    `notApplicable`로 즉시 끝난다.
 ///
+/// **저장한 서버 주소·토큰은 재시작 없이 적용된다.** 저장이 디스크에 쓴 뒤
+/// `DashboardApiConfigController`(`state/config_provider.dart`)를 새 값으로
+/// 바꾸고, 그다음에 push 등록과 동기화를 깨운다. 첫 실행의 첫 저장은 동기화를
+/// 시작하고, 이미 연결된 앱의 주소·토큰 변경은 새 연결로 곧바로 다시
+/// 동기화한다. 주소를 비워 저장하면 실행 중인 연결은 그대로고, 다음 실행부터
+/// 저장된 값이 없는 상태로 시작한다(빌드에 구운 기본값이 있으면 그 값으로).
+///
 /// **알려진 한계(공개 문서화, followup으로 보고):** `DashboardConfigValues`
 /// (`state/config_provider.dart`)에는 "알림 사용"/"본문 내용 숨기기"/
 /// "기기 이름" 필드가 여전히 없다 — 이번 작업은 상주 토글 하나만 그 파일에
@@ -54,10 +61,10 @@ import 'package:my_dashboard/src/util/mute_time.dart' show formatMuteUntilClock;
 class SetupPage extends ConsumerStatefulWidget {
   const SetupPage({super.key, this.onSaved});
 
-  /// T-wire: 저장이 성공한 뒤(서버 주소가 비어 있지 않게 됐을 때만) 호출된다.
-  /// `app.dart`의 `_AppHome`이 "첫 실행 -> 이 화면"에서 세션 목록으로
-  /// 넘어가는 데 쓴다 — `dashboardConfigValuesProvider`는 부팅 시점
-  /// 스냅샷이라(`config_provider.dart` 문서 참고) 저장 후에도 값이 갈아
+  /// T-wire: 저장이 성공한 뒤(서버 주소가 쓸 수 있는 값으로 저장됐을 때만)
+  /// 호출된다. `app.dart`의 `_AppHome`이 "첫 실행 -> 이 화면"에서 세션
+  /// 목록으로 넘어가는 데 쓴다 — `dashboardConfigValuesProvider`는 부팅
+  /// 시점 스냅샷이라(`config_provider.dart` 문서 참고) 저장 후에도 값이 갈아
   /// 끼워지지 않으므로, 화면 전환은 이 콜백이 만드는 로컬 위젯 상태로만
   /// 가능하다. 이 화면을 다른 진입점(설정 아이콘 등)에서 그냥 push했을
   /// 때는 null로 두면 된다 — 없어도 저장 자체는 그대로 동작한다.
@@ -156,6 +163,17 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     // 않도록 한 번 더 막는다.
     if (_loadingConfig || _loadError != null) return;
     setState(() => _busy = true);
+    // 저장하는 동안 이 화면이 사라져도(뒤로 가기) 디스크에 쓴 값은 지금 쓰는
+    // API 설정에 반영돼야 한다. 위젯이 죽은 뒤에는 `ref`를 쓸 수 없으므로
+    // 컨트롤러와 이전 값을 미리 잡아 둔다.
+    final connection = ref.read(dashboardApiConfigControllerProvider.notifier);
+    final previous = ref.read(dashboardApiConfigControllerProvider);
+    final uiLang = ref.read(uiLangControllerProvider.notifier);
+    final sync = ref.read(syncControllerProvider.notifier);
+    final wasStopped = ref.read(syncControllerProvider).needsSetup;
+    final registerPush = ref.read(pushRegistrarProvider);
+    final deviceLabel = _deviceLabelOrNull();
+    final patch = ref.read(configPatchFnProvider);
     try {
       final urlText = _serverUrlController.text.trim();
       final tokenText = _clientTokenController.text.trim();
@@ -177,45 +195,77 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       // 필드(cursor/resident/themeMode/uiLang)는 전부 `current`에서
       // 명시적으로 그대로 옮겨 적어야 한다(하나라도 빠뜨리면 "저장" 버튼을
       // 누를 때마다 그 필드가 조용히 초기화된다).
-      await ref.read(configPatchFnProvider)(
-        (DashboardConfigValues current) => DashboardConfigValues(
+      await patch((DashboardConfigValues current) {
+        final changedServer =
+            serverUrl != null &&
+            parseServerUrl(serverUrl) != parseServerUrl(current.serverUrl);
+        return DashboardConfigValues(
           serverUrl: serverUrl,
           clientToken: clientToken,
-          cursor: current.cursor,
+          cursor: changedServer ? null : current.cursor,
           resident: current.resident,
           themeMode: current.themeMode,
-          seenWatermark: current.seenWatermark,
+          seenWatermark: changedServer ? null : current.seenWatermark,
           uiLang: current.uiLang,
           extra: current.extra,
-        ),
+        );
+      });
+      // 디스크에 쓴 **뒤에**, 앱이 지금 쓰는 API 설정을 저장한 값으로 바꾼다 —
+      // 아래 push 등록과 동기화가 `dashboardApiProvider`를 읽기 전이라야 한다.
+      // 부팅 스냅샷(`dashboardConfigValuesProvider`)은 저장해도 갱신되지
+      // 않으므로, 이 갈아 끼움이 없으면 첫 실행의 첫 저장은 값 없는 API를
+      // 읽다 던지고, 주소나 토큰을 바꾼 저장은 앱을 다시 켤 때까지 옛 값으로
+      // 요청이 나간다(`config_provider.dart`의 `DashboardApiConfigController`).
+      // 쓸 수 있는 주소가 아니면(`applied == null`) 실행 중인 연결은 그대로다.
+      final applied = connection.apply(
+        serverUrl: serverUrl,
+        clientToken: clientToken,
       );
+      if (applied != null) {
+        // 첫 sync는 언어 POST가 느려도 시작한다. pendingServerWrite가 서버의
+        // 예전/null 언어가 로컬의 명시적 선택을 덮지 못하게 한다.
+        unawaited(registerPush(label: deviceLabel));
+        sync.configureAndStart();
+        if ((previous != null && previous != applied) || wasStopped) {
+          sync.triggerNow(force: true);
+        }
+      }
+      if (applied != null && uiLang.pendingServerWrite && mounted) {
+        final revision = connection.revision;
+        final value = uiLang.currentChoice;
+        try {
+          final confirmed = await ref
+              .read(dashboardApiProvider)
+              .setUiLang(value == 'system' ? null : value);
+          if (connection.revision == revision &&
+              uiLang.currentChoice == value) {
+            uiLang.confirmServerChoice(parseUiLang(confirmed));
+          }
+        } catch (_) {
+          // 연결 저장은 성공했다. 선택은 로컬에 남겨 다음 저장에서 재시도한다.
+        }
+      }
       if (!mounted) return;
+      // 주소를 적었는데 쓸 수 없으면(`https://host:443x` 등) 저장은 됐어도
+      // 연결하지 않았다는 사실을 그대로 알린다. 빈 값 저장은 예전처럼 "저장했다"만
+      // 알린다 — 지울 의도일 수 있고, 실행 중인 연결은 다음 실행부터 저장된
+      // 값(없으면 빌드에 구운 기본값)을 따른다.
       setState(() {
         _busy = false;
-        _statusMessage = tRead(ref, 'setup.save_success');
+        _statusMessage = tRead(
+          ref,
+          serverUrl != null && applied == null
+              ? 'setup.server_url_invalid'
+              : 'setup.save_success',
+        );
       });
-      // T-wire: 서버 주소가 (비어 있지 않은 값으로) 저장된 뒤에만 아래
-      // 블록을 탄다 — 첫 실행 유도 화면에서 빈 값 그대로 저장을 눌러 봐야
-      // 여전히 설정이 필요한 상태이므로 push 등록도, 폴링 시작도, 세션
-      // 목록 전환도 할 이유가 없다(U-fix: 서버 주소가 없는 동안 네트워크
-      // 0회 계약 — `pushRegistrarProvider`를 비어 있는 상태에서 부르면
-      // 미설정 boot snapshot에서 예외를 던질 수 있다, `app.dart`의 같은
-      // 가드 문서 참고).
-      if (serverUrl != null) {
-        // TASK D-app 배선 (4): 새 서버 주소·토큰으로 push를 다시 등록한다.
-        // 기다리지 않는다 — 저장 자체는 이미 끝났고, 등록은 "있으면 좋은
-        // 깨우기 힌트"라 화면을 붙잡을 이유가 없다(부팅 경로가 같은 이유로
-        // `unawaited`하는 것과 같은 자리, `app.dart` 참고).
-        // `pushRegistrarProvider`가 모든 실패를 값으로 접으므로 던지지
-        // 않고, 대상이 아닌 호스트에서는 서버도 건드리지 않고 즉시 끝난다.
-        unawaited(ref.read(pushRegistrarProvider)(label: _deviceLabelOrNull()));
-        // U-fix: 기존 "저장 후 재등록 트리거"(바로 위 pushRegistrar 호출)와
-        // 같은 자리에 얹는다 — 새 메커니즘을 만들지 않고, 부팅이 서버
-        // 주소 없이 멈춰 둔 폴링을 여기서 정식으로 연다
-        // (`sync_controller.dart`의 `SyncController.configureAndStart` 참고).
-        ref.read(syncControllerProvider.notifier).configureAndStart();
-        widget.onSaved?.call();
-      }
+      // T-wire: 서버 주소가 쓸 수 있는 값으로 저장된 뒤에만 아래 블록을 탄다 —
+      // 첫 실행 유도 화면에서 빈 값 그대로 저장을 눌러 봐야 여전히 설정이
+      // 필요한 상태이므로 push 등록도, 폴링 시작도, 세션 목록 전환도 할 이유가
+      // 없다(U-fix: 서버 주소가 없는 동안 네트워크 0회 계약 —
+      // `pushRegistrarProvider`를 비어 있는 상태에서 부르면 예외를 던질 수
+      // 있다, `app.dart`의 같은 가드 문서 참고).
+      if (applied != null) widget.onSaved?.call();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -309,16 +359,16 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   /// (`_mute`/`_unmute`와 같은 태도 — 되돌릴 낙관 상태가 애초에 없다).
   ///
   /// **예외: 서버 미설정 단계.** 서버 주소 자체가 아직 없거나
-  /// (`dashboardConfigValuesProvider.serverUrl == null` — `SyncPhase.
-  /// unconfigured`, `dashboardApiProvider`를 읽으면 던진다) `needsSetup`
-  /// (401/403으로 멈춘 `SyncPhase.stopped` — POST는 실패하지만 값이 그대로
-  /// 남아 사용자를 가둔다)이면 서버에 쓸 방법이 없거나 써도 사용자를
-  /// 구제하지 못하므로, 이 두 경우에만 로컬(위젯 상태·컨트롤러·로컬 캐시)에
-  /// 곧바로 반영한다 — 언어를 잘못 골라 이 설정 화면 자체를 못 읽게 된
-  /// 사용자가 영영 못 빠져나오는 것을 막기 위해서다(지시의 설계 근거 그대로).
+  /// (`dashboardServerUrlProvider == null` — `SyncPhase.unconfigured`,
+  /// `dashboardApiProvider`를 읽으면 던진다. 이 세션에서 저장한 주소도
+  /// 센다) `needsSetup`(401/403으로 멈춘 `SyncPhase.stopped` — POST는
+  /// 실패하지만 값이 그대로 남아 사용자를 가둔다)이면 서버에 쓸 방법이
+  /// 없거나 써도 사용자를 구제하지 못하므로, 이 두 경우에만 로컬(위젯 상태·
+  /// 컨트롤러·로컬 캐시)에 곧바로 반영한다 — 언어를 잘못 골라 이 설정 화면
+  /// 자체를 못 읽게 된 사용자가 영영 못 빠져나오는 것을 막기 위해서다(지시의
+  /// 설계 근거 그대로).
   Future<void> _setUiLang(String value) async {
-    final unconfigured =
-        ref.read(dashboardConfigValuesProvider).serverUrl == null;
+    final unconfigured = ref.read(dashboardServerUrlProvider) == null;
     final needsSetup = ref.read(syncControllerProvider).needsSetup;
     if (unconfigured || needsSetup) {
       // 선택과 화면 언어(컨트롤러)를 먼저 같은 값으로 바꾸고 그다음 로컬
@@ -331,7 +381,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         _uiLang = value;
         _busy = true;
       });
-      ref.read(uiLangControllerProvider.notifier).setUiLang(value);
+      ref.read(uiLangControllerProvider.notifier).setLocalChoice(value);
       try {
         await ref.read(configPatchFnProvider)(
           (DashboardConfigValues current) => current.copyWith(uiLang: value),
@@ -351,10 +401,19 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     setState(() => _busy = true);
     try {
       final api = ref.read(dashboardApiProvider);
+      final connection = ref.read(
+        dashboardApiConfigControllerProvider.notifier,
+      );
+      final revision = connection.revision;
+      final serverUrl = api.config.baseUrl;
       // `'system'`은 로컬 기기 사실이라 서버로 보내지 않는다 — 서버 값을
       // 지우는 요청(null)으로 옮겨 적는다(`dashboard_api.dart`의
       // `setUiLang` 문서 참고).
       final confirmed = await api.setUiLang(value == 'system' ? null : value);
+      if (connection.revision != revision) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
       final resolved = parseUiLang(confirmed);
       if (!mounted) return;
       // 확인값이 돌아온 **즉시** 화면(세그먼트 선택 + 컨트롤러)에 반영한다.
@@ -363,10 +422,15 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       // 디스크가 이미 확정된 언어의 화면 반영을 늦출 이유가 없다(리뷰 지적
       // medium 수정).
       setState(() => _uiLang = resolved);
-      ref.read(uiLangControllerProvider.notifier).setUiLang(resolved);
-      await ref.read(configPatchFnProvider)(
-        (DashboardConfigValues current) => current.copyWith(uiLang: resolved),
-      );
+      ref.read(uiLangControllerProvider.notifier).confirmServerChoice(resolved);
+      await ref.read(configPatchFnProvider)((DashboardConfigValues current) {
+        if (connection.revision != revision ||
+            (current.serverUrl != null &&
+                parseServerUrl(current.serverUrl) != serverUrl)) {
+          return current;
+        }
+        return current.copyWith(uiLang: resolved);
+      });
       if (!mounted) return;
       setState(() => _busy = false);
     } on DashboardApiException {

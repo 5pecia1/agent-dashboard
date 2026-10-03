@@ -15,6 +15,12 @@ import 'package:flutter/material.dart';
 import 'package:my_dashboard/src/state/dashboard_extensions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:my_dashboard/src/data/dashboard_api.dart'
+    show
+        MalformedResponseFault,
+        ProtocolMismatchFault,
+        TimeoutFault,
+        TransportFault;
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/routing/app_router.dart'
@@ -54,6 +60,53 @@ SessionsScreenPhase sessionsScreenPhaseFor(SyncControllerState state) {
   if (state.sync.activeSessions.isEmpty) return SessionsScreenPhase.empty;
   if (state.lastError != null) return SessionsScreenPhase.staleData;
   return SessionsScreenPhase.ready;
+}
+
+/// 동기화 오류 상세 문구. 오류 화면(`_ErrorView`)과 [StaleDataBanner]가
+/// 같은 문구를 쓴다(build 단계 전용 — [t]와 같은 재렌더링 근거).
+///
+/// 실패의 사실([SyncErrorInfo.fault])이 있으면 표시 언어의 문장을 만들고,
+/// 런타임 원문(`SocketException: ...`, `FormatException: ...` 등)은 번역하지
+/// 않고 그대로 끼운다. 사실이 없는 [DashboardApiException](HTTP 상태 오류
+/// 등)은 서버/전송 계층 원문([SyncErrorInfo.message])을 그대로 보여준다.
+/// [DashboardApiException]이 아닌 예외([SyncErrorKind.unexpected])는 원문을
+/// 보이지 않고 표시 언어의 일반 문장 하나만 보인다 — 원문은 `Provider`
+/// 오류처럼 여러 줄의 스택 트레이스를 담은 개발자용 덤프일 수 있고, 로그에는
+/// 이미 남았다([SyncErrorInfo.fromError]). 오류가 없으면 빈 문자열이다.
+String syncErrorDetailText(WidgetRef ref, SyncErrorInfo? error) {
+  if (error == null) return '';
+  if (error.kind == SyncErrorKind.unexpected) {
+    return t(ref, 'sync.error.unexpected');
+  }
+  return switch (error.fault) {
+    null => error.message,
+    TransportFault(:final method, :final path, :final cause) => t(
+      ref,
+      'sync.error.transport_failed',
+      {'method': method, 'path': path, 'cause': cause},
+    ),
+    TimeoutFault(:final method, :final path, :final timeoutMs) => t(
+      ref,
+      'sync.error.timeout',
+      {'method': method, 'path': path, 'timeout_ms': '$timeoutMs'},
+    ),
+    MalformedResponseFault(:final method, :final path, :final detail) => t(
+      ref,
+      'sync.error.malformed_response',
+      {'method': method, 'path': path, 'detail': detail},
+    ),
+    // 앱은 같은 major만 받으므로 어느 쪽이 뒤처졌는지에 따라 안내가 다르다.
+    final ProtocolMismatchFault fault => t(
+      ref,
+      fault.serverIsNewer
+          ? 'sync.error.protocol_update_app'
+          : 'sync.error.protocol_update_server',
+      {
+        'server_version': '${fault.serverVersion}',
+        'supported_version': '${fault.supportedVersion}',
+      },
+    ),
+  };
 }
 
 /// 세션 목록을 [SessionViewDto.project](전체 경로) 기준으로 묶은 한 그룹.
@@ -256,7 +309,7 @@ class SessionsPage extends ConsumerWidget {
         // 명시한다.
         StaleDataBanner(
           lastSuccessAtMs: controllerState.lastSuccessAtMs,
-          errorDetail: controllerState.lastError?.message ?? '',
+          errorDetail: syncErrorDetailText(ref, controllerState.lastError),
           onRetry: () =>
               ref.read(syncControllerProvider.notifier).triggerNow(force: true),
         ),
@@ -576,10 +629,10 @@ class _ErrorView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // `lastError.message`는 서버/전송 계층 원문이라 번역하지 않는다 —
-    // 로컬 변수로 옮겨서 `Text()`에 리터럴이 아닌 값으로 넘긴다
-    // (`i18n_check.py`는 `Text('...')` 리터럴만 본다, 변수는 대상이 아니다).
-    final detail = controllerState.lastError?.message ?? '';
+    // 실패의 사실이 있으면 표시 언어의 문장, 없으면 서버/전송 계층 원문이다
+    // ([syncErrorDetailText]) — 로컬 변수로 옮겨서 `Text()`에 리터럴이 아닌
+    // 값으로 넘긴다(`i18n_check.py`는 `Text('...')` 리터럴만 본다).
+    final detail = syncErrorDetailText(ref, controllerState.lastError);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
       child: Column(

@@ -52,3 +52,37 @@ open flutter_app/build/macos/Build/Products/Release/my_dashboard.app
 ```
 
 Clicking an already-delivered local banner after quit is separate from receiving a new APNs banner while the app is closed. This entry point does not register for APNs. APNs verification needs separate signing, entitlements, and server Firebase configuration; successful local banners do not establish APNs behavior. See [notification click handling](../../lib/src/ui/notification_click_actions.dart) and the [regression tests](../../test/widget_tests/notification_app_wiring_test.dart) for delivery and read-tracking boundaries.
+
+## Check sync errors and server changes in an isolated Profile app
+
+The integration targets use the real application entry point, Rust translations, native plugins, timers, configuration files, and loopback HTTP servers. Each run needs a fresh temporary HOME containing `.my-dashboard-qa-home`. Profile mode avoids pausing the Rust bridge's initialization isolate during desktop integration testing. Screenshots and request observations are written to `MY_DASHBOARD_QA_OUT`.
+
+Run from `app/flutter_app`. Create a separate bundle ID before building; these targets do not need to replace the installed application:
+
+```sh
+qa_original_home="$HOME"
+qa_home="$(mktemp -d)"
+touch "$qa_home/.my-dashboard-qa-home"
+qa_settings="$(mktemp)"
+cat > "$qa_settings" <<'XCCONFIG'
+PRODUCT_BUNDLE_IDENTIFIER = io.github.5pecia1.mydashboard.qa64
+PRODUCT_DISPLAY_NAME = Dashboard QA64
+XCCONFIG
+
+mise exec -- env HOME="$qa_home" \
+  PUB_CACHE="${PUB_CACHE:-$qa_original_home/.pub-cache}" \
+  CARGO_HOME="${CARGO_HOME:-$qa_original_home/.cargo}" \
+  RUSTUP_HOME="${RUSTUP_HOME:-$qa_original_home/.rustup}" \
+  XCODE_XCCONFIG_FILE="$qa_settings" \
+  MY_DASHBOARD_QA_SCENARIO=transport MY_DASHBOARD_QA_LANG=en \
+  MY_DASHBOARD_QA_OUT="$qa_home/evidence" \
+  flutter drive --profile --no-pub -d macos \
+    --target integration_test/sync_error_locale_qa_test.dart \
+    --driver test_driver/sync_qa_driver.dart
+```
+
+Repeat with a fresh HOME for `transport`, `timeout`, `malformed`, `protocol_newer`, `protocol_older`, and `unexpected`, in `en` and `ko`. Every case checks the first error screen, recovery, and the stale-data banner. Runtime diagnostic text may be truncated; the localized description, update direction, window bounds, and screenshots need review. Missing QA environment variables fail the run instead of silently skipping it.
+
+For native notification delivery, use target `integration_test/notification_server_switch_qa_test.dart`, scenario `notification_server_switch`, and add `MY_DASHBOARD_QA_BUNDLE_ID=io.github.5pecia1.mydashboard.qa64`. The running application's Info.plist must match that identifier before the test inspects or clears its three fixture notification IDs. If permission is missing, the QA dialog opens that application's own notification settings or requests permission; allow notifications for the verified QA app. Real device pointer events are enabled for this interactive target.
+
+The native case verifies A:901, B:6, a repeated B:6, and B:7 through production sync and notification code. A transparent channel recorder forwards the original messages to the native plugin and checks cancel/show counts; delivered notification IDs, bodies, and server origins come from macOS. When `await-old-source-click` appears, open Notification Center and click `QA A alert 901: old server` within ten minutes. The previous-server notice must appear without a seen or ack request, and B's read markers must stay unchanged. Do not substitute a direct callback for this OS click. Receiving APNs while the app is closed remains a separate check requiring APNs signing and server configuration.

@@ -167,10 +167,15 @@ final Provider<DashboardApiConfig> dashboardApiConfigProvider =
 sealed class DashboardApiException implements Exception {
   const DashboardApiException(this.message, {this.statusCode});
 
+  /// 실패의 원문. 번역하지 않는다 — [fault]가 있으면 그 사실 나열과 같다.
   final String message;
 
   /// HTTP 상태 코드. 전송 자체가 실패했으면 null.
   final int? statusCode;
+
+  /// 화면이 표시 언어의 문장을 만들 사실. 없으면 null이고, 화면은 [message]
+  /// 원문을 그대로 보여준다(`sessions_page.dart`의 `syncErrorDetailText`).
+  DashboardFault? get fault => null;
 
   @override
   String toString() => '$runtimeType($statusCode): $message';
@@ -198,25 +203,186 @@ final class DashboardServerError extends DashboardApiException {
 
 /// 시간 안에 응답이 오지 않았다.
 final class DashboardTimeout extends DashboardApiException {
-  const DashboardTimeout(super.message);
+  const DashboardTimeout(super.message, {required this.fault});
+
+  @override
+  final TimeoutFault fault;
+}
+
+/// 실패 한 건의 사실. 이 계층은 사람이 읽을 문장을 만들지 않는다 — 화면이
+/// 이 사실로 표시 언어에 맞는 문장을 만든다(`sessions_page.dart`의
+/// `syncErrorDetailText`). 예전에는 여기서 한국어 문장을 만들어 영어
+/// 화면에도 그 조각이 보였다. `sealed`라 화면의 `switch`가 새 사실을
+/// 빠뜨리면 컴파일 타임에 잡힌다.
+///
+/// 하위 클래스의 `toString`은 `DashboardApi._statusFailure`의
+/// `'$method $path: $detail'`과 같은 모양의 사실 나열이다(문장이 아니다).
+/// 예외의 [DashboardApiException.message]가 이 값을 쓴다.
+@immutable
+sealed class DashboardFault {
+  const DashboardFault();
+}
+
+/// 시임([HttpSendFn])이 던져 응답을 끝까지 받지 못했다: 어느 요청([method]
+/// [path])이 무슨 원인([cause])으로. 연결 거부뿐 아니라 응답을 받는 도중의
+/// 실패(본문 디코딩, 연결 끊김, TLS)도 여기로 온다.
+final class TransportFault extends DashboardFault {
+  const TransportFault({
+    required this.method,
+    required this.path,
+    required this.cause,
+  });
+
+  /// 대문자 HTTP 메서드(`GET`/`POST`/`DELETE`).
+  final String method;
+
+  /// 요청한 경로 상수(예: [kSyncPath]). 서버 주소·쿼리·토큰은 담지 않는다.
+  final String path;
+
+  /// 시임이 던진 원래 예외의 문자열(예: `SocketException: ...`). 런타임이
+  /// 만든 원문이라 번역하지 않는다.
+  final String cause;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransportFault &&
+          other.method == method &&
+          other.path == path &&
+          other.cause == cause;
+
+  @override
+  int get hashCode => Object.hash(method, path, cause);
+
+  @override
+  String toString() => '$method $path: $cause';
+}
+
+/// 요청([method] [path])이 [timeoutMs] 안에 응답을 받지 못했다
+/// ([DashboardApiConfig.timeout]).
+final class TimeoutFault extends DashboardFault {
+  const TimeoutFault({
+    required this.method,
+    required this.path,
+    required this.timeoutMs,
+  });
+
+  /// 대문자 HTTP 메서드(`GET`/`POST`/`DELETE`).
+  final String method;
+
+  /// 요청한 경로 상수(예: [kSyncPath]). 서버 주소·쿼리·토큰은 담지 않는다.
+  final String path;
+
+  /// 기다린 상한(ms).
+  final int timeoutMs;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TimeoutFault &&
+          other.method == method &&
+          other.path == path &&
+          other.timeoutMs == timeoutMs;
+
+  @override
+  int get hashCode => Object.hash(method, path, timeoutMs);
+
+  @override
+  String toString() => '$method $path: timeout ${timeoutMs}ms';
+}
+
+/// 2xx 응답([method] [path])의 본문을 기대한 모양으로 읽지 못했다 — JSON이
+/// 아니거나(프록시나 캡티브 포털이 HTML을 200으로 돌려줄 때가 대표적이다)
+/// JSON 객체가 아니거나, 이벤트 기록 응답의 필드가 어긋났다.
+final class MalformedResponseFault extends DashboardFault {
+  const MalformedResponseFault({
+    required this.method,
+    required this.path,
+    required this.detail,
+  });
+
+  /// 대문자 HTTP 메서드(`GET`/`POST`/`DELETE`).
+  final String method;
+
+  /// 요청한 경로 상수(예: [kSyncPath]). 서버 주소·쿼리·토큰은 담지 않는다.
+  final String path;
+
+  /// 해석 실패의 원문 — 디코더나 파서가 던진 예외의 문자열(예:
+  /// `FormatException: ...`)이나, JSON이지만 객체가 아니면 그 값의 런타임
+  /// 타입. 번역하지 않는다.
+  final String detail;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MalformedResponseFault &&
+          other.method == method &&
+          other.path == path &&
+          other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(method, path, detail);
+
+  @override
+  String toString() => '$method $path: $detail';
+}
+
+/// 서버가 말한 프로토콜 major([serverVersion])가 이 앱이 아는 값
+/// ([supportedVersion], [kDashboardProtocolVersion])과 다르다.
+final class ProtocolMismatchFault extends DashboardFault {
+  const ProtocolMismatchFault({
+    required this.serverVersion,
+    required this.supportedVersion,
+  });
+
+  final int serverVersion;
+  final int supportedVersion;
+
+  /// 서버가 더 새 major를 말한다 — 앱을 갱신해야 맞는다. 아니면 서버가
+  /// 뒤처졌다(이 앱은 같은 major만 받는다,
+  /// `SyncResponseDto.isSupportedProtocol`).
+  bool get serverIsNewer => serverVersion > supportedVersion;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProtocolMismatchFault &&
+          other.serverVersion == serverVersion &&
+          other.supportedVersion == supportedVersion;
+
+  @override
+  int get hashCode => Object.hash(serverVersion, supportedVersion);
+
+  @override
+  String toString() =>
+      'protocol_version $serverVersion (supported: $supportedVersion)';
 }
 
 /// 전송 자체가 실패했다(연결 불가, 시임 미설정 등).
 final class DashboardNetworkFailure extends DashboardApiException {
-  const DashboardNetworkFailure(super.message);
+  const DashboardNetworkFailure(super.message, {this.fault});
+
+  /// 시임이 던진 예외를 접은 실패라면 그 요청과 원인. 시임 미설정처럼 특정
+  /// 요청과 무관한 실패면 null이다.
+  @override
+  final TransportFault? fault;
 }
 
 /// 2xx인데 본문이 JSON 객체가 아니다.
 final class DashboardMalformedResponse extends DashboardApiException {
-  const DashboardMalformedResponse(super.message);
+  const DashboardMalformedResponse(super.message, {required this.fault});
+
+  @override
+  final MalformedResponseFault fault;
 }
 
 /// 서버가 모르는 프로토콜 major를 말한다. 정본 `sync.response.fields`의
 /// "클라이언트가 모르는 값이면 갱신을 안내한다".
 final class DashboardProtocolMismatch extends DashboardApiException {
-  const DashboardProtocolMismatch(super.message, {required this.serverVersion});
+  const DashboardProtocolMismatch(super.message, {required this.fault});
 
-  final int serverVersion;
+  @override
+  final ProtocolMismatchFault fault;
 }
 
 /// push 자격증명이 서버에 없다(또는 라우트가 아직 없다).
@@ -254,11 +420,11 @@ class DashboardApi {
     final json = await _request('GET', kSyncPath, query: query);
     final response = SyncResponseDto.fromJson(json);
     if (!response.isSupportedProtocol) {
-      throw DashboardProtocolMismatch(
-        '서버 프로토콜 major ${response.protocolVersion}는 이 앱이 모른다 '
-        '(아는 값: $kDashboardProtocolVersion).',
+      final fault = ProtocolMismatchFault(
         serverVersion: response.protocolVersion,
+        supportedVersion: kDashboardProtocolVersion,
       );
+      throw DashboardProtocolMismatch('$fault', fault: fault);
     }
     return response;
   }
@@ -280,8 +446,8 @@ class DashboardApi {
     );
     try {
       return DashboardHistoryPage.fromJson(json);
-    } on Object {
-      throw const DashboardMalformedResponse('Invalid event history response');
+    } on Object catch (error) {
+      throw _malformed('GET', kEventsPath, '$error');
     }
   }
 
@@ -541,14 +707,17 @@ class DashboardApi {
     try {
       response = await send(request).timeout(config.timeout);
     } on TimeoutException {
-      throw DashboardTimeout(
-        '${config.timeout.inMilliseconds}ms 안에 응답이 오지 않았다: '
-        '$method $path',
+      final fault = TimeoutFault(
+        method: method,
+        path: path,
+        timeoutMs: config.timeout.inMilliseconds,
       );
+      throw DashboardTimeout('$fault', fault: fault);
     } on DashboardApiException {
       rethrow;
     } catch (error) {
-      throw DashboardNetworkFailure('전송 실패: $method $path ($error)');
+      final fault = TransportFault(method: method, path: path, cause: '$error');
+      throw DashboardNetworkFailure('$fault', fault: fault);
     }
 
     if (!response.isSuccess) throw _statusFailure(response, method, path);
@@ -605,14 +774,25 @@ class DashboardApi {
     try {
       decoded = jsonDecode(body) as Object?;
     } on FormatException catch (error) {
-      throw DashboardMalformedResponse('$method $path: JSON이 아니다 ($error)');
+      throw _malformed(method, path, '$error');
     }
     if (decoded is! Map<String, dynamic>) {
-      throw DashboardMalformedResponse(
-        '$method $path: JSON 객체가 아니다 (${decoded.runtimeType})',
-      );
+      throw _malformed(method, path, '${decoded.runtimeType}');
     }
     return decoded;
+  }
+
+  DashboardMalformedResponse _malformed(
+    String method,
+    String path,
+    String detail,
+  ) {
+    final fault = MalformedResponseFault(
+      method: method,
+      path: path,
+      detail: detail,
+    );
+    return DashboardMalformedResponse('$fault', fault: fault);
   }
 }
 

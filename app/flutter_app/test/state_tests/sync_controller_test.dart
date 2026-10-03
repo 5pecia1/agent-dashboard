@@ -126,44 +126,8 @@ void main() {
     });
   });
 
-  group('classifyError / isAuthFailure', () {
-    test('401/403은 auth로 분류되고, auth만 재시도 중단 대상이다', () {
-      expect(
-        classifyError(const DashboardUnauthorized('x')),
-        SyncErrorKind.auth,
-      );
-      expect(classifyError(const DashboardForbidden('x')), SyncErrorKind.auth);
-      expect(isAuthFailure(SyncErrorKind.auth), isTrue);
-      expect(isAuthFailure(SyncErrorKind.network), isFalse);
-    });
-
-    test('타임아웃 · 전송 실패는 network다', () {
-      expect(classifyError(const DashboardTimeout('x')), SyncErrorKind.network);
-      expect(
-        classifyError(const DashboardNetworkFailure('x')),
-        SyncErrorKind.network,
-      );
-    });
-
-    test('5xx는 server, 프로토콜 불일치는 protocol이다', () {
-      expect(
-        classifyError(const DashboardServerError('x', statusCode: 500)),
-        SyncErrorKind.server,
-      );
-      expect(
-        classifyError(const DashboardProtocolMismatch('x', serverVersion: 99)),
-        SyncErrorKind.protocol,
-      );
-    });
-
-    test('그 밖의 4xx나 알 수 없는 예외는 other다(자동으로 멈추지 않는다)', () {
-      expect(
-        classifyError(const DashboardClientError('x', statusCode: 400)),
-        SyncErrorKind.other,
-      );
-      expect(classifyError(StateError('무관한 예외')), SyncErrorKind.other);
-    });
-  });
+  // classifyError / isAuthFailure 단위 테스트는 실패의 사실(fault) 테스트와
+  // 함께 `sync_error_info_test.dart`에 있다(이 파일의 1000줄 상한).
 
   group('SyncController (조립)', () {
     late List<_Scheduled> scheduled;

@@ -10,7 +10,8 @@
 ///    ([isAppleConfigComplete]). **설계 ③의 핵심**: 옵션을
 ///    `GoogleService-Info.plist`로 빌드에 굽지 않고 서버가 준 값으로 코드
 ///    주입한다 — 프로젝트를 바꾸거나 키를 회전해도 앱을 다시 빌드하지 않는다.
-/// 3. **Firebase 초기화.** 앱당 한 번. 이미 초기화돼 있으면 재사용한다.
+/// 3. **Firebase 초기화.** 기본 앱의 메시징 식별자가 같을 때만 재사용한다.
+///    다르면 토큰을 새 서버에 등록하지 않고 로컬 알림으로 돌아간다.
 /// 4. **클릭 복원.** 열린 배너 구독과 냉시작 클릭 조회를 먼저 설치한다.
 ///    이미 누른 알림은 이후 권한·토큰 등록의 성공 여부와 무관하게 처리한다.
 /// 5. **권한 요청.** 승인되지 않으면 [ApnsTokenStatus.permissionRequired]로
@@ -38,12 +39,14 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/platform/apns_push.dart';
 import 'package:my_dashboard/src/platform/push_signal.dart';
-import 'package:my_dashboard/src/platform/push_signal_native.dart' show emitPushSignal;
+import 'package:my_dashboard/src/platform/push_signal_native.dart'
+    show emitPushSignal;
 
 /// 이 호스트가 APNs 경로 대상인가. macOS 데스크톱만 true다.
 ///
@@ -55,11 +58,11 @@ import 'package:my_dashboard/src/platform/push_signal_native.dart' show emitPush
 /// 호스트 OS에 따라 갈리지 않게 하는 것이 이 선택의 핵심이다. APNs 분기
 /// 자체는 `push_provider.dart`의 `isApplePushHostProvider`를 override해
 /// 값으로 태운다(실제 macOS 앱에서는 이 값이 그대로 true다).
-bool get hasApplePushHost => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+bool get hasApplePushHost =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
-final ApnsNotificationOpenHandler _notificationOpens = ApnsNotificationOpenHandler(
-  onSignal: emitPushSignal,
-);
+final ApnsNotificationOpenHandler _notificationOpens =
+    ApnsNotificationOpenHandler(onSignal: emitPushSignal);
 
 /// APNs 경유 FCM 등록 토큰을 받아 온다.
 Future<ApnsTokenResult> acquireApnsToken(PushConfigDto config) async {
@@ -67,14 +70,18 @@ Future<ApnsTokenResult> acquireApnsToken(PushConfigDto config) async {
     return const ApnsTokenResult.unsupported('이 호스트에는 APNs가 없다');
   }
   if (!isAppleConfigComplete(config.appleConfig)) {
-    return const ApnsTokenResult.unsupported('push-config의 apple_config가 비었거나 필수 키가 없다');
+    return const ApnsTokenResult.unsupported(
+      'push-config의 apple_config가 비었거나 필수 키가 없다',
+    );
   }
 
   final FirebaseOptions options;
   try {
     options = _optionsFrom(config.appleConfig);
   } on Object catch (error) {
-    return ApnsTokenResult.failed('apple_config를 FirebaseOptions로 못 옮겼다: $error');
+    return ApnsTokenResult.failed(
+      'apple_config를 FirebaseOptions로 못 옮겼다: $error',
+    );
   }
 
   try {
@@ -161,10 +168,29 @@ FirebaseOptions _optionsFrom(Map<String, Object?> appleConfig) {
   );
 }
 
-/// 기본 앱을 한 번만 초기화한다. 이미 있으면(hot restart, 설정 저장 후
-/// 재등록) 그대로 재사용한다 — 같은 이름으로 다시 부르면 SDK가 던진다.
+/// FCM 토큰의 프로젝트를 결정하는 옵션들이 같은지 확인한다. 네이티브 SDK가
+/// 생략된 선택 옵션을 채울 수 있어 전체 옵션 맵의 동등성은 쓰지 않는다.
+bool sameFirebaseMessagingIdentity(
+  FirebaseOptions existing,
+  FirebaseOptions requested,
+) =>
+    existing.apiKey == requested.apiKey &&
+    existing.appId == requested.appId &&
+    existing.messagingSenderId == requested.messagingSenderId &&
+    existing.projectId == requested.projectId &&
+    (requested.iosBundleId == null ||
+        existing.iosBundleId == requested.iosBundleId);
+
+/// 기본 앱을 한 번만 초기화한다. 다른 프로젝트의 기본 앱이 이미 있으면
+/// 예외를 던져 로컬 배너 폴백을 선택하게 한다.
 Future<void> _ensureFirebaseApp(FirebaseOptions options) async {
-  if (Firebase.apps.isNotEmpty) return;
+  for (final app in Firebase.apps) {
+    if (app.name != defaultFirebaseAppName) continue;
+    if (!sameFirebaseMessagingIdentity(app.options, options)) {
+      throw StateError('기존 Firebase 기본 앱의 설정과 새 서버의 apple_config가 다르다');
+    }
+    return;
+  }
   await Firebase.initializeApp(options: options);
 }
 
@@ -172,7 +198,8 @@ Future<void> _ensureFirebaseApp(FirebaseOptions options) async {
 /// 권한이라 우리 소유권 규칙(설계 ②)에서는 승인과 같게 취급한다 — 그
 /// 상태에서도 배너는 APNs가 띄우므로 로컬 알림이 겹치면 안 된다.
 bool _isAuthorized(AuthorizationStatus status) =>
-    status == AuthorizationStatus.authorized || status == AuthorizationStatus.provisional;
+    status == AuthorizationStatus.authorized ||
+    status == AuthorizationStatus.provisional;
 
 /// Firebase가 준비된 뒤 열린 배너 수신을 설치하고 초기 클릭을 한 번 읽는다.
 /// 등록 재시도나 동시 호출로 동일한 초기 클릭을 여러 번 전달하지 않는다.
@@ -200,7 +227,9 @@ class ApnsNotificationOpenHandler {
     return _initialRead ??= _emitInitialMessage(getInitialMessage);
   }
 
-  Future<void> _emitInitialMessage(Future<RemoteMessage?> Function() getInitialMessage) async {
+  Future<void> _emitInitialMessage(
+    Future<RemoteMessage?> Function() getInitialMessage,
+  ) async {
     try {
       final initial = await getInitialMessage();
       if (initial != null) onSignal(pushSignalFromRemoteMessage(initial));

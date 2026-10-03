@@ -407,9 +407,9 @@ Future<void> bringWindowToFront() => showResidentWindow();
 ///
 /// [id]는 이 알림을 대응하는 전이(`NotifyPayload.id` = `TransitionDto.id`)로
 /// 구분한다 — [_selfTestNotificationId] 문서 참고.
-/// - `id`가 있으면(세션 전이) 그 값을 그대로 쓴다. **취소하지 않는다** —
-///   같은 전이를 다시 쏠 때 알림 센터가 제자리 갱신하는 건 올바른 동작
-///   이다(재전송이 배너를 중복시키지 않는다).
+/// - `id`가 있으면(세션 전이) 그 값을 쓴다. 다른 서버도 같은 전이 id를
+///   쓸 수 있으므로 기존 전달 항목을 지운 뒤 새 배너를 낸다. 같은 전이의
+///   재발신은 [AlertNotifier]가 억제한다.
 /// - `id`가 없으면(대응하는 전이가 없는 일시 알림, `tray_native.dart`의
 ///   음소거 확인 토스트 등) [_transientNotificationId]를 쓰되, 매번 같은
 ///   id를 재사용하므로 `show` 직전에 반드시 `cancel`한다 — 취소하지 않으면
@@ -461,8 +461,10 @@ Future<void> _showViaFlutterLocalNotifications({
       // 일시 알림은 고정 id를 재사용한다 — 알림 센터에 이전 항목이 남아
       // 있으면 제자리 갱신(무음)되므로 매번 쏘기 전에 지운다.
       resolvedId = _transientNotificationId;
-      await _plugin.cancel(id: resolvedId);
     }
+    // 이전 서버 또는 재시작 전 배너와 OS id가 겹쳐도 새 알림이 무음 갱신되지
+    // 않게 한다. 자기 테스트·일시 알림과 같은 cancel -> show 순서다.
+    await _plugin.cancel(id: resolvedId);
     await _plugin.show(
       id: resolvedId,
       title: title,

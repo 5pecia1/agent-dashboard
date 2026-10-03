@@ -596,6 +596,37 @@ void main() {
       expect(after.lastError?.kind, SyncErrorKind.network);
     });
 
+    test('전송이 던지면 롤백하고 lastError에 그 요청과 원인을 사실로 남긴다', () async {
+      final container = await bootWithSession(
+        key: 'claude-code:abc',
+        state: 'working',
+      );
+      addTearDown(container.dispose);
+
+      // 실제 전송처럼 DashboardApiException이 아닌 예외를 던진다 — `_request`가
+      // 요청과 원인을 TransportFault로 접고, 화면은 그 사실로 표시 언어의
+      // 문장을 만든다(`sessions_page.dart`의 `syncErrorDetailText`).
+      httpHandler = (ApiRequest request) =>
+          Future<ApiResponse>.error(const _SocketFailure());
+
+      final result = await container
+          .read(syncControllerProvider.notifier)
+          .deleteSession('claude-code:abc');
+
+      expect(result, isFalse);
+      final after = container.read(syncControllerProvider);
+      expect(after.sync.sessions['claude-code:abc']?.state, 'working');
+      expect(after.lastError?.kind, SyncErrorKind.network);
+      expect(
+        after.lastError?.fault,
+        const TransportFault(
+          method: 'DELETE',
+          path: kSessionsPath,
+          cause: _SocketFailure.text,
+        ),
+      );
+    });
+
     test('404는 성공으로 접는다(이미 지워진 세션)', () async {
       final container = await bootWithSession(
         key: 'claude-code:abc',
@@ -701,6 +732,17 @@ void main() {
       );
     });
   });
+}
+
+/// `dart:io`의 `SocketException`처럼 시임이 던지는, [DashboardApiException]이
+/// 아닌 예외 흉내.
+class _SocketFailure implements Exception {
+  const _SocketFailure();
+
+  static const String text = 'SocketException: Connection refused';
+
+  @override
+  String toString() => text;
 }
 
 /// 대기 중인 스케줄 하나(`(delay, callback)`)의 기록.
