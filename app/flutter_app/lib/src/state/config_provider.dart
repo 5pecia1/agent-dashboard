@@ -31,14 +31,6 @@ import 'dart:convert' show jsonDecode;
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:collection/collection.dart' show DeepCollectionEquality;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// `Override`는 `.overrideWithValue()`의 실제 반환 타입이지만
-// `flutter_riverpod`의 barrel export 목록에는 없다 — 정본 위치인
-// `package:riverpod/misc.dart`에서 이름만 가져온다(riverpod은
-// flutter_riverpod의 전이 의존성이라 `depend_on_referenced_packages`
-// info가 뜨지만, 함수 반환 타입에 이름을 직접 써야 해서 타입 추론만으로는
-// 피할 수 없다 — `http_provider.dart`의 `httpSendProviderOverride`처럼
-// 변수 선언이었다면 추론으로 피했을 것이다).
-import 'package:riverpod/misc.dart' show Override;
 
 import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/state/config_store_io.dart'
@@ -491,56 +483,63 @@ final Provider<DashboardConfigValues> dashboardConfigValuesProvider =
       ),
     );
 
-/// [dashboardConfigValuesProvider]로 [dashboardApiConfigProvider]
-/// (`dashboard_api.dart`)를 채운다.
+/// 저장된 서버 주소를 쓸 수 있는 [Uri]로 읽는다. 주소가 없거나(첫 실행)
+/// HTTP(S) 절대 주소로 읽지 못하면(예: `https://host:443x` 또는 `host:8787`)
+/// null이다. 상대 주소를 허용하면 웹에서는 현재 페이지의 origin으로 토큰을
+/// 보낼 수 있으므로 scheme과 host를 함께 확인한다.
+/// [dashboardApiConfigFor]와 [bootConfigValuesFor]가 "쓸 수 있는 주소"를 같은
+/// 규칙으로 판정하게 하는 단 하나의 자리다.
+Uri? parseServerUrl(String? serverUrl) {
+  if (serverUrl == null) return null;
+  final uri = Uri.tryParse(serverUrl);
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https') ||
+      !uri.hasAuthority ||
+      uri.host.isEmpty) {
+    return null;
+  }
+  return uri;
+}
+
+/// 서버 주소와 CLIENT_TOKEN으로 [DashboardApiConfig]
+/// (`dashboard_api.dart`)를 만든다.
 ///
 /// T-wire 계약(U-fix): 서버 주소가 아직 없으면(첫 실행) **null을 돌려준다**
 /// — placeholder URL로 채워 실제 네트워크를 타게 두지 않는다. 예전에는
 /// `fallbackBaseUrl`(예: `https://api.example.workers.dev`)을 채워 넣었지만,
 /// 그 값은 실존하는 API가 아니라서 `syncController`/`pushRegistrar`가
-/// 부팅 즉시 그 자리표시자 호스트로 요청을 쏘는 버그의 원인이었다. 호출자
-/// (`main.dart`)는 null이면 `dashboardApiConfigProvider`를 아예 override하지
-/// 않는다 — 그 provider를 override 없이 읽으면 던지는 게 원래 계약이고,
-/// 서버 주소가 없는 동안은 그 계약대로 **아무도 읽지 않아야** 한다
-/// (`sync_controller.dart`의 unconfigured 게이팅, `app.dart`의 push 등록
-/// 게이팅 참고).
+/// 부팅 즉시 그 자리표시자 호스트로 요청을 쏘는 버그의 원인이었다. 서버
+/// 주소가 없는 동안은 [dashboardApiConfigProvider]를 읽으면 던지는 게 원래
+/// 계약이고, 그 계약대로 **아무도 읽지 않아야** 한다(`sync_controller.dart`의
+/// unconfigured 게이팅, `app.dart`의 push 등록 게이팅 참고).
 ///
 /// **저장된 문자열 때문에 던지지 않는다.** 설정 화면은 어떤 문자열이든
 /// 저장하고, `Uri.parse`는 `https://host:443x` 같은 값에서 던진다 — 그러면
-/// 부팅이 첫 화면도 못 띄운다. 해석할 수 없는 주소는 API를 override하지
-/// 않는다. 부팅은 [bootConfigValuesFor]로 같은 주소를 스냅샷에서도 비워
-/// "서버 주소가 있으면 API도 설정돼 있다"를 지킨다. 해석되는 주소는 예전과
-/// 똑같이 쓴다.
-Override? dashboardApiConfigOverrideFor(
-  DashboardConfigValues values, {
-  Duration timeout = const Duration(seconds: 10),
+/// 부팅이 첫 화면도 못 띄운다. 해석할 수 없는 주소는 null이다. 부팅은
+/// [bootConfigValuesFor]로 같은 주소를 스냅샷에서도 비워 "서버 주소가
+/// 있으면 API도 설정돼 있다"를 지킨다.
+DashboardApiConfig? dashboardApiConfigFor({
+  String? serverUrl,
+  String? clientToken,
 }) {
-  final serverUrl = values.serverUrl;
-  if (serverUrl == null) return null;
-  final baseUrl = Uri.tryParse(serverUrl);
+  final baseUrl = parseServerUrl(serverUrl);
   if (baseUrl == null) return null;
-  return dashboardApiConfigProvider.overrideWithValue(
-    DashboardApiConfig(
-      baseUrl: baseUrl,
-      clientToken: values.clientToken,
-      timeout: timeout,
-    ),
-  );
+  return DashboardApiConfig(baseUrl: baseUrl, clientToken: clientToken);
 }
 
 /// [dashboardConfigValuesProvider]에 넣을 부팅 스냅샷. 저장된 서버 주소를
 /// 해석할 수 없으면(예: `https://host:443x`) 스냅샷에서만 주소를 비운다.
 ///
-/// 앱 곳곳이 "`serverUrl != null`이면 API가 설정돼 있다"에 기댄다 — 동기화의
-/// 미설정 게이팅, `app.dart`의 push 등록 게이팅, 설정 화면의 언어 저장
-/// 분기. 주소는 남기고 API override만 빠지면 push 등록이 부팅마다
-/// `dashboardApiProvider`를 읽다 던진다. 주소를 비우면 첫 실행과 같은 길을
-/// 탄다: 홈이 설정 화면이고, 설정 화면은 디스크에서 다시 읽은 원래 문자열을
-/// 보여 주므로 사용자가 고칠 수 있다. 디스크의 값은 지우지 않는다 — 모든
-/// 쓰기는 패치 큐가 디스크를 다시 읽어 자기 필드만 바꾼다.
+/// 부팅이 "`serverUrl != null`이면 API가 설정돼 있다"에 기댄다 — 동기화의
+/// 미설정 게이팅, `app.dart`의 push 등록 게이팅. 주소는 남기고 API 설정만
+/// 빠지면 push 등록이 부팅마다 `dashboardApiProvider`를 읽다 던진다. 주소를
+/// 비우면 첫 실행과 같은 길을 탄다: 홈이 설정 화면이고, 설정 화면은
+/// 디스크에서 다시 읽은 원래 문자열을 보여 주므로 사용자가 고칠 수 있다.
+/// 디스크의 값은 지우지 않는다 — 모든 쓰기는 패치 큐가 디스크를 다시 읽어
+/// 자기 필드만 바꾼다.
 DashboardConfigValues bootConfigValuesFor(DashboardConfigValues values) {
   final serverUrl = values.serverUrl;
-  if (serverUrl == null || Uri.tryParse(serverUrl) != null) return values;
+  if (serverUrl == null || parseServerUrl(serverUrl) != null) return values;
   return DashboardConfigValues(
     clientToken: values.clientToken,
     cursor: values.cursor,
@@ -551,3 +550,110 @@ DashboardConfigValues bootConfigValuesFor(DashboardConfigValues values) {
     extra: values.extra,
   );
 }
+
+// ─── 지금 쓰는 API 설정 ──────────────────────────────────────────────────
+
+/// 부팅이 [dashboardConfigValuesProvider]의 주소·토큰으로 만든 API 설정
+/// ([dashboardApiConfigFor]). 서버 주소가 없거나 해석할 수 없으면(첫 실행)
+/// null이다. `main.dart`의 `buildDashboardRoot`가 채우고, override가 없으면
+/// (화면 단위 테스트) null이다.
+///
+/// 이 값은 **시작값**일 뿐이다. 앱이 지금 쓰는 값은
+/// [dashboardApiConfigControllerProvider]다. 예전에는 이 값이 곧
+/// [dashboardApiConfigProvider]의 override라서, 설정 화면이 서버 주소나
+/// 토큰을 저장해도 앱을 다시 켤 때까지 요청이 옛 값(첫 실행이면 값 없음)으로
+/// 나갔다. 통합 연동의 `teamClaudeInitialConnectionProvider`와 같은 모양이다.
+final Provider<DashboardApiConfig?> dashboardInitialApiConfigProvider =
+    Provider<DashboardApiConfig?>((ref) => null);
+
+/// 앱이 지금 서버에 쓰는 API 설정. 시작값은 [dashboardInitialApiConfigProvider]
+/// 이고, 설정 화면이 서버 주소나 토큰을 저장하면 [apply]가 바꾼다. null이면
+/// 아직 서버가 없다(첫 실행).
+///
+/// [dashboardApiConfigProvider]가 이 값을 따라가므로
+/// ([dashboardApiConfigProviderOverride]) `dashboardApiProvider`와, 그것을
+/// 호출 시점에 읽는 모든 곳(동기화·push 등록·트레이·진단·세션 기록)이 재시작
+/// 없이 새 값으로 요청한다. 부팅 스냅샷([dashboardConfigValuesProvider])은
+/// 저장해도 갱신되지 않는다 — 그 필드들을 읽는 쪽은 각자 시작할 때 한 번만
+/// 읽는다. 테마·상주·언어 컨트롤러처럼 "저장하면 설정 화면이 컨트롤러에
+/// 직접 알린다".
+class DashboardApiConfigController extends Notifier<DashboardApiConfig?> {
+  int _revision = 0;
+  int _serverRevision = 0;
+
+  /// URL 또는 토큰이 실제로 바뀔 때 증가한다. 비동기 응답이 시작할 때의
+  /// 연결에 아직 속하는지 판정할 때 사용한다.
+  int get revision => _revision;
+
+  /// URL이 실제로 바뀔 때만 증가한다. 서버별 cursor·알림 워터마크의
+  /// 수명을 구분한다. A→B→A처럼 중간 서버 요청이 없었던 전환도 구분한다.
+  int get serverRevision => _serverRevision;
+
+  @override
+  DashboardApiConfig? build() => ref.read(dashboardInitialApiConfigProvider);
+
+  /// 설정 화면이 저장한 서버 주소와 토큰을 지금 쓰는 값으로 바꾸고, 그 값을
+  /// 돌려준다. 호출자는 디스크에 쓴 **뒤에** 부른다 — 쓰기가 실패하면 실행 중인
+  /// 연결도 그대로여야 한다.
+  ///
+  /// 쓸 수 있는 주소가 아니면([parseServerUrl]: 비었거나 해석할 수 없음)
+  /// 아무것도 바꾸지 않고 null을 돌려준다. 실행 중인 연결은 그대로고, 저장된
+  /// 값은 다음 부팅에서 [bootConfigValuesFor]가 같은 규칙으로 읽는다. 그래서
+  /// 주소를 비워 저장해도 실행 중인 연결은 끊기지 않는다(다음 실행부터는
+  /// 저장된 값을 따른다 — 비어 있으면 미설정이고, 빌드에 구운 기본값이 있으면
+  /// 그 값이다).
+  DashboardApiConfig? apply({String? serverUrl, String? clientToken}) {
+    final next = dashboardApiConfigFor(
+      serverUrl: serverUrl,
+      clientToken: clientToken,
+    );
+    if (next == null) return null;
+    if (next != state) {
+      if (next.baseUrl != state?.baseUrl) _serverRevision += 1;
+      _revision += 1;
+      state = next;
+    }
+    return next;
+  }
+}
+
+final NotifierProvider<DashboardApiConfigController, DashboardApiConfig?>
+dashboardApiConfigControllerProvider =
+    NotifierProvider<DashboardApiConfigController, DashboardApiConfig?>(
+      DashboardApiConfigController.new,
+    );
+
+/// 앱 부팅이 [dashboardApiConfigProvider] 자리에 꽂는 override. 지금 쓰는 값
+/// ([dashboardApiConfigControllerProvider])을 따라가므로 설정 화면이 저장한
+/// 값이 곧바로 반영된다.
+///
+/// 서버 주소가 아직 없으면 override하지 않았을 때와 똑같이 읽는 쪽에 던진다 —
+/// 서버가 없는 동안은 **아무도 읽지 않아야** 한다는 계약(`sync_controller.dart`
+/// 의 unconfigured 게이팅)이 그대로다. 값이 아니라 구현을 꽂는 top-level
+/// override라서(`http_provider.dart`의 `httpSendProviderOverride`와 같은
+/// 모양) 첫 실행과 아닌 부팅이 같은 개수의 override를 갖는다.
+final dashboardApiConfigProviderOverride = dashboardApiConfigProvider
+    .overrideWith((ref) {
+      final config = ref.watch(dashboardApiConfigControllerProvider);
+      if (config == null) {
+        throw StateError(
+          '서버 주소가 아직 없다 — 설정 화면이 저장하면 '
+          'dashboardApiConfigControllerProvider가 채운다.',
+        );
+      }
+      return config;
+    });
+
+/// 지금 쓰는 서버 주소. 지금 쓰는 API 설정이 있으면 그 주소(설정 화면이 바꾼
+/// 값 포함), 없으면 부팅 스냅샷([dashboardConfigValuesProvider])의 주소(없으면
+/// null)다.
+///
+/// 주소를 부팅 스냅샷에서 읽으면 첫 실행에서 저장한 뒤에도 "서버 없음"으로,
+/// 주소를 바꾼 뒤에는 옛 주소로 읽힌다 — 훅 업데이트 명령이 옛 서버를
+/// 가리키는 식이다. 스냅샷은 지금 쓰는 설정이 아직 없을 때의 대비일 뿐이다
+/// (화면 단위 테스트가 스냅샷만 override한다).
+final Provider<String?> dashboardServerUrlProvider = Provider<String?>((ref) {
+  final live = ref.watch(dashboardApiConfigControllerProvider);
+  if (live != null) return live.baseUrl.toString();
+  return ref.watch(dashboardConfigValuesProvider).serverUrl;
+});

@@ -35,13 +35,17 @@ library;
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:my_dashboard/src/data/dashboard_api.dart' show dashboardApiConfigProvider;
+import 'package:my_dashboard/src/data/dashboard_api.dart'
+    show dashboardApiConfigProvider;
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
-import 'package:my_dashboard/src/i18n/t.dart' show i18nTranslateOverride, localeProvider;
-import 'package:my_dashboard/src/state/capability_provider.dart' show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/i18n/t.dart'
+    show i18nTranslateOverride, localeProvider;
+import 'package:my_dashboard/src/state/capability_provider.dart'
+    show isWasmRuntimeProvider;
 import 'package:my_dashboard/src/state/dashboard_provider.dart'
     show sessionStateDtoFromCode, stateLabelKeyFnProvider;
-import 'package:my_dashboard/src/state/push_provider.dart' show apnsRegisteredProvider;
+import 'package:my_dashboard/src/state/push_provider.dart'
+    show apnsRegisteredProvider;
 import 'package:my_dashboard/src/state/notify_bridge_io.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/state/notify_bridge_web.dart'
     as bridge;
@@ -59,14 +63,16 @@ class NotifyPayload {
     this.sessionKey,
     this.project,
     this.host,
+    this.serverUrl,
   });
 
-  /// OS 알림 id로 그대로 쓰는 [TransitionDto.id]. 서버가 단조 증가시키고
-  /// 재사용하지 않는 AUTOINCREMENT라 앱 재시작과 무관하다 — 프로세스 메모리
+  /// OS 알림 id로 쓰는 [TransitionDto.id]. 같은 서버 안에서는 단조 증가하는
+  /// AUTOINCREMENT라 앱 재시작과 무관하다 — 프로세스 메모리
   /// 카운터(`_nextNotificationId`, 이제 제거됨)가 재시작마다 리셋되면서
   /// macOS 알림 센터에 남은 이전 배너의 id와 충돌해 제자리 갱신(무음)으로
   /// 처리되던 회귀를 막는다(`local_notifications_native.dart`
-  /// `showNotification`의 `id` 인자로 그대로 흘러간다).
+  /// `showNotification`의 `id` 인자로 흘러간다). 서로 다른 서버가 같은
+  /// 전이 id를 쓰면 네이티브 발신이 이전 항목을 취소한 뒤 새로 띄운다.
   final int id;
 
   final String title;
@@ -80,6 +86,9 @@ class NotifyPayload {
   final String? project;
   final String? host;
 
+  /// 발신 대상 전이를 받은 서버. 비동기 발신 중 연결이 바뀌어도 출처를 보존한다.
+  final String? serverUrl;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -89,10 +98,12 @@ class NotifyPayload {
           other.body == body &&
           other.sessionKey == sessionKey &&
           other.project == project &&
-          other.host == host;
+          other.host == host &&
+          other.serverUrl == serverUrl;
 
   @override
-  int get hashCode => Object.hash(id, title, body, sessionKey, project, host);
+  int get hashCode =>
+      Object.hash(id, title, body, sessionKey, project, host, serverUrl);
 
   @override
   String toString() => 'NotifyPayload($id, $title, sessionKey: $sessionKey)';
@@ -129,12 +140,14 @@ typedef StateLabelResolver = String Function(String stateCode);
 /// 발신할 때마다 다시 읽는다.
 ///
 /// 테스트는 이 Provider 하나만 override하면 i18n·FRB를 전혀 거치지 않는다.
-final Provider<StateLabelResolver> alertStateLabelProvider = Provider<StateLabelResolver>((ref) {
-  final labelKeyFor = ref.watch(stateLabelKeyFnProvider);
-  final locale = ref.watch(localeProvider);
-  final translate = ref.watch(i18nTranslateOverride);
-  return (String stateCode) => translate(labelKeyFor(sessionStateDtoFromCode(stateCode)), locale);
-});
+final Provider<StateLabelResolver> alertStateLabelProvider =
+    Provider<StateLabelResolver>((ref) {
+      final labelKeyFor = ref.watch(stateLabelKeyFnProvider);
+      final locale = ref.watch(localeProvider);
+      final translate = ref.watch(i18nTranslateOverride);
+      return (String stateCode) =>
+          translate(labelKeyFor(sessionStateDtoFromCode(stateCode)), locale);
+    });
 
 /// 이 전이가 알림을 받을 자격이 있는지는 이미 `TransitionDto.isAlert`가
 /// 정본(push_states)으로 판정했다 — 여기서는 표시 문구만 만든다.
@@ -162,7 +175,11 @@ final Provider<StateLabelResolver> alertStateLabelProvider = Provider<StateLabel
 /// 서버 push 경로(`dashboard-server`의 `buildPushPayload`)도 같은 순서를 쓴다 —
 /// 정본은 계약의 `i18n.ko.push.title`(`{project} · {host} · {label}`)이다.
 /// 두 경로의 제목이 갈라지면 같은 전이가 기기마다 다른 제목으로 보인다.
-NotifyPayload payloadForAlert(TransitionDto alert, {required StateLabelResolver stateLabel}) {
+NotifyPayload payloadForAlert(
+  TransitionDto alert, {
+  required StateLabelResolver stateLabel,
+  String? serverUrl,
+}) {
   final label = stateLabel(alert.toState);
   final project = alert.project;
   final projectText = (project != null && project.isNotEmpty)
@@ -185,6 +202,7 @@ NotifyPayload payloadForAlert(TransitionDto alert, {required StateLabelResolver 
     sessionKey: alert.sessionKey,
     project: alert.project,
     host: alert.host,
+    serverUrl: serverUrl,
   );
 }
 
@@ -193,10 +211,14 @@ NotifyPayload payloadForAlert(TransitionDto alert, {required StateLabelResolver 
 /// 실제로 알림 하나를 띄운다(macOS: `osascript`, 웹: no-op).
 typedef LocalNotifyFn = Future<void> Function(NotifyPayload payload);
 
-final Provider<LocalNotifyFn> localNotifyFnProvider = Provider<LocalNotifyFn>((ref) {
+final Provider<LocalNotifyFn> localNotifyFnProvider = Provider<LocalNotifyFn>((
+  ref,
+) {
   return (payload) => bridge.showLocalNotification(
     payload,
-    serverUrl: ref.read(dashboardApiConfigProvider).baseUrl.toString(),
+    serverUrl:
+        payload.serverUrl ??
+        ref.read(dashboardApiConfigProvider).baseUrl.toString(),
   );
 });
 
@@ -224,7 +246,9 @@ Future<void> _notifyBridge(
 /// [apnsRegisteredProvider]를 `watch`하므로 등록이 성공/실패로 바뀌는
 /// 순간 이 시임이 새로 만들어진다 — 소유권 전환이 다음 알림부터 즉시
 /// 반영된다(설정 저장 후 재등록이 그 경로다).
-final Provider<NotifyDispatchFn> notifyProvider = Provider<NotifyDispatchFn>((ref) {
+final Provider<NotifyDispatchFn> notifyProvider = Provider<NotifyDispatchFn>((
+  ref,
+) {
   final localNotify = ref.watch(localNotifyFnProvider);
   final isWasm = ref.watch(isWasmRuntimeProvider);
   final apnsOwnsBanners = ref.watch(apnsRegisteredProvider);
@@ -241,9 +265,13 @@ final Provider<NotifyDispatchFn> notifyProvider = Provider<NotifyDispatchFn>((re
 /// 2) — 이 Provider는 그 bool을 화면이 바로 [t]에 넘길 수 있는 문자열 키로
 /// 뒤집을 뿐이다. `setup.notification_osascript_fallback_note`와 같은
 /// 자리·수위로 쓰인다(`setup_page.dart`).
-final Provider<String> notificationPathLabelKeyProvider = Provider<String>((ref) {
+final Provider<String> notificationPathLabelKeyProvider = Provider<String>((
+  ref,
+) {
   final apnsOwnsBanners = ref.watch(apnsRegisteredProvider);
-  return apnsOwnsBanners ? 'setup.notification_path_apns' : 'setup.notification_path_polling';
+  return apnsOwnsBanners
+      ? 'setup.notification_path_apns'
+      : 'setup.notification_path_polling';
 });
 
 // ─── 오케스트레이션 ─────────────────────────────────────────────────────
@@ -259,8 +287,11 @@ Future<void> notifyForAlerts(
   List<TransitionDto> alerts, {
   required NotifyDispatchFn dispatch,
   required StateLabelResolver stateLabel,
+  String? serverUrl,
 }) async {
   for (final alert in alerts) {
-    await dispatch(payloadForAlert(alert, stateLabel: stateLabel));
+    await dispatch(
+      payloadForAlert(alert, stateLabel: stateLabel, serverUrl: serverUrl),
+    );
   }
 }

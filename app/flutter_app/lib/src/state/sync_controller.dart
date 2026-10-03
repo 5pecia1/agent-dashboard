@@ -41,18 +41,25 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show immutable;
-import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleState;
+import 'package:flutter/foundation.dart' show debugPrint, immutable;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleListener, AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/data/dashboard_dto.dart'
-    show SessionViewDto, TransitionDto, kDashboardStateWorking, kDashboardStates;
+    show
+        SessionViewDto,
+        TransitionDto,
+        kDashboardStateWorking,
+        kDashboardStates;
 import 'package:my_dashboard/src/data/sync_reducer.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/platform/background_activity_native.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/platform/background_activity_web.dart'
     as wake_bridge;
+
+part 'sync_controller_actions.dart';
 
 // ─── 정책 상수 ──────────────────────────────────────────────────────────
 
@@ -102,7 +109,10 @@ Duration pollInterval({
 /// 실패 횟수를 12로 접는 건 오버플로 방지용 안전장치일 뿐이다 — 가장 작은
 /// `base`(3초)로도 2^12배면 이미 상한을 훨씬 넘어서 실질적인 값에는 영향이
 /// 없다.
-Duration backoffDelay({required Duration base, required int consecutiveFailures}) {
+Duration backoffDelay({
+  required Duration base,
+  required int consecutiveFailures,
+}) {
   final shift = consecutiveFailures < 0
       ? 0
       : (consecutiveFailures > 12 ? 12 : consecutiveFailures);
@@ -125,19 +135,28 @@ enum SyncErrorKind {
   /// 서버가 이 클라이언트가 모르는 프로토콜 major를 말한다. 앱 갱신이 필요하다.
   protocol,
 
-  /// 그 밖(4xx, 응답 파싱 실패 등) — 재시도해도 대개 같은 결과지만 401/403
-  /// 만큼 확실하지 않아 자동으로는 멈추지 않는다.
+  /// 그 밖의 [DashboardApiException](4xx, 응답 파싱 실패 등) — 재시도해도
+  /// 대개 같은 결과지만 401/403만큼 확실하지 않아 자동으로는 멈추지 않는다.
   other,
+
+  /// [DashboardApiException]이 아닌 예외 — 시임 자체의 버그, 응답 해석 중의
+  /// 타입 불일치, provider 오류 등. 원문은 런타임이 만든 개발자용 덤프라
+  /// 화면에 보이지 않는다(`sessions_page.dart`의 `syncErrorDetailText`가
+  /// 표시 언어의 일반 문장을 보인다). 원문은 [SyncErrorInfo.fromError]가
+  /// 로그로 남긴다. 재시도 정책은 [other]와 같다.
+  unexpected,
 }
 
 /// [error]를 [SyncErrorKind]로 분류한다. [DashboardApiException]이 아닌
-/// 예외(시임 자체의 버그 등)도 [SyncErrorKind.other]로 접어 안전하게 다룬다.
+/// 예외(시임 자체의 버그 등)는 [SyncErrorKind.unexpected]로 접어 안전하게
+/// 다룬다.
 SyncErrorKind classifyError(Object error) => switch (error) {
   DashboardUnauthorized() || DashboardForbidden() => SyncErrorKind.auth,
   DashboardTimeout() || DashboardNetworkFailure() => SyncErrorKind.network,
   DashboardServerError() => SyncErrorKind.server,
   DashboardProtocolMismatch() => SyncErrorKind.protocol,
-  _ => SyncErrorKind.other,
+  DashboardApiException() => SyncErrorKind.other,
+  _ => SyncErrorKind.unexpected,
 };
 
 /// 이 종류의 실패가 "재시도를 멈추고 설정 화면으로 보내야 하는" 401/403인가.
@@ -168,20 +187,49 @@ enum SyncPhase {
   stopped,
 }
 
-/// 마지막 오류 한 건. 화면의 "오류 배지"가 그대로 표시할 수 있는 값이다.
+/// 마지막 오류 한 건. 화면의 "오류 배지"가 그리는 재료다 — 실패의 사실
+/// ([fault])이 있으면 문장은 화면이 표시 언어로 만든다(`sessions_page.dart`의
+/// `syncErrorDetailText`).
 @immutable
 class SyncErrorInfo {
   const SyncErrorInfo({
     required this.kind,
     required this.message,
     required this.atMs,
+    this.fault,
   });
 
+  /// 실패 경로(동기화 사이클·ack·삭제)가 [error]를 같은 규칙으로 접는다.
+  ///
+  /// [DashboardApiException]이 아닌 예외는 원문을 화면이 아니라 로그로
+  /// 남긴다([SyncErrorKind.unexpected]). 이 팩토리가 세 실패 경로의 단일
+  /// 진입점이라 한 곳에서 한 번만 남는다.
+  factory SyncErrorInfo.fromError(Object error, {required int atMs}) {
+    final kind = classifyError(error);
+    if (kind == SyncErrorKind.unexpected) {
+      debugPrint('sync: unexpected failure (${error.runtimeType}): $error');
+    }
+    return SyncErrorInfo(
+      kind: kind,
+      message: '$error',
+      atMs: atMs,
+      fault: error is DashboardApiException ? error.fault : null,
+    );
+  }
+
   final SyncErrorKind kind;
+
+  /// 실패 원문(`'$error'`). 번역하지 않는다 — 화면은 [kind]가
+  /// [SyncErrorKind.unexpected]가 아니고 [fault]도 없을 때만 이 값을 그대로
+  /// 보여준다. 예상하지 못한 예외의 원문은 화면에 닿지 않는다.
   final String message;
 
   /// 오류가 관찰된 시각(epoch ms, [SyncNowMsFn] 기준).
   final int atMs;
+
+  /// 실패의 사실([DashboardApiException.fault]) — 전송 실패·타임아웃·해석
+  /// 실패·프로토콜 불일치. 그 밖의 실패면 null.
+  final DashboardFault? fault;
 
   @override
   bool operator ==(Object other) =>
@@ -189,10 +237,11 @@ class SyncErrorInfo {
       other is SyncErrorInfo &&
           other.kind == kind &&
           other.message == message &&
-          other.atMs == atMs;
+          other.atMs == atMs &&
+          other.fault == fault;
 
   @override
-  int get hashCode => Object.hash(kind, message, atMs);
+  int get hashCode => Object.hash(kind, message, atMs, fault);
 
   @override
   String toString() => 'SyncErrorInfo($kind @ $atMs: $message)';
@@ -276,14 +325,14 @@ const Object _unset = Object();
 /// 갈아끼워 시간을 흘리지 않고 `(delay, callback)`을 기록만 하는 가짜
 /// 타이머를 준다(완료 기준 (a)(b)(c)가 실제로 3초/30초/60초를 기다리지
 /// 않고 통과하는 이유).
-typedef SyncScheduleFn = Timer Function(Duration delay, void Function() callback);
+typedef SyncScheduleFn =
+    Timer Function(Duration delay, void Function() callback);
 
 Timer _scheduleBridge(Duration delay, void Function() callback) =>
     Timer(delay, callback);
 
-final Provider<SyncScheduleFn> syncScheduleFnProvider = Provider<SyncScheduleFn>(
-  (ref) => _scheduleBridge,
-);
+final Provider<SyncScheduleFn> syncScheduleFnProvider =
+    Provider<SyncScheduleFn>((ref) => _scheduleBridge);
 
 /// 현재 시각(epoch ms).
 typedef SyncNowMsFn = int Function();
@@ -331,9 +380,8 @@ typedef SyncWakeWatchFn = Stream<void> Function();
 
 Stream<void> _syncWakeWatchBridge() => wake_bridge.watchWakeSignals();
 
-final Provider<SyncWakeWatchFn> syncWakeWatchFnProvider = Provider<SyncWakeWatchFn>(
-  (ref) => _syncWakeWatchBridge,
-);
+final Provider<SyncWakeWatchFn> syncWakeWatchFnProvider =
+    Provider<SyncWakeWatchFn>((ref) => _syncWakeWatchBridge);
 
 // ─── 컨트롤러 (3계층: 조립) ──────────────────────────────────────────────
 
@@ -343,7 +391,8 @@ final Provider<SyncWakeWatchFn> syncWakeWatchFnProvider = Provider<SyncWakeWatch
 /// `state` setter를 안전하다고 보장하지 않는다) — 앱 시작 즉시 1회 트리거도
 /// `_scheduleNext(Duration.zero)`로 미뤄, 실제 상태 갱신은 항상 `build()`
 /// 밖(타이머 콜백)에서 일어난다.
-class SyncController extends Notifier<SyncControllerState> {
+class SyncController extends Notifier<SyncControllerState>
+    with SyncControllerActions {
   Timer? _timer;
   bool _cycleInFlight = false;
   bool _pendingImmediate = false;
@@ -356,12 +405,32 @@ class SyncController extends Notifier<SyncControllerState> {
   /// 폴백 시도든) 영구히 `true`로 남는다 — 다시 `false`로 되돌리는 경로는
   /// 없다(앱을 껐다 켜야 다음 기회가 온다). 계약 `sync.transition_object.
   /// apply_rule`("정보가 부족하면 reset을 한 번 받아 맞춘다")의 "한 번"이
-  /// 이 필드다.
+  /// 이 필드다. 서버가 바뀌면([_resetIfServerChanged]) 새 서버에 대해 다시
+  /// 한 번 연다 — 새 서버는 "이번 부팅"의 첫 서버와 같다.
   bool _snapshotReconciledThisBoot = false;
+
+  /// 마지막 사이클이 말을 건 서버 주소. 설정 화면이 서버 주소를 바꿔 저장하면
+  /// 다음 사이클에서 달라진다([_resetIfServerChanged]). 아직 한 번도 돌지
+  /// 않았으면 null이다.
+  Uri? _servedBaseUrl;
+  int? _servedServerRevision;
 
   @override
   SyncControllerState build() {
     final configValues = ref.watch(dashboardConfigValuesProvider);
+    final connection = ref.read(dashboardApiConfigControllerProvider.notifier);
+    _servedBaseUrl = ref.read(dashboardApiConfigControllerProvider)?.baseUrl;
+    _servedServerRevision = connection.serverRevision;
+    // 주소 변경 즉시 이전 서버의 세션을 숨긴다. 느린 이전 요청을 기다리는
+    // 동안 사용자가 그 세션을 새 서버에 ack/delete하지 못하게 한다.
+    ref.listen<DashboardApiConfig?>(dashboardApiConfigControllerProvider, (
+      previous,
+      next,
+    ) {
+      if (next != null) {
+        _resetIfServerChanged(next.baseUrl, connection.serverRevision);
+      }
+    });
     final restored = restoreState(
       persistedCursor: configValues.cursor,
       persistedSeenWatermark: configValues.seenWatermark,
@@ -465,56 +534,109 @@ class SyncController extends Notifier<SyncControllerState> {
     state = state.copyWith(phase: SyncPhase.syncing);
 
     final nowMsFn = ref.read(syncNowMsFnProvider);
+    final connection = ref.read(dashboardApiConfigControllerProvider.notifier);
+    final revision = connection.revision;
 
     try {
       // `dashboardApiProvider`(→ `dashboardApiConfigProvider`)를 try
-      // 안에서 읽는다: 서버 주소 없이 부팅했을 때(main.dart가 그 자리를
-      // override하지 않은 boot snapshot) 이 read가 StateError를 던질 수
-      // 있고, 그걸 기존 catch/분류(`classifyError` → `SyncErrorKind.other`)
+      // 안에서 읽는다: 서버 주소가 아직 없을 때(미설정 부팅에서 누가
+      // 게이팅을 건너뛰고 부른 경우) 이 read가 StateError를 던질 수 있고,
+      // 그걸 기존 catch/분류(`classifyError` → `SyncErrorKind.unexpected`)
       // 로 안전하게 접어 백오프시킨다 — 크래시 대신 "첫 sync 시도는
       // 했다"는 계약을 지킨다.
       final api = ref.read(dashboardApiProvider);
+      // 요청의 `since`를 정하기 전에 서버가 바뀌었는지 본다.
+      _resetIfServerChanged(api.config.baseUrl, connection.serverRevision);
       final response = await api.sync(since: cursorForRequest(state.sync));
-      final nowMs = nowMsFn();
-      var nextSync = reduceSync(state.sync, response, nowMs: nowMs);
+      if (connection.revision != revision) {
+        _pendingImmediate = true;
+      } else {
+        final nowMs = nowMsFn();
+        var nextSync = reduceSync(state.sync, response, nowMs: nowMs);
 
-      if (!_snapshotReconciledThisBoot) {
-        if (response.reset) {
-          // 이번 응답 자체가 이미 스냅샷이다(첫 부팅에 커서가 없었거나,
-          // 커서가 손상/정리됨). 계약이 요구하는 "정보 보강"은 이미 됐다
-          // — 폴백을 쓸 필요가 없다. 완료 기준 (d): 재요청 0회 추가.
-          _snapshotReconciledThisBoot = true;
-        } else {
-          // 콜드 부팅 + 델타(reset:false) 조합: 메모리 세션 맵은 부팅
-          // 직후라 비어 있었는데, 델타는 그 사이 바뀐 세션만 알려줄 뿐
-          // 나머지 세션의 존재조차 말해주지 않는다("정보 부족", 계약
-          // apply_rule). 가드를 먼저 올려 둔다 — 아래 재요청이 성공하든
-          // 실패하든 이번 부팅에서 다시 시도하지 않는다(무한 루프 금지).
-          _snapshotReconciledThisBoot = true;
-          try {
-            final snapshot = await api.sync(since: null);
-            final reconciled = reduceSync(nextSync, snapshot, nowMs: nowMsFn());
-            nextSync = _preserveBootCatchupAlerts(reconciled, nextSync);
-          } catch (_) {
-            // 스냅샷 재조회 자체가 실패해도 이번 사이클을 실패로 치지
-            // 않는다 — 델타만으로 만든 부분 상태(빈 화면일 수 있음)라도
-            // 유지하고, 커서도 그 델타 기준으로 이어간다. 다음 폴링
-            // 사이클이 정상적으로 계속되며(가드는 이미 소진됐으니 이
-            // 폴백을 다시 시도하지는 않는다), 그때 세션 맵이 델타로
-            // 점차 채워진다.
+        if (!_snapshotReconciledThisBoot) {
+          if (response.reset) {
+            // 이번 응답 자체가 이미 스냅샷이다(첫 부팅에 커서가 없었거나,
+            // 커서가 손상/정리됨). 계약이 요구하는 "정보 보강"은 이미 됐다
+            // — 폴백을 쓸 필요가 없다. 완료 기준 (d): 재요청 0회 추가.
+            _snapshotReconciledThisBoot = true;
+          } else {
+            // 콜드 부팅 + 델타(reset:false) 조합: 메모리 세션 맵은 부팅
+            // 직후라 비어 있었는데, 델타는 그 사이 바뀐 세션만 알려줄 뿐
+            // 나머지 세션의 존재조차 말해주지 않는다("정보 부족", 계약
+            // apply_rule). 가드를 먼저 올려 둔다 — 아래 재요청이 성공하든
+            // 실패하든 이번 부팅에서 다시 시도하지 않는다(무한 루프 금지).
+            _snapshotReconciledThisBoot = true;
+            try {
+              final snapshot = await api.sync(since: null);
+              if (connection.revision == revision) {
+                final reconciled = reduceSync(
+                  nextSync,
+                  snapshot,
+                  nowMs: nowMsFn(),
+                );
+                nextSync = _preserveBootCatchupAlerts(reconciled, nextSync);
+              }
+            } catch (_) {
+              // 스냅샷 재조회 자체가 실패해도 이번 사이클을 실패로 치지
+              // 않는다 — 델타만으로 만든 부분 상태(빈 화면일 수 있음)라도
+              // 유지하고, 커서도 그 델타 기준으로 이어간다. 다음 폴링
+              // 사이클이 정상적으로 계속되며(가드는 이미 소진됐으니 이
+              // 폴백을 다시 시도하지는 않는다), 그때 세션 맵이 델타로
+              // 점차 채워진다.
+            }
           }
         }
-      }
 
-      _afterSuccess(nextSync, nowMs);
-      await _persistSyncMeta(nextSync);
+        if (connection.revision == revision) {
+          _afterSuccess(nextSync, nowMs);
+          await _persistSyncMeta(nextSync, api.config.baseUrl, revision);
+        } else {
+          _pendingImmediate = true;
+        }
+      }
     } catch (error) {
-      _afterFailure(error, nowMsFn());
+      if (connection.revision == revision) {
+        _afterFailure(error, nowMsFn());
+      } else {
+        _pendingImmediate = true;
+      }
     } finally {
       _cycleInFlight = false;
     }
 
     _scheduleFollowUp();
+  }
+
+  /// 사이클이 말을 거는 서버([baseUrl])가 지난 사이클과 다르면(설정 화면이
+  /// 서버 주소를 바꿔 저장했다) 이전 서버의 동기화 상태를 버리고 처음부터
+  /// 시작한다 — 앱을 새로 켠 것과 같다.
+  ///
+  /// 이전 서버의 세션·커서·워터마크·미확인 알림은 새 서버의 전이 id와 맞지
+  /// 않는다. 커서를 들고 가면 새 서버는 그 뒤의 델타만 주고, 그러면 이전
+  /// 서버의 세션이 새 서버의 세션과 섞여 남는다. 커서가 없으면 새 서버가
+  /// 스냅샷(`reset:true`)을 준다. 실패 횟수와 마지막 오류도 이전 서버의 것이라
+  /// 함께 버린다. 토큰만 바뀌었으면(같은 서버) 아무것도 하지 않는다.
+  ///
+  /// 사이클이 시작할 때 비교하므로, 주소를 바꾼 순간 이전 서버로 나가 있던
+  /// 요청의 응답이 늦게 도착해 상태에 반영돼도 새 서버로 나가는 첫 요청 전에
+  /// 함께 버려진다.
+  void _resetIfServerChanged(Uri baseUrl, int serverRevision) {
+    final served = _servedBaseUrl;
+    final servedRevision = _servedServerRevision;
+    _servedBaseUrl = baseUrl;
+    _servedServerRevision = serverRevision;
+    if (served == null ||
+        (served == baseUrl && servedRevision == serverRevision)) {
+      return;
+    }
+    _snapshotReconciledThisBoot = false;
+    state = state.copyWith(
+      sync: const SyncState(),
+      consecutiveFailures: 0,
+      lastSuccessAtMs: null,
+      lastError: null,
+    );
   }
 
   /// 사이클이 끝난 뒤 무엇을 할지 정한다: 밀린 즉시 트리거 > 서버가 자른
@@ -565,8 +687,8 @@ class SyncController extends Notifier<SyncControllerState> {
   /// [SyncPhase.stopped]로 접어 [_scheduleFollowUp]이 다음 예약을 만들지
   /// 않게 한다(= 재시도 중단).
   void _afterFailure(Object error, int nowMs) {
-    final kind = classifyError(error);
-    final info = SyncErrorInfo(kind: kind, message: '$error', atMs: nowMs);
+    final info = SyncErrorInfo.fromError(error, atMs: nowMs);
+    final kind = info.kind;
     state = state.copyWith(
       phase: isAuthFailure(kind) ? SyncPhase.stopped : SyncPhase.backingOff,
       consecutiveFailures: isAuthFailure(kind)
@@ -596,7 +718,11 @@ class SyncController extends Notifier<SyncControllerState> {
   /// 다시 서서 이미 확인한 세션 전부가 재차 "미확인"으로 뜬다 — cursor와
   /// 정확히 같은 종류의 문제라 같은 자리(사이클 성공 직후)에서 같은 방식
   /// (patch 큐)으로 같이 저장한다.
-  Future<void> _persistSyncMeta(SyncState sync) async {
+  Future<void> _persistSyncMeta(
+    SyncState sync,
+    Uri baseUrl,
+    int revision,
+  ) async {
     final cursor = sync.cursor;
     final seenWatermark = sync.seenWatermark;
     if (cursor == null && seenWatermark == null) return;
@@ -605,13 +731,21 @@ class SyncController extends Notifier<SyncControllerState> {
       // 저장된 설정으로 부팅했는데 파일이 사라졌으면(사용자가 고치려고
       // 옮긴 순간) 커서만 담긴 새 파일을 만들지 않는다.
       await patch(
-        backgroundConfigPatch(
-          (DashboardConfigValues current) => current.copyWith(
-            cursor: cursor,
-            seenWatermark: seenWatermark,
-          ),
-          storedAtBoot: ref.read(storedConfigAtBootProvider),
-        ),
+        backgroundConfigPatch((DashboardConfigValues current) {
+          // 패치가 큐에서 기다리는 동안 Setup이 다른 서버를 저장할 수 있다.
+          // 검사도 디스크를 다시 읽은 바로 이 자리에서 해야 한다.
+          if (ref
+                  .read(dashboardApiConfigControllerProvider.notifier)
+                  .revision !=
+              revision) {
+            return current;
+          }
+          final storedUrl = current.serverUrl;
+          if (storedUrl != null && parseServerUrl(storedUrl) != baseUrl) {
+            return current;
+          }
+          return current.copyWith(cursor: cursor, seenWatermark: seenWatermark);
+        }, storedAtBoot: ref.read(storedConfigAtBootProvider)),
       );
     } catch (_) {
       // 조용히 삼킨다 — config_provider.dart의 ConfigSaveFn 계약(저장
@@ -628,233 +762,16 @@ class SyncController extends Notifier<SyncControllerState> {
   /// [SyncPhase.unconfigured]를 벗어나 기존 [triggerNow] 경로를 여는
   /// 것뿐이다. 이미 설정돼 있으면(= unconfigured가 아니면) 아무것도
   /// 하지 않는다 — 재저장·토큰 갱신 등으로 다시 불려도 안전하다.
+  ///
+  /// 호출자는 [dashboardApiConfigControllerProvider]를 저장한 값으로 **먼저**
+  /// 바꿔 둬야 한다 — 여는 첫 사이클이 곧바로 `dashboardApiProvider`를 읽는다.
+  /// 주소나 토큰을 바꿔 저장한 이미 설정된 앱은 이 메서드가 아니라
+  /// `triggerNow(force: true)`로 새 연결에 곧바로 다시 동기화한다.
   void configureAndStart() {
     if (state.phase != SyncPhase.unconfigured) return;
-    state = state.copyWith(phase: SyncPhase.idle);
+    // 주소를 알 수 없던 부팅에서 복원한 커서는 어느 서버 것인지 증명할 수 없다.
+    state = state.copyWith(sync: const SyncState(), phase: SyncPhase.idle);
     triggerNow();
-  }
-
-  /// UserAck-impl: `StateChip`이 `waiting_input` 카드에서 탭됐을 때 부른다
-  /// (정본 `client_actions.UserAck`, `POST /dashboard/sessions/{key}/ack`).
-  ///
-  /// **낙관 갱신 정합.** 요청을 기다리지 않고 즉시 [kDashboardStateWorking]로
-  /// 보여준다 — 사람이 방금 응답을 마쳤다는 확신이 있어야 누른 것이므로,
-  /// 왕복 지연 동안 칩이 그대로 `waiting_input`이면 "눌렀는데 안 먹었나"로
-  /// 보인다. 응답이 오면 [AckResultDto.state]로 그대로 덮어써 정합을
-  /// 맞춘다 — 서버가 실제로 전이했으면 그 값도 `working`이라 눈에 띄는
-  /// 변화가 없고, guard에 걸려 no-op이었으면(이미 다른 기기가 먼저
-  /// 응답했거나 세션 상태가 바뀜) 그 응답의 [AckResultDto.state]가 곧
-  /// 되돌리기 전 실제 현재 상태라 이 한 줄이 "되돌리기"까지 함께 구현한다 —
-  /// 별도 분기가 필요 없다. 요청 자체가 실패하면(네트워크·서버 오류) 그
-  /// 응답이 아예 없으니 [previous]로 직접 되돌리고, `_afterFailure`와 같은
-  /// [SyncErrorInfo]/[classifyError] 조합으로 [SyncControllerState.lastError]
-  /// 를 채운다 — 이 파일 밖에 SnackBar 같은 별도 오류 표시 관례가 없고
-  /// (`sessions_page.dart`의 `StaleDataBanner`가 이 필드를 그대로 그린다),
-  /// 그게 곧 "기존 오류 표시 관례"다.
-  ///
-  /// [AckResultDto.state]가 null이거나(세션이 아예 없어졌다 — 카드는 낙관
-  /// 갱신이 남긴 `working`인 채로 아직 화면에 있을 수 있다) [kDashboardStates]
-  /// 밖의 값이면(검증 리뷰 지적 medium 수정) 그 값으로 덮어쓰지 않고
-  /// [previous]로 되돌린다 — 예전에는 `AckResultDto.state`가
-  /// `@Default('')`라 null이 빈 문자열로 접혔고, 빈 문자열은
-  /// `sessionStateDtoFromCode`(dashboard_provider.dart)의 미인식 코드 폴백을 타 화면에
-  /// 가짜 `idle` 배지로 영구히 남았다(롤백도 오류 표시도 없이) — 이 분기가
-  /// 그 회귀를 없앤다.
-  ///
-  /// 두 지점 다 `sync`가 아직 그 [key]를 들고 있을 때만 손댄다 — 낙관 갱신을
-  /// 시작한 사이 진짜 폴링이 세션을 맵에서 지웠다면(예: 세션 종료) 되살릴
-  /// 이유가 없다.
-  Future<void> ackSession(String key) async {
-    final previous = state.sync.sessions[key];
-    if (previous == null) return;
-    _patchSessionState(key, kDashboardStateWorking);
-    final nowMsFn = ref.read(syncNowMsFnProvider);
-    try {
-      final api = ref.read(dashboardApiProvider);
-      final result = await api.ack(key);
-      final resolvedState = result.state;
-      final isRecognizedState =
-          resolvedState != null && kDashboardStates.contains(resolvedState);
-      _patchSessionState(key, isRecognizedState ? resolvedState : previous.state);
-      // seen 연동(0004, 읽음 계약): ack가 실제로 전이를 만들었으면
-      // (transitionId != null) 그 전이 자체가 방금 사람이 처리했다는
-      // 사실이다 — 서버(ack 라우트)도 같은 자리에서 그 세션의
-      // seen_transition_id를 그 전이 id로 단조 갱신한다. 여기서 미리
-      // 반영해 두지 않으면, 이 응답과 다음 정상 폴링 사이 짧은 틈에 카드가
-      // "자기 자신의 ack 전이" 때문에 다시 미확인으로 반짝인다. 세션
-      // 객체가 아니라 `SyncState.seenTransitionIds` 맵을 MAX로 올린다
-      // ([_bumpSeen] 참고).
-      if (result.transitionId != null) {
-        _bumpSeen(key, result.transitionId!);
-      }
-    } catch (error) {
-      _patchSessionState(key, previous.state);
-      state = state.copyWith(
-        lastError: SyncErrorInfo(
-          kind: classifyError(error),
-          message: '$error',
-          atMs: nowMsFn(),
-        ),
-      );
-    }
-  }
-
-  /// 읽음 처리(0004 seen 기능) — `session_detail_page.dart`가 화면 진입
-  /// (`initState`) 시 정확히 한 번 부른다.
-  ///
-  /// **실패 무해.** ack와 달리 이 액션은 "상태가 변했는가"와 무관한 순수
-  /// UI 편의 표시(미확인 점)라, 오케스트레이터 사양이 명시적으로 실패를
-  /// 화면에 드러내지 말라고 한다 — [SyncControllerState.lastError]를 절대
-  /// 건드리지 않고 조용히 삼킨다. 세션이 이미 맵에 없으면(예: 그 사이 삭제)
-  /// 아무것도 하지 않는다.
-  ///
-  /// 낙관 갱신: 요청을 기다리지 않고 이 세션의 `SyncState.
-  /// seenTransitionIds`를 이미 알고 있는 [SessionViewDto.lastTransitionId]로
-  /// 즉시 올려([_bumpSeen]) 화면의 미확인 점을 바로 끈다. 서버 응답이 오면
-  /// 그 값(뒤늦게 도착한 더 최신 전이가 있었을 수 있어 서버가 최종
-  /// 권위자다)으로 다시 한 번 정합을 맞춘다 — 둘 다 MAX 적용이라 서버 값이
-  /// 더 작아도(있을 수 없지만) 로컬을 낮추지 않는다.
-  Future<void> markSeen(String key) async {
-    final session = state.sync.sessions[key];
-    if (session == null) return;
-    final lastTransitionId = session.lastTransitionId;
-    if (lastTransitionId != null) {
-      await markSeenThrough(key, lastTransitionId);
-      return;
-    }
-    try {
-      final seen = await ref.read(dashboardApiProvider).markSeen(key);
-      if (seen != null) _bumpSeen(key, seen);
-    } catch (_) {
-      // Read markers never block navigation.
-    }
-  }
-
-  /// A tray row captures its watermark when the menu opens. Do not acknowledge
-  /// newer transitions that arrive while the user chooses an external window.
-  Future<void> markSeenThrough(String key, int transitionId) async {
-    // A delivered banner may be opened before the first session sync. Its
-    // explicit watermark is safe to submit without guessing the current state.
-    if (transitionId <= 0) return;
-    _bumpSeen(key, transitionId);
-    try {
-      final seen = await ref
-          .read(dashboardApiProvider)
-          .markSeen(key, lastTransitionId: transitionId);
-      if (seen != null) _bumpSeen(key, seen);
-    } catch (_) {
-      // Preserve the existing optimistic, nonblocking marker semantics.
-    }
-  }
-
-  /// 삭제 UI 사양: 세션 카드 hover의 ×, 상세 화면 AppBar의 삭제 아이콘이
-  /// 확인 다이얼로그를 거쳐 부른다(`DELETE /dashboard/sessions/{key}`).
-  ///
-  /// **낙관 제거 + 롤백.** 요청을 기다리지 않고 목록에서 즉시 지운다 —
-  /// 실패하면 지웠던 [SessionViewDto]를 그대로 되돌리고, [ackSession]과
-  /// 같은 관례로 [SyncControllerState.lastError]를 세운다(기존 오류 표시
-  /// 관례 — `StaleDataBanner`가 그린다). 삭제된 키가 이후 델타 전이로
-  /// 부활하는 것은 정상이다(살아있는 세션) — `sync_reducer.dart`는 그
-  /// 전이를 새 세션처럼 그냥 반영하므로 여기서 특별히 막을 것이 없다.
-  ///
-  /// 성공 여부를 [bool]로 돌려준다(예외를 던지지 않는다 — 실패는 이미 위
-  /// 롤백·[lastError]로 다 처리됐다) — 상세 화면 AppBar의 삭제 액션은 이
-  /// 값을 보고 성공했을 때만 목록으로 pop한다(카드의 hover 삭제는 이 값을
-  /// 무시해도 된다 — 실패 시 카드가 목록에 그대로/다시 보이는 것 자체가
-  /// 이미 충분한 신호다).
-  Future<bool> deleteSession(String key) async {
-    final previous = state.sync.sessions[key];
-    if (previous == null) return false;
-    _removeSession(key);
-    final nowMsFn = ref.read(syncNowMsFnProvider);
-    try {
-      final api = ref.read(dashboardApiProvider);
-      await api.deleteSession(key);
-      return true;
-    } catch (error) {
-      _restoreSession(key, previous);
-      state = state.copyWith(
-        lastError: SyncErrorInfo(
-          kind: classifyError(error),
-          message: '$error',
-          atMs: nowMsFn(),
-        ),
-      );
-      return false;
-    }
-  }
-
-  /// [ackSession]이 낙관 갱신·성공 반영·실패 되돌리기 세 자리에서 공유하는
-  /// 세션 맵 patch. 리듀서를 다시 돌리지 않고 그 세션 한 칸의 [SessionViewDto.
-  /// state]만 바꾼다 — 그 밖의 필드(예: `lastProgressAt`)는 다음 정상 폴링이
-  /// 채우므로 여기서 추정해 채우지 않는다.
-  void _patchSessionState(String key, String newState) {
-    _updateSession(key, (current) => current.copyWith(state: newState));
-  }
-
-  /// [_patchSessionState]/[markSeen]/[ackSession]이 공유하는 더 일반적인
-  /// patch — 세션 맵의 한 칸을 [update]로 바꿔 넣는다. 그 키가 이미 맵에
-  /// 없으면(예: 그 사이 폴링이나 삭제로 사라짐) 아무것도 하지 않는다.
-  void _updateSession(
-    String key,
-    SessionViewDto Function(SessionViewDto current) update,
-  ) {
-    final current = state.sync.sessions[key];
-    if (current == null) return;
-    final patched = Map<String, SessionViewDto>.of(state.sync.sessions)
-      ..[key] = update(current);
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        sessions: Map<String, SessionViewDto>.unmodifiable(patched),
-      ),
-    );
-  }
-
-  /// [ackSession]/[markSeen]이 공유하는 seen 맵 patch(읽음 계약).
-  ///
-  /// `SyncState.seenTransitionIds[key]`를 [candidate]와 **MAX**로 올린다 —
-  /// `sync_reducer.dart`의 `reduceSync`가 `response.seen`을 병합할 때 쓰는
-  /// 규칙과 정확히 같다. 낙관 갱신이 이미 세운 값을, 그 갱신을 아직 반영
-  /// 하지 못한 채 뒤늦게 도착한 서버 값이 되돌리는 일이 없다(깜빡임 방지).
-  /// [candidate]가 기존 값 이하면 아무것도 하지 않는다(불필요한 리빌드
-  /// 방지).
-  void _bumpSeen(String key, int candidate) {
-    final current = state.sync.seenTransitionIds[key] ?? 0;
-    if (candidate <= current) return;
-    final patched = Map<String, int>.of(state.sync.seenTransitionIds)
-      ..[key] = candidate;
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        seenTransitionIds: Map<String, int>.unmodifiable(patched),
-      ),
-    );
-  }
-
-  /// [deleteSession]의 낙관 제거. 맵에 그 키가 없으면 아무것도 하지 않는다.
-  void _removeSession(String key) {
-    if (!state.sync.sessions.containsKey(key)) return;
-    final patched = Map<String, SessionViewDto>.of(state.sync.sessions)
-      ..remove(key);
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        sessions: Map<String, SessionViewDto>.unmodifiable(patched),
-      ),
-    );
-  }
-
-  /// [deleteSession] 실패 시 롤백 — 지웠던 세션을 그대로 되살린다. 그 사이
-  /// 진짜 폴링이 같은 키를 이미 다시 채워 넣었다면(예: 살아있는 세션이 그
-  /// 새 이벤트로 부활) 그 최신 값을 덮어쓰지 않는다 — 서버가 이미 더 새
-  /// 진실을 줬는데 롤백이 그걸 과거 값으로 되돌리면 안 된다.
-  void _restoreSession(String key, SessionViewDto previous) {
-    if (state.sync.sessions.containsKey(key)) return;
-    final patched = Map<String, SessionViewDto>.of(state.sync.sessions)
-      ..[key] = previous;
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        sessions: Map<String, SessionViewDto>.unmodifiable(patched),
-      ),
-    );
   }
 }
 
@@ -894,8 +811,9 @@ SyncState _preserveBootCatchupAlerts(SyncState reconciled, SyncState delta) {
 /// [dashboardApiProvider]/[httpSendProvider] 등을 먼저 override한 뒤 이걸
 /// 읽어야 한다(그 provider들이 override 없이는 던지는 것과 같은 이유).
 final NotifierProvider<SyncController, SyncControllerState>
-syncControllerProvider =
-    NotifierProvider<SyncController, SyncControllerState>(SyncController.new);
+syncControllerProvider = NotifierProvider<SyncController, SyncControllerState>(
+  SyncController.new,
+);
 
 /// TASK MUTE-impl: 지금 음소거 중인지 + 그 종료 시각. `ui/setup_page.dart`
 /// (설정 화면의 상시 상태 표시)와 `platform/tray_native.dart`(트레이 메뉴

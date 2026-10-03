@@ -141,7 +141,7 @@ void main() {
       );
     });
 
-    test('응답이 늦으면 DashboardTimeout', () async {
+    test('응답이 늦으면 DashboardTimeout이고 요청과 기다린 시간을 사실로 싣는다', () async {
       // 영원히 완료되지 않는 응답 = 네트워크 지연.
       final recorder = _Recorder(
         (ApiRequest _) => Completer<ApiResponse>().future,
@@ -152,9 +152,18 @@ void main() {
           isA<DashboardTimeout>()
               .having((DashboardTimeout e) => e.statusCode, 'status', isNull)
               .having(
+                (DashboardTimeout e) => e.fault,
+                'fault',
+                const TimeoutFault(
+                  method: 'GET',
+                  path: kSyncPath,
+                  timeoutMs: 20,
+                ),
+              )
+              .having(
                 (DashboardTimeout e) => e.message,
                 'message',
-                contains('/dashboard/sync'),
+                'GET $kSyncPath: timeout 20ms',
               ),
         ),
       );
@@ -171,38 +180,134 @@ void main() {
       );
     });
 
-    test('2xx인데 JSON 객체가 아니면 DashboardMalformedResponse', () async {
-      final broken = _Recorder(
-        (ApiRequest _) async =>
-            const ApiResponse(statusCode: 200, body: '<html>proxy</html>'),
+    test('전송 실패는 요청과 원인을 사실로 싣고 사람이 읽을 문장은 만들지 않는다', () async {
+      // 결함(2026-09-10~): 이 계층이 '전송 실패' 한국어 접두사를 붙인 문장을
+      // 만들어 영어 화면에도 그 조각이 보였다. 문장은 화면이 표시 언어로
+      // 만든다(`sessions_page.dart`의 `syncErrorDetailText`).
+      const cause = SocketExceptionLike('Connection refused');
+      final recorder = _Recorder(
+        (ApiRequest _) => Future<ApiResponse>.error(cause),
       );
       await expectLater(
-        _api(broken).sync(),
-        throwsA(isA<DashboardMalformedResponse>()),
-      );
-
-      final array = _Recorder(
-        (ApiRequest _) async =>
-            const ApiResponse(statusCode: 200, body: '[1,2,3]'),
-      );
-      await expectLater(
-        _api(array).sync(),
-        throwsA(isA<DashboardMalformedResponse>()),
+        _api(recorder).sync(since: 7),
+        throwsA(
+          isA<DashboardNetworkFailure>()
+              .having(
+                (DashboardNetworkFailure e) => e.fault,
+                'fault',
+                TransportFault(method: 'GET', path: kSyncPath, cause: '$cause'),
+              )
+              .having(
+                (DashboardNetworkFailure e) => e.message,
+                'message',
+                'GET $kSyncPath: $cause',
+              ),
+        ),
       );
     });
 
-    test('모르는 프로토콜 major는 DashboardProtocolMismatch', () async {
+    test(
+      '2xx인데 JSON 객체가 아니면 DashboardMalformedResponse이고 요청과 해석 실패 원문을 싣는다',
+      () async {
+        final broken = _Recorder(
+          (ApiRequest _) async =>
+              const ApiResponse(statusCode: 200, body: '<html>proxy</html>'),
+        );
+        await expectLater(
+          _api(broken).sync(),
+          throwsA(
+            isA<DashboardMalformedResponse>().having(
+              (DashboardMalformedResponse e) => e.fault,
+              'fault',
+              isA<MalformedResponseFault>()
+                  .having((f) => f.method, 'method', 'GET')
+                  .having((f) => f.path, 'path', kSyncPath)
+                  .having(
+                    (f) => f.detail,
+                    'detail',
+                    startsWith('FormatException'),
+                  ),
+            ),
+          ),
+        );
+
+        final array = _Recorder(
+          (ApiRequest _) async =>
+              const ApiResponse(statusCode: 200, body: '[1,2,3]'),
+        );
+        await expectLater(
+          _api(array).sync(),
+          throwsA(
+            isA<DashboardMalformedResponse>().having(
+              (DashboardMalformedResponse e) => e.fault,
+              'fault',
+              MalformedResponseFault(
+                method: 'GET',
+                path: kSyncPath,
+                detail: '${<dynamic>[].runtimeType}',
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('모르는 프로토콜 major는 DashboardProtocolMismatch이고 두 버전을 사실로 싣는다', () async {
       final recorder = _json(200, _syncBody(protocolVersion: 2));
       await expectLater(
         _api(recorder).sync(),
         throwsA(
           isA<DashboardProtocolMismatch>().having(
-            (DashboardProtocolMismatch e) => e.serverVersion,
-            'serverVersion',
-            2,
+            (DashboardProtocolMismatch e) => e.fault,
+            'fault',
+            const ProtocolMismatchFault(
+              serverVersion: 2,
+              supportedVersion: kDashboardProtocolVersion,
+            ),
           ),
         ),
       );
+    });
+
+    test('사실을 싣는 실패의 메시지는 사실 나열이고 한국어 문장을 만들지 않는다', () async {
+      // 결함(2026-09-10~): 타임아웃·해석 실패·프로토콜 불일치도 이 계층이 한국어
+      // 문장을 만들어 영어 화면의 동기화 오류 줄에 그대로 보였다. 문장은 화면이
+      // 표시 언어로 만든다(`sessions_page.dart`의 `syncErrorDetailText`).
+      final hangul = RegExp('[가-힣]');
+      final failures = <String, _Recorder>{
+        'transport': _Recorder(
+          (ApiRequest _) => Future<ApiResponse>.error(
+            const SocketExceptionLike('Connection refused'),
+          ),
+        ),
+        'timeout': _Recorder((ApiRequest _) => Completer<ApiResponse>().future),
+        'not json': _Recorder(
+          (ApiRequest _) async =>
+              const ApiResponse(statusCode: 200, body: '<html>proxy</html>'),
+        ),
+        'not an object': _Recorder(
+          (ApiRequest _) async =>
+              const ApiResponse(statusCode: 200, body: '[1,2,3]'),
+        ),
+        'protocol': _json(200, _syncBody(protocolVersion: 2)),
+      };
+      for (final MapEntry(key: name, value: recorder) in failures.entries) {
+        final api = _api(recorder, timeout: const Duration(milliseconds: 20));
+        await expectLater(
+          api.sync(),
+          throwsA(
+            isA<DashboardApiException>()
+                .having((e) => e.fault, 'fault', isNotNull)
+                .having(
+                  (e) => e.message == '${e.fault}',
+                  'message lists the fault',
+                  isTrue,
+                )
+                .having((e) => e.message, 'message', isNot(contains(hangul))),
+          ),
+          reason: name,
+        );
+      }
     });
 
     test('JSON이 아닌 오류 본문도 문구로 살려 낸다', () async {

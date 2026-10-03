@@ -12,26 +12,36 @@ class WindowNavigationTarget {
     this.project,
     this.host,
     this.transitionId,
+    this.serverUrl,
+    this.serverRevision,
     this.requireSelection = false,
   });
 
-  factory WindowNavigationTarget.fromSession(SessionViewDto session) => WindowNavigationTarget(
-    sessionKey: session.key,
-    project: session.project,
-    host: session.host,
-    transitionId: session.lastTransitionId,
-  );
+  factory WindowNavigationTarget.fromSession(SessionViewDto session) =>
+      WindowNavigationTarget(
+        sessionKey: session.key,
+        project: session.project,
+        host: session.host,
+        transitionId: session.lastTransitionId,
+      );
 
   final String sessionKey;
   final String? project;
   final String? host;
   final int? transitionId;
+
+  /// 서버에서 온 알림의 원본. 없는 로컬 세션 대상은 시작 시 연결에 묶인다.
+  final String? serverUrl;
+  final int? serverRevision;
   final bool requireSelection;
 
   WindowConnectionKey? get connectionKey {
     final project = this.project;
     final host = this.host;
-    if (project == null || project.trim().isEmpty || host == null || host.trim().isEmpty) {
+    if (project == null ||
+        project.trim().isEmpty ||
+        host == null ||
+        host.trim().isEmpty) {
       return null;
     }
     return WindowConnectionKey(host: host, project: project);

@@ -14,6 +14,8 @@
 /// 최소 프로브 위젯을 하나 띄워 진짜 `WidgetRef`를 얻는다.
 library;
 
+import 'dart:async' show Completer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +31,8 @@ import 'package:my_dashboard/src/platform/tray_web.dart' as tray_web;
 import 'package:my_dashboard/src/rust/api/i18n.dart' show LocaleDto;
 import 'package:my_dashboard/src/state/dashboard_provider.dart'
     show stateLabelKeyFnProvider;
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show dashboardApiConfigControllerProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart'
     show SyncController, SyncControllerState, syncControllerProvider;
 import 'package:tray_manager/tray_manager.dart' show MenuItem;
@@ -291,17 +295,17 @@ void main() {
       expect(menu.debugAppliedState, isNull, reason: '아직 아무것도 밀어 넣지 않았다');
 
       // 비음소거 -> 비음소거: 첫 apply는 부른다.
-      await menu.apply(muted: false, muteUntil: null);
+      await menu.apply(muted: false, muteUntil: null, serverRevision: 0);
       expect(calls, hasLength(1));
       expect(calls.last[1].key, TrayCommand.mute30.menuItemKey);
 
       // 폴링이 같은 상태를 다시 들고 와도 채널을 건드리지 않는다.
-      await menu.apply(muted: false, muteUntil: null);
+      await menu.apply(muted: false, muteUntil: null, serverRevision: 0);
       expect(calls, hasLength(1), reason: '값이 바뀌지 않았으면 채널을 건드리지 않는다');
 
       // 음소거로 바뀌면 "해제" 항목으로 갈아 끼운다.
       final muteUntil = DateTime(2026, 9, 11, 3, 5).millisecondsSinceEpoch;
-      await menu.apply(muted: true, muteUntil: muteUntil);
+      await menu.apply(muted: true, muteUntil: muteUntil, serverRevision: 0);
       expect(calls, hasLength(2));
       expect(calls.last[1].key, TrayCommand.unmute.menuItemKey);
       expect(calls.last[1].label, 'tray.mute_unmute|time=03:05');
@@ -309,7 +313,7 @@ void main() {
       expect(menu.debugAppliedState?.muteUntil, muteUntil);
 
       // 해제되면 다시 30분 항목으로 되돌아온다.
-      await menu.apply(muted: false, muteUntil: null);
+      await menu.apply(muted: false, muteUntil: null, serverRevision: 0);
       expect(calls, hasLength(3));
       expect(calls.last[1].key, TrayCommand.mute30.menuItemKey);
     });
@@ -579,9 +583,7 @@ void main() {
 
   group('buildTrayMenuItems (안읽은 세션 항목 나열, TASK TRAY-unseen-menu)', () {
     testWidgets('미확인 세션이 있으면 "열기" 아래 구분선 사이에 세션 항목이 서브메뉴 없이 '
-        '바로 나열되고, 각 항목이 세션별 동적 키와 "프로젝트 — 상태" 라벨을 갖는다', (
-      tester,
-    ) async {
+        '바로 나열되고, 각 항목이 세션별 동적 키와 "프로젝트 — 상태" 라벨을 갖는다', (tester) async {
       late List<MenuItem> items;
       await _pumpProbe(
         tester,
@@ -709,7 +711,8 @@ void main() {
             .where((item) => item.type != 'separator')
             .any((item) => item.disabled),
         isFalse,
-        reason: '"…외 N개" 같은 비활성 꼬리 항목은 더 이상 달지 않는다 '
+        reason:
+            '"…외 N개" 같은 비활성 꼬리 항목은 더 이상 달지 않는다 '
             '(구분선은 태생이 disabled라 제외한다)',
       );
     });
@@ -735,6 +738,52 @@ void main() {
   });
 
   group('TrayMenu (미확인 목록 변화, TASK TRAY-unseen-menu)', () {
+    testWidgets('대기열의 A 메뉴가 B 전환 뒤 설치돼도 옛 세션을 선택하지 않는다', (tester) async {
+      final firstApply = Completer<void>();
+      final calls = <List<MenuItem>>[];
+      late WidgetRef capturedRef;
+      await _pumpProbe(tester, [
+        tray_native.trayMenuApplyFnProvider.overrideWithValue((items) async {
+          calls.add(items);
+          if (calls.length == 1) await firstApply.future;
+        }),
+        stateLabelKeyFnProvider.overrideWithValue((s) => 'label.${s.name}'),
+      ], (ref) => capturedRef = ref);
+      SessionViewDto? selected;
+      final menu = tray_native.TrayMenu(
+        capturedRef,
+        onSessionSelected: (session) async => selected = session,
+      );
+      final before = menu.apply(muted: true, muteUntil: 1, serverRevision: 0);
+      await tester.pump();
+      final queued = menu.apply(
+        muted: false,
+        muteUntil: null,
+        serverRevision: 0,
+        unseen: const [
+          SessionViewDto(
+            key: 'codex:old',
+            state: 'waiting_input',
+            project: '/work/old',
+            host: 'mac',
+            lastTransitionId: 10,
+          ),
+        ],
+      );
+      capturedRef
+          .read(dashboardApiConfigControllerProvider.notifier)
+          .apply(serverUrl: 'https://b.example.test', clientToken: null);
+      firstApply.complete();
+      await before;
+      await queued;
+      final oldRow = calls.last.singleWhere(
+        (item) => item.key == traySeenMenuKey('codex:old'),
+      );
+      oldRow.onClick!(oldRow);
+      await tester.pump();
+      expect(selected, isNull);
+    });
+
     testWidgets('미확인 목록의 내용이 바뀔 때만 setContextMenu 시임을 다시 부른다', (tester) async {
       final calls = <List<MenuItem>>[];
       late WidgetRef capturedRef;
@@ -754,7 +803,12 @@ void main() {
         ),
       ];
 
-      await menu.apply(muted: false, muteUntil: null, unseen: unseen);
+      await menu.apply(
+        muted: false,
+        muteUntil: null,
+        serverRevision: 0,
+        unseen: unseen,
+      );
       expect(calls, hasLength(1));
       expect(
         calls.last.map((item) => item.key),
@@ -765,6 +819,7 @@ void main() {
       // 폴링이 내용은 같은 새 리스트 인스턴스를 들고 와도 채널을 건드리지
       // 않는다 — 레코드의 List는 참조 비교라 `==`로는 못 거르는 영역이다.
       await menu.apply(
+        serverRevision: 0,
         muted: false,
         muteUntil: null,
         unseen: const [
@@ -778,7 +833,7 @@ void main() {
       expect(calls, hasLength(1), reason: '목록 내용이 같으면 다시 그리지 않는다');
 
       // 세션이 하나 빠지면(읽음 처리됐다는 뜻) 세션 항목들이 통째로 사라진다.
-      await menu.apply(muted: false, muteUntil: null);
+      await menu.apply(muted: false, muteUntil: null, serverRevision: 0);
       expect(calls, hasLength(2));
       expect(
         calls.last.any((item) => traySeenSessionKey(item.key) != null),
@@ -815,7 +870,9 @@ void main() {
         );
       },
     );
-    final row = items.singleWhere((item) => item.key == traySeenMenuKey(displayed.key));
+    final row = items.singleWhere(
+      (item) => item.key == traySeenMenuKey(displayed.key),
+    );
     row.onClick!(row);
     await tester.pumpAndSettle();
     expect(selected, same(displayed));

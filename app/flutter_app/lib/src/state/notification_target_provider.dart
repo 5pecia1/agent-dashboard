@@ -5,6 +5,7 @@ import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/data/notification_tap.dart';
 import 'package:my_dashboard/src/data/window_navigation_target.dart';
+import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/sync_controller.dart';
 
 const kNotificationSessionWait = Duration(seconds: 8);
@@ -14,13 +15,18 @@ class NotificationTargetUnavailable implements Exception {
   final String messageKey;
 }
 
-typedef NotificationSessionLookup = Future<SessionViewDto?> Function(String key);
-final notificationSessionLookupProvider = Provider<NotificationSessionLookup>((ref) {
+typedef NotificationSessionLookup =
+    Future<SessionViewDto?> Function(String key);
+final notificationSessionLookupProvider = Provider<NotificationSessionLookup>((
+  ref,
+) {
   return (key) async {
     final before = ref.read(syncControllerProvider);
     final cached = before.sync.sessions[key];
     if (cached != null) return cached;
-    if (before.phase == SyncPhase.unconfigured || before.needsSetup) return null;
+    if (before.phase == SyncPhase.unconfigured || before.needsSetup) {
+      return null;
+    }
     final result = Completer<SessionViewDto?>();
     final subscription = ref.listen(syncControllerProvider, (_, next) {
       final session = next.sync.sessions[key];
@@ -35,15 +41,21 @@ final notificationSessionLookupProvider = Provider<NotificationSessionLookup>((r
     });
     try {
       ref.read(syncControllerProvider.notifier).triggerNow();
-      return await result.future.timeout(kNotificationSessionWait, onTimeout: () => null);
+      return await result.future.timeout(
+        kNotificationSessionWait,
+        onTimeout: () => null,
+      );
     } finally {
       subscription.close();
     }
   };
 });
 
-typedef NotificationTargetResolver = Future<WindowNavigationTarget?> Function(NotificationTap tap);
-final notificationTargetResolverProvider = Provider<NotificationTargetResolver>((ref) {
+typedef NotificationTargetResolver =
+    Future<WindowNavigationTarget?> Function(NotificationTap tap);
+final notificationTargetResolverProvider = Provider<NotificationTargetResolver>((
+  ref,
+) {
   return (tap) async {
     final key = tap.sessionKey;
     if (key == null || key.isEmpty) return null;
@@ -51,13 +63,17 @@ final notificationTargetResolverProvider = Provider<NotificationTargetResolver>(
     if (origin != null) {
       String? current;
       try {
-        current = _serverScope(ref.read(dashboardApiConfigProvider).baseUrl.toString());
+        current = _serverScope(
+          ref.read(dashboardApiConfigProvider).baseUrl.toString(),
+        );
       } catch (_) {
         // A notification from an old configured server must not acknowledge a
         // similarly named session on an unconfigured or different connection.
       }
       if (current != origin) {
-        throw const NotificationTargetUnavailable('notification.server_changed');
+        throw const NotificationTargetUnavailable(
+          'notification.server_changed',
+        );
       }
     }
     var project = _known(tap.project);
@@ -81,6 +97,12 @@ final notificationTargetResolverProvider = Provider<NotificationTargetResolver>(
       sessionKey: key,
       project: project,
       host: host,
+      serverUrl: origin,
+      serverRevision: origin == null
+          ? null
+          : ref
+                .read(dashboardApiConfigControllerProvider.notifier)
+                .serverRevision,
       // Old banners have no trustworthy original watermark. Never replace it
       // with the live session's newest transition or the masked OS id.
       transitionId: tap.legacy || origin == null ? null : tap.transitionId,
@@ -89,6 +111,7 @@ final notificationTargetResolverProvider = Provider<NotificationTargetResolver>(
   };
 });
 
-String? _known(String? value) => value == null || value.trim().isEmpty ? null : value;
+String? _known(String? value) =>
+    value == null || value.trim().isEmpty ? null : value;
 String? _serverScope(String? value) =>
     NotificationTap.safeServerUrl(value)?.replaceFirst(RegExp(r'/+$'), '');

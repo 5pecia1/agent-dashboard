@@ -42,6 +42,8 @@ import 'package:my_dashboard/src/platform/local_notifications_native.dart'
     show bringWindowToFront, showNotification;
 import 'package:my_dashboard/src/platform/tray_command.dart';
 import 'package:my_dashboard/src/state/dashboard_extensions.dart';
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show dashboardApiConfigControllerProvider;
 import 'package:my_dashboard/src/state/dashboard_provider.dart'
     show sessionStateDtoFromCode, stateLabelKeyFnProvider;
 import 'package:my_dashboard/src/state/sync_controller.dart'
@@ -221,6 +223,10 @@ List<MenuItem> _buildUnseenItems(
   TraySessionSelectFn? onSessionSelected,
 ) {
   if (unseen.isEmpty) return const <MenuItem>[];
+  // 열린 메뉴는 스냅샷으로 남는다. A 메뉴를 B 전환 뒤 클릭해도 A의
+  // 세션과 읽음 id를 B에 전달하지 않도록 생성 시 서버 수명을 붙인다.
+  final connection = ref.read(dashboardApiConfigControllerProvider.notifier);
+  final serverRevision = connection.serverRevision;
   final labelKeyFor = ref.read(stateLabelKeyFnProvider);
   String labelFor(SessionViewDto session) {
     final project = session.project.isNotEmpty
@@ -243,7 +249,10 @@ List<MenuItem> _buildUnseenItems(
         key: traySeenMenuKey(session.key),
         label: labelFor(session),
         onClick: (_) {
-          if (onSessionSelected != null) unawaited(onSessionSelected(session));
+          if (onSessionSelected != null &&
+              connection.serverRevision == serverRevision) {
+            unawaited(onSessionSelected(session));
+          }
         },
       ),
     MenuItem.separator(),
@@ -429,6 +438,7 @@ typedef TrayMenuInputs = ({
   int? muteUntil,
   List<SessionViewDto> unseen,
   DashboardTrayLabels labels,
+  int serverRevision,
 });
 
 final trayMenuInputsListenable = Provider<TrayMenuInputs>((ref) {
@@ -438,6 +448,9 @@ final trayMenuInputsListenable = Provider<TrayMenuInputs>((ref) {
     muteUntil: state.sync.muteUntil,
     unseen: state.sync.unseenReportableSessions,
     labels: ref.watch(dashboardTrayLabelsProvider),
+    serverRevision: ref
+        .watch(dashboardApiConfigControllerProvider.notifier)
+        .serverRevision,
   );
 });
 
@@ -463,6 +476,7 @@ class TrayMenu {
   Future<void> apply({
     required bool muted,
     required int? muteUntil,
+    required int serverRevision,
     List<SessionViewDto> unseen = const <SessionViewDto>[],
     DashboardTrayLabels labels = emptyDashboardTrayLabels,
   }) {
@@ -472,6 +486,7 @@ class TrayMenu {
       muteUntil: muteUntil,
       unseen: unseen,
       labels: labels,
+      serverRevision: serverRevision,
     );
     return _pendingApply = _pendingApply.then((_) async {
       if (!_showing) await _apply(input);
@@ -487,6 +502,7 @@ class TrayMenu {
           previous != null &&
           previous.muted == input.muted &&
           previous.muteUntil == input.muteUntil &&
+          previous.serverRevision == input.serverRevision &&
           listEquals(previous.unseen, input.unseen) &&
           listEquals(_usageLabels, labels)) {
         return true;
@@ -498,7 +514,17 @@ class TrayMenu {
           muteUntil: input.muteUntil,
           unseen: input.unseen,
           usageLabels: labels,
-          onSessionSelected: onSessionSelected,
+          onSessionSelected: onSessionSelected == null
+              ? null
+              : (session) async {
+                  if (_ref
+                          .read(dashboardApiConfigControllerProvider.notifier)
+                          .serverRevision !=
+                      input.serverRevision) {
+                    return;
+                  }
+                  await onSessionSelected!(session);
+                },
         ),
       );
       _applied = input;
@@ -631,6 +657,7 @@ Future<void> installTray(
         menu.apply(
           muted: next.muted,
           muteUntil: next.muteUntil,
+          serverRevision: next.serverRevision,
           unseen: next.unseen,
           labels: next.labels,
         ),

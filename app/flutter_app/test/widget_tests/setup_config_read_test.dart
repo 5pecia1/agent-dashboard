@@ -43,6 +43,7 @@ const DashboardConfigValues _stored = DashboardConfigValues(
   serverUrl: 'https://dash.example.test',
   clientToken: 'stored-client-token',
   cursor: 41,
+  seenWatermark: 40,
   themeMode: 'system',
   extra: <String, Object?>{
     'teamclaude': <String, Object?>{
@@ -164,7 +165,8 @@ void main() {
       final saved = saves.single;
       expect(saved.serverUrl, 'https://new.example.test');
       expect(saved.clientToken, _stored.clientToken);
-      expect(saved.cursor, _stored.cursor);
+      expect(saved.cursor, isNull, reason: '새 서버는 이전 서버의 커서를 쓸 수 없다');
+      expect(saved.seenWatermark, isNull, reason: '새 서버의 읽음 기준을 다시 세운다');
       expect(saved.extra, _stored.extra);
     });
 
@@ -366,9 +368,7 @@ void main() {
           _setupPage(
             load: load,
             saves: saves,
-            extra: [
-              notificationReprobeProvider.overrideWithValue(() async {}),
-            ],
+            extra: [notificationReprobeProvider.overrideWithValue(() async {})],
           ),
         );
         await tester.pumpAndSettle();

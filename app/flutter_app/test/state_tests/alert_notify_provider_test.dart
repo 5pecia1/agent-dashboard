@@ -19,10 +19,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
+import 'package:my_dashboard/src/data/dashboard_api.dart'
+    show DashboardApiConfig;
 import 'package:my_dashboard/src/data/sync_reducer.dart';
-import 'package:my_dashboard/src/platform/apns_push.dart' show kPushTransportFcmApns;
+import 'package:my_dashboard/src/platform/apns_push.dart'
+    show kPushTransportFcmApns;
 import 'package:my_dashboard/src/state/alert_notify_provider.dart';
-import 'package:my_dashboard/src/state/capability_provider.dart' show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/capability_provider.dart'
+    show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/config_provider.dart'
+    show
+        dashboardApiConfigControllerProvider,
+        dashboardInitialApiConfigProvider;
 import 'package:my_dashboard/src/state/notify_provider.dart'
     show NotifyPayload, alertStateLabelProvider, localNotifyFnProvider;
 import 'package:my_dashboard/src/state/push_provider.dart'
@@ -63,22 +71,27 @@ class _FakeSyncController extends SyncController {
 
   /// 서버 응답 한 통을 **진짜 리듀서**로 접어 상태로 밀어 넣는다.
   void emitResponse(SyncResponseDto response, {required int nowMs}) {
-    state = state.copyWith(sync: reduceSync(state.sync, response, nowMs: nowMs));
+    state = state.copyWith(
+      sync: reduceSync(state.sync, response, nowMs: nowMs),
+    );
   }
 }
 
 const int _kNowMs = 1_700_000_000_000;
 
-TransitionDto _alert({required int id, required String sessionKey, String? message}) =>
-    TransitionDto(
-      id: id,
-      sessionKey: sessionKey,
-      toState: 'waiting_input',
-      source: sessionKey.split(':').first,
-      message: message,
-      occurredAt: _kNowMs,
-      createdAt: _kNowMs,
-    );
+TransitionDto _alert({
+  required int id,
+  required String sessionKey,
+  String? message,
+}) => TransitionDto(
+  id: id,
+  sessionKey: sessionKey,
+  toState: 'waiting_input',
+  source: sessionKey.split(':').first,
+  message: message,
+  occurredAt: _kNowMs,
+  createdAt: _kNowMs,
+);
 
 SyncResponseDto _delta(List<TransitionDto> transitions) => SyncResponseDto(
   cursor: transitions.isEmpty ? 0 : transitions.last.id,
@@ -99,14 +112,18 @@ void main() {
   ({ProviderContainer container, _FakeSyncController controller}) boot({
     bool apnsRegistered = false,
     bool isWasm = false,
+    DashboardApiConfig? initial,
   }) {
     sent = <NotifyPayload>[];
     _FakeSyncController.last = null;
     final container = ProviderContainer(
       overrides: [
         syncControllerProvider.overrideWith(_FakeSyncController.new),
+        dashboardInitialApiConfigProvider.overrideWithValue(initial),
         isWasmRuntimeProvider.overrideWithValue(isWasm),
-        apnsRegisteredProvider.overrideWith(() => _FixedOwnership(apnsRegistered)),
+        apnsRegisteredProvider.overrideWith(
+          () => _FixedOwnership(apnsRegistered),
+        ),
         localNotifyFnProvider.overrideWithValue((NotifyPayload payload) async {
           sent.add(payload);
         }),
@@ -140,7 +157,11 @@ void main() {
         _alert(id: 3, sessionKey: 'claude_code:s3'),
       ];
 
-      expect(unnotifiedAlerts(alerts, watermark: 0).map((t) => t.id), <int>[1, 2, 3]);
+      expect(unnotifiedAlerts(alerts, watermark: 0).map((t) => t.id), <int>[
+        1,
+        2,
+        3,
+      ]);
       expect(unnotifiedAlerts(alerts, watermark: 2).map((t) => t.id), <int>[3]);
       expect(unnotifiedAlerts(alerts, watermark: 3), isEmpty);
       expect(unnotifiedAlerts(const <TransitionDto>[], watermark: 0), isEmpty);
@@ -195,6 +216,74 @@ void main() {
   });
 
   group('완료 기준 (4)(a): 중복 재전송 0회', () {
+    test('서버 A의 큰 전이 뒤 서버 B의 작은 전이도 발신하고 B 안에서는 중복하지 않는다', () async {
+      final booted = boot(
+        initial: DashboardApiConfig(
+          baseUrl: Uri.parse('https://a.example.test'),
+        ),
+      );
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 901, sessionKey: 'codex:a')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+      expect(sent.map((payload) => payload.id), <int>[901]);
+      expect(sent.single.serverUrl, 'https://a.example.test');
+
+      final connection = booted.container.read(
+        dashboardApiConfigControllerProvider.notifier,
+      );
+      connection.apply(serverUrl: 'https://b.example.test');
+      booted.controller.state = booted.controller.state.copyWith(
+        sync: const SyncState(cursor: 0),
+      );
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 6, sessionKey: 'codex:b')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+      expect(sent.map((payload) => payload.id), <int>[901, 6]);
+      expect(sent.last.serverUrl, 'https://b.example.test');
+
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 6, sessionKey: 'codex:b')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+      expect(sent.map((payload) => payload.id), <int>[901, 6]);
+
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 7, sessionKey: 'codex:b2')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+      expect(sent.map((payload) => payload.id), <int>[901, 6, 7]);
+      expect(booted.container.read(alertNotifierProvider).debugWatermark, 7);
+    });
+
+    test('같은 서버의 토큰만 바꾸면 알림 워터마크를 유지한다', () async {
+      final booted = boot(
+        initial: DashboardApiConfig(
+          baseUrl: Uri.parse('https://a.example.test'),
+        ),
+      );
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 901, sessionKey: 'codex:a')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+
+      booted.container
+          .read(dashboardApiConfigControllerProvider.notifier)
+          .apply(serverUrl: 'https://a.example.test', clientToken: 'rotated');
+      booted.controller.emitResponse(
+        _delta(<TransitionDto>[_alert(id: 6, sessionKey: 'codex:old')]),
+        nowMs: _kNowMs,
+      );
+      await _settle();
+      expect(sent.map((payload) => payload.id), <int>[901]);
+    });
+
     test('같은 큐가 폴링마다 다시 도착해도 다시 발신하지 않는다', () async {
       final booted = boot();
       final first = <TransitionDto>[
@@ -295,13 +384,15 @@ void main() {
       await _settle();
       expect(sent.length, 1, reason: '아직 이 앱이 배너의 주인이다');
 
-      booted.container.read(apnsRegisteredProvider.notifier).applyResult(
-        const PushRegistrationResult(
-          availability: PushAvailability.registered,
-          token: 't',
-          transport: kPushTransportFcmApns,
-        ),
-      );
+      booted.container
+          .read(apnsRegisteredProvider.notifier)
+          .applyResult(
+            const PushRegistrationResult(
+              availability: PushAvailability.registered,
+              token: 't',
+              transport: kPushTransportFcmApns,
+            ),
+          );
 
       booted.controller.emitResponse(
         _delta(<TransitionDto>[_alert(id: 2, sessionKey: 'codex:s2')]),

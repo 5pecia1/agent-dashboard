@@ -1,6 +1,6 @@
 /// `config_provider.dart`를 실제 파일/localStorage 없이 닫는다.
 ///
-/// [DashboardConfigValues]의 (역)직렬화·[dashboardApiConfigOverrideFor]는
+/// [DashboardConfigValues]의 (역)직렬화·[dashboardApiConfigFor]는
 /// 순수 값 변환이라 IO 없이 확인할 수 있다. [configLoadFnProvider]/
 /// [configSaveFnProvider]는 시임 계약(override 가능한 자리라는 것)만
 /// 확인한다 — 실제 io/web 브리지(`config_store_io.dart`/`config_store_web.dart`)
@@ -206,31 +206,33 @@ void main() {
     });
   });
 
-  group('dashboardApiConfigOverrideFor', () {
+  group('dashboardApiConfigFor', () {
     test('serverUrl이 없으면(첫 실행) null을 돌려준다(U-fix: placeholder URL 금지)', () {
+      expect(dashboardApiConfigFor(), isNull);
+      expect(dashboardApiConfigFor(clientToken: 'token-only'), isNull);
+    });
+
+    test('저장된 serverUrl/clientToken이 있으면 그것으로 API 설정을 만든다', () {
+      final config = dashboardApiConfigFor(
+        serverUrl: 'https://saved.example.dev',
+        clientToken: 'saved-token',
+      );
+
+      expect(config, isNotNull);
+      expect(config!.baseUrl, Uri.parse('https://saved.example.dev'));
+      expect(config.clientToken, 'saved-token');
       expect(
-        dashboardApiConfigOverrideFor(DashboardConfigValues.empty),
-        isNull,
+        config.timeout,
+        DashboardApiConfig(baseUrl: config.baseUrl).timeout,
+        reason: '시간 제한은 API 설정의 기본값이다',
       );
     });
 
-    test('저장된 serverUrl/clientToken이 있으면 그것으로 override를 만든다', () {
-      final override = dashboardApiConfigOverrideFor(
-        const DashboardConfigValues(
-          serverUrl: 'https://saved.example.dev',
-          clientToken: 'saved-token',
-        ),
-        timeout: const Duration(seconds: 3),
-      );
-      expect(override, isNotNull);
+    test('토큰이 없는 주소도 쓸 수 있다', () {
+      final config = dashboardApiConfigFor(serverUrl: 'https://saved.example.dev');
 
-      final container = ProviderContainer(overrides: [override!]);
-      addTearDown(container.dispose);
-
-      final config = container.read(dashboardApiConfigProvider);
-      expect(config.baseUrl, Uri.parse('https://saved.example.dev'));
-      expect(config.clientToken, 'saved-token');
-      expect(config.timeout, const Duration(seconds: 3));
+      expect(config, isNotNull);
+      expect(config!.clientToken, isNull);
     });
 
     test('해석할 수 없는 저장 주소는 부팅을 죽이지 않고 API를 설정하지 않는다', () {
@@ -239,10 +241,31 @@ void main() {
         'http://[::1',
       ]) {
         expect(
-          dashboardApiConfigOverrideFor(
-            DashboardConfigValues(serverUrl: serverUrl, clientToken: 't'),
-          ),
+          dashboardApiConfigFor(serverUrl: serverUrl, clientToken: 't'),
           isNull,
+          reason: serverUrl,
+        );
+      }
+    });
+
+    test('쓸 수 있는 주소의 판정은 부팅 스냅샷과 같은 규칙이다', () {
+      for (final serverUrl in <String?>[
+        null,
+        'https://saved.example.dev',
+        'https://api.example.test:443x',
+        'http://[::1',
+      ]) {
+        final snapshot = bootConfigValuesFor(
+          DashboardConfigValues(serverUrl: serverUrl),
+        );
+        expect(
+          dashboardApiConfigFor(serverUrl: snapshot.serverUrl) != null,
+          snapshot.serverUrl != null,
+          reason: '스냅샷에 주소가 있으면 API 설정도 있다: $serverUrl',
+        );
+        expect(
+          parseServerUrl(serverUrl) != null,
+          dashboardApiConfigFor(serverUrl: serverUrl) != null,
           reason: serverUrl,
         );
       }
@@ -282,7 +305,10 @@ void main() {
         ),
       );
       expect(
-        dashboardApiConfigOverrideFor(snapshot),
+        dashboardApiConfigFor(
+          serverUrl: snapshot.serverUrl,
+          clientToken: snapshot.clientToken,
+        ),
         isNull,
         reason: '주소가 없으면 API도 없다 — 둘이 어긋나지 않는다',
       );

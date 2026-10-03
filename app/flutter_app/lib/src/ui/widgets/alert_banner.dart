@@ -25,7 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/state/config_provider.dart'
-    show dashboardConfigValuesProvider;
+    show dashboardServerUrlProvider;
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/widgets/relative_time.dart';
 import 'package:my_dashboard/src/ui/widgets/session_card.dart'
@@ -169,8 +169,9 @@ class StaleDataBanner extends ConsumerWidget {
   /// "성공한 적 있음"을 전제하지 않는다).
   final int? lastSuccessAtMs;
 
-  /// `SyncControllerState.lastError?.message` — 서버/전송 계층 원문이라
-  /// `_ErrorView`와 마찬가지로 번역하지 않는다.
+  /// `sessions_page.dart`의 `syncErrorDetailText`가 만든 오류 상세 —
+  /// `_ErrorView`와 같은 문구다. 실패의 사실이 있으면 표시 언어의 문장이고,
+  /// 없으면 번역하지 않은 서버/전송 계층 원문이다.
   final String errorDetail;
 
   final VoidCallback? onRetry;
@@ -250,11 +251,16 @@ String hookSkewUpdateCommand(String serverUrl) {
 /// `sessions_page.dart`는 `syncControllerProvider` 하나만 watch한다는
 /// 문서화된 계약이 있어(파일 머리말 참고) 그 화면 쪽에 새 provider 읽기를
 /// 얹고 싶지 않다. 이 배너는 이미 `ConsumerWidget`이라 자기 `ref`로
-/// `dashboardConfigValuesProvider`(부팅 스냅샷, `config_provider.dart`)를
-/// 직접 읽는 쪽이 호출부를 건드리지 않는다. 그 provider는 override 없이
-/// 읽으면 던지는 계약이라 이 배너를 펌프하는 위젯 테스트(`alert_banner_
-/// test.dart`, `sessions_page_test.dart`)는 전부 그 provider를
-/// override해야 한다.
+/// `dashboardServerUrlProvider`(`config_provider.dart`)를 직접 읽는 쪽이
+/// 호출부를 건드리지 않는다.
+///
+/// **왜 부팅 스냅샷이 아니라 그 provider인가.** 명령이 가리키는 서버는 지금
+/// 동기화하는 서버(그래서 이 배너를 띄운 `hook_skew`를 준 서버)여야 한다.
+/// 부팅 스냅샷은 설정 화면이 주소를 바꿔도 옛 주소를 들고 있어, 복사한
+/// 명령이 옛 서버의 `setup.sh`를 받게 된다. 지금 쓰는 API 설정이 아직 없으면
+/// 그 provider가 부팅 스냅샷으로 되돌아가므로, 이 배너를 펌프하는 위젯
+/// 테스트(`alert_banner_test.dart`, `sessions_page_test.dart`)는 여전히
+/// `dashboardConfigValuesProvider`를 override해야 한다.
 class HookSkewBanner extends ConsumerWidget {
   const HookSkewBanner({super.key, required this.hookSkew});
 
@@ -266,7 +272,7 @@ class HookSkewBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final hosts = hookSkew.map(hookSkewLabel).join(', ');
-    final serverUrl = ref.watch(dashboardConfigValuesProvider).serverUrl;
+    final serverUrl = ref.watch(dashboardServerUrlProvider);
     return _Banner(
       title: t(ref, 'alert.banner.hook_skew.title'),
       body: Text(

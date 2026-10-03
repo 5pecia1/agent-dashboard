@@ -251,6 +251,8 @@ void main() {
       serverUrl: _tap.serverUrl,
     );
 
+    expect(calls.map((call) => call.method), <String>['cancel', 'show']);
+    expect(calls.first.arguments, _osNotificationId);
     final shown =
         calls.singleWhere((call) => call.method == 'show').arguments as Map;
     final payload = NotificationTap.decode(shown['payload'] as String)!;
@@ -295,5 +297,32 @@ void main() {
     expect(payload.project, '/work/my-dashboard');
     expect(payload.host, 'work-mac');
     expect(raw, isNot(contains('must-not-enter-notification')));
+  });
+
+  test('비동기 발신 도중 주소가 바뀌어도 배너에 원래 서버를 기록한다', () async {
+    final container = ProviderContainer(
+      overrides: [
+        dashboardApiConfigProvider.overrideWithValue(
+          DashboardApiConfig(baseUrl: Uri.parse('https://new.example.test')),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await probeNotificationSupport();
+    calls.clear();
+
+    await container.read(localNotifyFnProvider)(
+      const NotifyPayload(
+        id: _transitionId,
+        title: '이전 서버 알림',
+        body: '입력 필요',
+        sessionKey: 'codex:old',
+        serverUrl: 'https://old.example.test',
+      ),
+    );
+
+    final shown = calls.singleWhere((call) => call.method == 'show').arguments as Map;
+    final tap = NotificationTap.decode(shown['payload'] as String)!;
+    expect(tap.serverUrl, 'https://old.example.test');
   });
 }

@@ -278,6 +278,33 @@ void main() {
       expect(after.lastError?.kind, SyncErrorKind.network);
     });
 
+    test('전송이 던지면 되돌리고 lastError에 그 요청과 원인을 사실로 남긴다', () async {
+      final container = await bootWithWaitingSession();
+      addTearDown(container.dispose);
+
+      // 실제 전송처럼 DashboardApiException이 아닌 예외를 던진다 — `_request`가
+      // 요청과 원인을 TransportFault로 접고, 화면은 그 사실로 표시 언어의
+      // 문장을 만든다(`sessions_page.dart`의 `syncErrorDetailText`).
+      httpHandler = (ApiRequest request) =>
+          Future<ApiResponse>.error(const _SocketFailure());
+
+      await container
+          .read(syncControllerProvider.notifier)
+          .ackSession('claude-code:abc');
+
+      final after = container.read(syncControllerProvider);
+      expect(after.sync.sessions['claude-code:abc']?.state, 'waiting_input');
+      expect(after.lastError?.kind, SyncErrorKind.network);
+      expect(
+        after.lastError?.fault,
+        const TransportFault(
+          method: 'POST',
+          path: kSessionsPath,
+          cause: _SocketFailure.text,
+        ),
+      );
+    });
+
     test('맵에 없는 세션 키로 부르면 아무 요청도 보내지 않는다', () async {
       httpHandler = (ApiRequest request) async =>
           ApiResponse(statusCode: 200, body: jsonEncode(snapshotJson()));
@@ -302,6 +329,17 @@ void main() {
       expect(callCount, 0, reason: '방어적 이른 반환 — 없는 세션에 낙관 갱신을 걸 수 없다');
     });
   });
+}
+
+/// `dart:io`의 `SocketException`처럼 시임이 던지는, [DashboardApiException]이
+/// 아닌 예외 흉내.
+class _SocketFailure implements Exception {
+  const _SocketFailure();
+
+  static const String text = 'SocketException: Connection refused';
+
+  @override
+  String toString() => text;
 }
 
 /// 대기 중인 스케줄 하나(`(delay, callback)`)의 기록.

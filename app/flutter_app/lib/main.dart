@@ -86,7 +86,7 @@ Future<void> runDashboard({
 /// 예외는 웹에서 브라우저가 저장소를 막아 빈 값으로 시작하는 부팅이다
 /// (`ui/config_read_failure.dart`의 `shouldBootWithoutStoredConfig`).
 /// 해석할 수 없는 서버 주소는 [bootConfigValuesFor]가 스냅샷에서 비운다 —
-/// 그래서 스냅샷에 주소가 있으면 API override도 있다.
+/// 그래서 스냅샷에 주소가 있으면 시작 API 설정도 있다.
 Widget buildDashboardRoot(
   DashboardConfigValues stored, {
   required Widget app,
@@ -96,13 +96,21 @@ Widget buildDashboardRoot(
   final configValues = bootConfigValuesFor(configure?.call(stored) ?? stored);
 
   // T-wire 계약(U-fix): 서버 주소가 아직 없으면(첫 실행) placeholder URL로
-  // 채워 넣지 않는다 — `dashboardApiConfigOverrideFor`가 이때 null을 돌려
-  // 주므로 `dashboardApiConfigProvider`를 아예 override하지 않는다. 이
-  // 상태에서 그 provider(또는 `dashboardApiProvider`)를 읽으면 던지는 게
-  // 정상이다 — `sync_controller.dart`(unconfigured 게이팅)와
-  // `app.dart`(push 등록 게이팅)가 서버 주소가 없는 동안 두 자리 모두
-  // 아예 읽지 않는다는 계약으로 "네트워크 0"을 지킨다.
-  final apiConfigOverride = dashboardApiConfigOverrideFor(configValues);
+  // 채워 넣지 않는다 — `dashboardApiConfigFor`가 이때 null을 돌려주므로 시작
+  // API 설정이 비어 있고, 그 상태에서 `dashboardApiConfigProvider`(또는
+  // `dashboardApiProvider`)를 읽으면 던지는 게 정상이다 —
+  // `sync_controller.dart`(unconfigured 게이팅)와 `app.dart`(push 등록
+  // 게이팅)가 서버 주소가 없는 동안 두 자리 모두 아예 읽지 않는다는 계약으로
+  // "네트워크 0"을 지킨다.
+  //
+  // 이 값은 시작값일 뿐이다. `dashboardApiConfigProvider`는 첫 실행이든
+  // 아니든 항상 [dashboardApiConfigProviderOverride]로 꽂아 지금 쓰는 값을
+  // 따라가게 한다 — 설정 화면이 서버 주소나 토큰을 저장하면 재시작 없이 그
+  // 값으로 요청한다(`config_provider.dart`의 `DashboardApiConfigController`).
+  final apiConfig = dashboardApiConfigFor(
+    serverUrl: configValues.serverUrl,
+    clientToken: configValues.clientToken,
+  );
 
   return ProviderScope(
     key: kDashboardRootKey,
@@ -112,7 +120,8 @@ Widget buildDashboardRoot(
       // 파일이 사라지면 백그라운드 저장이 새 파일을 만들지 않는다
       // (`config_provider.dart`의 `backgroundConfigPatch`).
       storedConfigAtBootProvider.overrideWithValue(!stored.isEmpty),
-      ?apiConfigOverride,
+      dashboardInitialApiConfigProvider.overrideWithValue(apiConfig),
+      dashboardApiConfigProviderOverride,
       httpSendProviderOverride,
       ...usageDashboardOverrides(configValues),
       ...?extensions?.call(configValues),
