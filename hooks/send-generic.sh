@@ -150,7 +150,7 @@ privacy_payload() {
     --arg include_content "${MY_DASHBOARD_INCLUDE_CONTENT:-0}" \
     --arg project "${MY_DASHBOARD_PROJECT_LABEL:-}" \
     --arg host "${MY_DASHBOARD_HOST_LABEL:-}" \
-    'if $include_content == "1" then . else .message = null | del(.raw) end
+    'if $include_content == "1" then . else .message = null | del(.raw, .display_title) end
      | if $project != "" then .project = $project else . end
      | if $host != "" then .host = $host else . end' 2>/dev/null
 }

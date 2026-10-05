@@ -40,6 +40,7 @@ export interface TransitionInput {
   host: string | null;
   /** 전이를 만든 이벤트의 message(이미 300자로 잘렸고, 저장이 꺼져 있으면 null). */
   message: string | null;
+  display_title?: string | null;
   /** 이벤트 발생 시각(epoch ms, 클라이언트 시계). */
   occurred_at: number;
 }
@@ -53,8 +54,8 @@ export function prepareTransition(
   return db
     .prepare(
       `INSERT INTO dashboard_transitions
-         (session_key, from_state, to_state, source, project, host, message, occurred_at, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+         (session_key, from_state, to_state, source, project, host, message, display_title, occurred_at, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE (? IS NULL OR EXISTS (SELECT 1 FROM dashboard_sessions WHERE key = ? AND projection_token = ?))
        RETURNING id`,
     )
@@ -66,6 +67,7 @@ export function prepareTransition(
       input.project,
       input.host,
       input.message,
+      input.display_title ?? null,
       input.occurred_at,
       now,
       projectionToken ?? null,
@@ -105,6 +107,7 @@ export async function appendTransition(
     project: input.project,
     host: input.host,
     message: input.message,
+    display_title: input.display_title ?? null,
     occurred_at: input.occurred_at,
   };
 }

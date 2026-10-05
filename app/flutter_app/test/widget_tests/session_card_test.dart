@@ -267,6 +267,90 @@ void main() {
     );
   });
 
+  group('SessionCard: 작업 표시 제목(display_title)', () {
+    testWidgets('제목이 있으면 카드 제목이 "{프로젝트} · {제목}"이고 전체 경로는 Tooltip에만 남는다', (
+      tester,
+    ) async {
+      const session = SessionViewDto(
+        key: 'claude-code:s1',
+        state: 'working',
+        source: 'claude-code',
+        sessionId: 's1',
+        project: '/repo/my-dashboard',
+        host: 'dev-mac',
+        lastOccurredAt: 5000,
+        updatedAt: 5000,
+        displayTitle: '작업 A',
+      );
+      await _pumpCard(tester, session);
+      await tester.pump();
+
+      expect(find.text('my-dashboard · 작업 A'), findsOneWidget);
+      expect(find.text('/repo/my-dashboard'), findsNothing);
+      expect(find.text('#s1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('compact 카드도 같은 표시 이름 규칙을 쓴다', (tester) async {
+      const session = SessionViewDto(
+        key: 'claude-code:s1',
+        state: 'working',
+        source: 'claude-code',
+        sessionId: 's1',
+        project: '/repo/my-dashboard',
+        host: 'dev-mac',
+        lastOccurredAt: 5000,
+        updatedAt: 5000,
+        displayTitle: '작업 A',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            i18nTranslateOverride.overrideWithValue((key, locale) => key),
+            i18nTranslateArgsOverride.overrideWithValue(
+              (key, locale, argKeys, argVals) => key,
+            ),
+            stateLabelKeyFnProvider.overrideWithValue((s) => 'label.${s.name}'),
+            isSessionStaleFnProvider.overrideWithValue(
+              ({required int now, required int updatedAt, required int staleMs}) =>
+                  false,
+            ),
+            syncControllerProvider.overrideWith(
+              () => _FixedSyncController(const SyncControllerState()),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: Scaffold(body: SessionCard(session: session, compact: true)),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('my-dashboard · 작업 A'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('제목이 없으면 basename만 보인다(무제목 형식 그대로)', (tester) async {
+      const session = SessionViewDto(
+        key: 'claude-code:s1',
+        state: 'working',
+        source: 'claude-code',
+        sessionId: 's1',
+        project: '/repo/my-dashboard',
+        host: 'dev-mac',
+        lastOccurredAt: 5000,
+        updatedAt: 5000,
+      );
+      await _pumpCard(tester, session);
+      await tester.pump();
+
+      expect(find.text('my-dashboard'), findsOneWidget);
+      expect(find.text('my-dashboard · '), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group(
     'SessionCard: 배지 줄 Wrap 최악 3줄이 그리드 칸 높이 안에 들어간다 '
     '(검증 리뷰 지적 medium 수정 — narrow_width_test.dart는 i18n 키를 그대로 '

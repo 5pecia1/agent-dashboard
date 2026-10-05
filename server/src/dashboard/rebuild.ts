@@ -128,6 +128,7 @@ interface RawEventRow {
   prompt_id: string | null;
   tool_use_id: string | null;
   tool_name: string | null;
+  display_title: string | null;
 }
 
 interface SessionProjection {
@@ -139,6 +140,7 @@ interface SessionProjection {
   state: SessionState;
   last_event: string;
   last_message: string | null;
+  display_title: string | null;
   last_occurred_at: number | null;
   last_progress_at: number | null;
   /** 재생 시 재계산한다(원본 값을 이월하지 않는다) - 위 파일 헤더의 판정 근거 참고. */
@@ -156,6 +158,7 @@ interface RebuiltTransition {
   project: string;
   host: string | null;
   message: string | null;
+  display_title: string | null;
   occurred_at: number;
   created_at: number;
 }
@@ -210,7 +213,7 @@ export interface RebuildResult {
 export async function rebuildProjection(db: D1Database): Promise<RebuildResult> {
   const { results } = await db
     .prepare(
-      `SELECT session_key, source, event, message, occurred_at, occurred_at_provided, received_at, host, raw, prompt_id, tool_use_id, tool_name
+      `SELECT session_key, source, event, message, display_title, occurred_at, occurred_at_provided, received_at, host, raw, prompt_id, tool_use_id, tool_name
          FROM dashboard_events
         ORDER BY COALESCE(occurred_at, received_at) ASC, id ASC`,
     )
@@ -326,6 +329,7 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
       state: newState,
       last_event: row.event,
       last_message: projectedMessage,
+      display_title: row.display_title,
       last_occurred_at: occurredAt,
       // 상태가 실제로 바뀌는(혹은 승격되는) 경로는 언제나 진척이다 - routes.ts의 상태 변경
       // UPSERT와 같은 규칙(last_progress_at = now, 기록만 경로는 위 5-a에서 이미 갈라진다).
@@ -353,6 +357,7 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
         project,
         host: row.host,
         message: row.message,
+        display_title: row.display_title,
         occurred_at: occurredAt,
         created_at: now,
       });
@@ -374,8 +379,8 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
     db
       .prepare(
         `INSERT INTO dashboard_sessions
-           (key, source, session_id, project, host, state, last_event, last_message, last_occurred_at, last_progress_at, last_transition_id, created_at, updated_at, input_state)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (key, source, session_id, project, host, state, last_event, last_message, display_title, last_occurred_at, last_progress_at, last_transition_id, created_at, updated_at, input_state)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         s.key,
@@ -386,6 +391,7 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
         s.state,
         s.last_event,
         s.last_message,
+        s.display_title,
         s.last_occurred_at,
         s.last_progress_at,
         s.last_transition_id,
@@ -399,10 +405,10 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
       db
         .prepare(
           `INSERT INTO dashboard_transitions
-             (session_key, from_state, to_state, source, project, host, message, occurred_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (session_key, from_state, to_state, source, project, host, message, display_title, occurred_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(t.session_key, t.from_state, t.to_state, t.source, t.project, t.host, t.message, t.occurred_at, t.created_at),
+        .bind(t.session_key, t.from_state, t.to_state, t.source, t.project, t.host, t.message, t.display_title, t.occurred_at, t.created_at),
     );
   }
   if (writes.length > 0) await db.batch(writes);

@@ -87,9 +87,25 @@ else: raise RuntimeError('dashboard database not found')`,persist],legacy);
   for (const [name, hash] of Object.entries(expected.migrationSha256)) {
     assert.equal(createHash('sha256').update(await readFile(path.join(consumer,'node_modules/@5pecia1/agent-dashboard-server/migrations',name))).digest('hex'),hash,`immutable migration ${name}`);
   }
-  const migrationOutput=wrangler(consumer,['d1','migrations','apply','DB','--local','--persist-to',persist]);
-  assert.match(migrationOutput,/No migrations to apply/);
-  assert.deepEqual(snapshot(consumer,persist),expected.tables,'migration ledger and all product tables must remain byte-equivalent');
+  assert.deepEqual(snapshot(consumer,persist),expected.tables,'pre-upgrade fixture must match');
+  wrangler(consumer,['d1','migrations','apply','DB','--local','--persist-to',persist]);
+  const migrated=snapshot(consumer,persist);
+  const titledTables=new Set(['dashboard_events','dashboard_sessions','dashboard_transitions']);
+  for (const table of tables.filter(table=>table!=='d1_migrations')) {
+    const expectedRows=titledTables.has(table)
+      ? expected.tables[table].map(row=>({...row,display_title:null}))
+      : expected.tables[table];
+    assert.deepEqual(migrated[table],expectedRows,`preserve existing ${table} rows`);
+  }
+  const oldLedger=expected.tables.d1_migrations;
+  assert.deepEqual(migrated.d1_migrations.slice(0,oldLedger.length),oldLedger);
+  assert.equal(migrated.d1_migrations.length,oldLedger.length+1);
+  assert.equal(migrated.d1_migrations.at(-1).name,'0006_display_title.sql');
+  assert.equal(migrated.d1_migrations.at(-1).id,oldLedger.at(-1).id+1);
+  assert.equal(typeof migrated.d1_migrations.at(-1).applied_at,'string');
+  const repeated=wrangler(consumer,['d1','migrations','apply','DB','--local','--persist-to',persist]);
+  assert.match(repeated,/No migrations to apply/);
+  assert.deepEqual(snapshot(consumer,persist),migrated,'migration rerun is a no-op');
   worker=await startWorker(consumer,persist);
   const sync=await api(worker.origin,'/dashboard/sync?include_ended=1');
   assert.equal(sync.cursor,expected.cursor);
@@ -100,7 +116,7 @@ else: raise RuntimeError('dashboard database not found')`,persist],legacy);
   const delta=await api(worker.origin,`/dashboard/sync?since=${expected.cursor}`);
   assert.equal(delta.reset,false);
   assert.equal(delta.transitions.length,0);
-  assert.deepEqual(snapshot(consumer,persist),expected.tables,'read APIs must not rewrite data or rebuild state');
+  assert.deepEqual(snapshot(consumer,persist),migrated,'read APIs must not rewrite data or rebuild state');
   const nextOccurredAt = Math.max(...expected.tables.dashboard_events.map(row=>row.occurred_at))+1;
   await api(worker.origin,'/dashboard/events',{token:'test-ingest-token',body:{protocol_version:1,project:'/workspace/example',source:'devin',session_id:'upgrade-devin',event:'PostToolUse',event_id:'upgrade-new-tool-a',prompt_id:'prompt-fixture',tool_use_id:'tool-a',tool_name:'exec',occurred_at:nextOccurredAt}});
   const inputAfterA=JSON.parse(rows(consumer,persist,'dashboard_sessions').find(row=>row.key==='devin:upgrade-devin').input_state);
@@ -111,9 +127,9 @@ else: raise RuntimeError('dashboard database not found')`,persist],legacy);
   assert.equal(after.reset,false);
   assert(after.cursor>expected.cursor);
   assert(after.transitions.some(row=>row.session_key==='devin:upgrade-devin' && row.to_state==='working'));
-  assert.equal(rows(consumer,persist,'d1_migrations').length,5);
+  assert.deepEqual(rows(consumer,persist,'d1_migrations'),migrated.d1_migrations);
   assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'),verifiedHash,'tarball changed during verification');
-  const receipt={ok:true,tarball,sha256:verifiedHash,workspace,sourceRevision:expected.sourceRevision,checks:['immutable migration hashes','existing SQL ledger no-op','all tables unchanged','cursor continuity','seen/settings/devices preserved','Devin pending correlation retained and resolved']};
+  const receipt={ok:true,tarball,sha256:verifiedHash,workspace,sourceRevision:expected.sourceRevision,checks:['immutable migration hashes','0006 adds nullable display_title to three tables as additive migration','old table columns and migration ledger rows preserved','migration rerun is a no-op','cursor continuity','seen/settings/devices preserved','Devin pending correlation retained and resolved']};
   const receiptIndex=process.argv.indexOf('--receipt');
   if (receiptIndex !== -1) await writeFile(path.resolve(process.argv[receiptIndex+1]),JSON.stringify(receipt,null,2)+'\n');
   console.log(JSON.stringify(receipt,null,2));

@@ -80,3 +80,70 @@ describe("buildPushPayload — push.title의 project basename 표시", () => {
     expect(withHost.title.split(" · ")).toEqual(["my-dashboard", "example-host", "실행 마침"]);
   });
 });
+
+describe("buildPushPayload — display_title", () => {
+  const OPT_IN_ENV = { DASHBOARD_STORE_MESSAGE: "1" } as DispatchEnv;
+
+  function titled(overrides: Partial<PushTransition> = {}): PushTransition {
+    return {
+      id: 7,
+      session_key: "claude-code:s1",
+      from_state: "working",
+      to_state: "waiting_input",
+      source: "claude-code",
+      project: "/repo/demo",
+      host: "example-host",
+      message: "확인할까요?",
+      display_title: "작업 A",
+      occurred_at: Date.now(),
+      ...overrides,
+    };
+  }
+
+  it("제목 있는 전이는 'project · 표시 제목'이 되고 host와 상태 라벨·메시지는 본문으로 간다", () => {
+    const payload = buildPushPayload(OPT_IN_ENV, titled());
+    expect(payload.title).toBe("demo · 작업 A");
+    expect(payload.body).toBe("example-host · 질문·승인 대기 · 확인할까요?");
+    expect(payload.data.display_title).toBe("작업 A");
+  });
+
+  it("제목 있는데 host가 없으면 본문 앞자리도 없어진다", () => {
+    const payload = buildPushPayload(OPT_IN_ENV, titled({ host: null }));
+    expect(payload.title).toBe("demo · 작업 A");
+    expect(payload.body).toBe("질문·승인 대기 · 확인할까요?");
+  });
+
+  it("제목이 프로젝트 이름과 같으면 'demo · demo'로 중복 표기하지 않는다", () => {
+    const payload = buildPushPayload(OPT_IN_ENV, titled({ display_title: "demo" }));
+    expect(payload.title).toBe("demo");
+    expect(payload.body).toBe("example-host · 질문·승인 대기 · 확인할까요?");
+  });
+
+  it("제목 있는데 message가 없으면 본문은 host와 상태 라벨뿐이다", () => {
+    const payload = buildPushPayload(OPT_IN_ENV, titled({ message: null }));
+    expect(payload.title).toBe("demo · 작업 A");
+    expect(payload.body).toBe("example-host · 질문·승인 대기");
+  });
+
+  it("제목이 없거나 공백뿐이면 기존 포맷 그대로다", () => {
+    const missing = buildPushPayload(OPT_IN_ENV, titled({ display_title: null }));
+    expect(missing.title).toBe("demo · example-host · 질문·승인 대기");
+    expect(missing.body).toBe("확인할까요?");
+    expect(missing.data.display_title).toBe("");
+
+    const blank = buildPushPayload(OPT_IN_ENV, titled({ display_title: "   " }));
+    expect(blank.title).toBe("demo · example-host · 질문·승인 대기");
+  });
+
+  it("저장 opt-in이 꺼져 있으면 저장된 제목이 있어도 노출하지 않는다", () => {
+    const payload = buildPushPayload(FAKE_ENV, titled());
+    expect(payload.title).toBe("demo · example-host · 질문·승인 대기");
+    expect(payload.data.display_title).toBe("");
+  });
+
+  it("bodyOverride는 제목 포맷보다 항상 이긴다", () => {
+    const payload = buildPushPayload(OPT_IN_ENV, titled(), { bodyOverride: "테스트 본문" });
+    expect(payload.title).toBe("demo · 작업 A");
+    expect(payload.body).toBe("테스트 본문");
+  });
+});

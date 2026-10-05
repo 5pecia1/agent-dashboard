@@ -49,7 +49,8 @@ import 'package:my_dashboard/src/state/dashboard_provider.dart'
 import 'package:my_dashboard/src/state/sync_controller.dart'
     show SyncControllerState, syncControllerProvider;
 import 'package:my_dashboard/src/util/mute_time.dart' show formatMuteUntilClock;
-import 'package:my_dashboard/src/util/project_path.dart' show projectBasename;
+import 'package:my_dashboard/src/util/session_display.dart'
+    show sessionDisplayName;
 
 /// `assets/tray_icon.png`(pubspec에 등록, 16×16 **컬러** PNG — 종 모양의
 /// 알파는 옛 template 원본 그대로, RGB만 보라 `#A56FD8`로 채웠다).
@@ -229,9 +230,11 @@ List<MenuItem> _buildUnseenItems(
   final serverRevision = connection.serverRevision;
   final labelKeyFor = ref.read(stateLabelKeyFnProvider);
   String labelFor(SessionViewDto session) {
-    final project = session.project.isNotEmpty
-        ? projectBasename(session.project)
-        : session.sessionId;
+    final project = sessionDisplayName(
+      project: session.project,
+      fallback: session.sessionId,
+      displayTitle: session.displayTitle,
+    );
     final stateLabel = tRead(
       ref,
       labelKeyFor(sessionStateDtoFromCode(session.state)),

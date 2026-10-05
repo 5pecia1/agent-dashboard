@@ -37,6 +37,7 @@ TransitionDto _alert({
   String? project,
   String? host,
   String? message,
+  String? displayTitle,
 }) => TransitionDto(
   id: id,
   sessionKey: sessionKey,
@@ -44,6 +45,7 @@ TransitionDto _alert({
   project: project,
   host: host,
   message: message,
+  displayTitle: displayTitle,
 );
 
 /// [StateLabelResolver]의 결정적 대역 — 실제 i18n 카탈로그(FRB·로케일)를
@@ -140,6 +142,94 @@ void main() {
 
       expect(payload.project, '/work/one/dashboard');
       expect(payload.host, 'remote-mac');
+    });
+  });
+
+  group('payloadForAlert — 작업 표시 제목(display_title)', () {
+    test('제목이 있으면 제목은 "{project} · {display_title}", 본문은 "[host · ]{label}[ · {message}]"다', () {
+      final payload = payloadForAlert(
+        _alert(
+          id: 1,
+          project: '/repo/demo',
+          host: 'host',
+          message: '확인할까요?',
+          displayTitle: '작업 A',
+        ),
+        stateLabel: _fakeLabel,
+      );
+
+      expect(payload.title, 'demo · 작업 A');
+      expect(payload.body, 'host · 질문·승인 대기 · 확인할까요?');
+      expect(payload.sessionKey, 'claude_code:s1');
+      expect(payload.project, '/repo/demo');
+      expect(payload.host, 'host');
+    });
+
+    test('제목이 있는데 host가 없으면 본문 접두가 없다', () {
+      expect(
+        payloadForAlert(
+          _alert(
+            id: 1,
+            project: '/repo/demo',
+            message: '확인할까요?',
+            displayTitle: '작업 A',
+          ),
+          stateLabel: _fakeLabel,
+        ).body,
+        '질문·승인 대기 · 확인할까요?',
+      );
+    });
+
+    test('제목이 있는데 message가 없으면 본문은 host와 상태 라벨뿐이다', () {
+      expect(
+        payloadForAlert(
+          _alert(id: 1, project: '/repo/demo', host: 'host', displayTitle: '작업 A'),
+          stateLabel: _fakeLabel,
+        ).body,
+        'host · 질문·승인 대기',
+      );
+    });
+
+    test('제목이 프로젝트 이름과 같으면 중복 표기하지 않는다', () {
+      final payload = payloadForAlert(
+        _alert(
+          id: 1,
+          project: '/repo/demo',
+          host: 'host',
+          message: '확인할까요?',
+          displayTitle: 'demo',
+        ),
+        stateLabel: _fakeLabel,
+      );
+      expect(payload.title, 'demo');
+      expect(payload.body, 'host · 질문·승인 대기 · 확인할까요?');
+    });
+
+    test('project가 없으면 제목이 "{sessionKey} · {display_title}"로 접힌다', () {
+      expect(
+        payloadForAlert(
+          _alert(id: 1, displayTitle: '작업 A'),
+          stateLabel: _fakeLabel,
+        ).title,
+        'claude_code:s1 · 작업 A',
+      );
+    });
+
+    test('빈/공백 제목은 "없음"으로 접어 무제목 형식을 바이트 그대로 따른다', () {
+      for (final title in <String>['', '   ']) {
+        final payload = payloadForAlert(
+          _alert(
+            id: 1,
+            project: '/repo/demo',
+            host: 'host',
+            message: '확인할까요?',
+            displayTitle: title,
+          ),
+          stateLabel: _fakeLabel,
+        );
+        expect(payload.title, 'demo · 질문·승인 대기', reason: 'displayTitle=$title');
+        expect(payload.body, 'host · 확인할까요?', reason: 'displayTitle=$title');
+      }
     });
   });
 

@@ -500,6 +500,7 @@ SessionViewDto _project(SessionViewDto? existing, TransitionDto transition) {
       // 전이 로그에는 이벤트 이름이 없다. 다음 스냅샷이 채운다.
       lastEvent: '',
       lastMessage: transition.message,
+      displayTitle: transition.displayTitle,
       lastOccurredAt: transition.occurredAt,
       createdAt: transition.createdAt,
       updatedAt: transition.createdAt,
@@ -520,6 +521,7 @@ SessionViewDto _project(SessionViewDto? existing, TransitionDto transition) {
     project: transition.project ?? existing.project,
     host: transition.host ?? existing.host,
     lastMessage: transition.message ?? existing.lastMessage,
+    displayTitle: transition.displayTitle,
     lastOccurredAt: transition.occurredAt,
     updatedAt: math.max(existing.updatedAt, transition.createdAt),
     lastProgressAt: math.max(

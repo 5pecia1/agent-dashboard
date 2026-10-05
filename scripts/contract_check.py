@@ -53,6 +53,7 @@ HOOKS_DIST_FILES = [
     "agent-event-hook.sh",
     "codex-notify.sh",
     "codex-hooks.toml",
+    "herdr-context.py",
     "install.sh",
     "send-generic.sh",
     "test-hooks.sh",

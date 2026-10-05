@@ -17,7 +17,7 @@ mixin _$SessionViewDto {
 
 /// `<source>:<session_id>`. 프로젝션·전이·push가 공유하는 식별자다.
  String get key;/// 현재 상태. [kDashboardStates] 중 하나.
- String get state; String get source;@JsonKey(name: 'session_id') String get sessionId; String get project; String? get host;@JsonKey(name: 'last_event') String get lastEvent;@JsonKey(name: 'last_message') String? get lastMessage;/// 마지막 이벤트의 발생 시각(epoch ms, **이벤트를 낸 기계의 시계**).
+ String get state; String get source;@JsonKey(name: 'session_id') String get sessionId; String get project; String? get host;@JsonKey(name: 'last_event') String get lastEvent;@JsonKey(name: 'last_message') String? get lastMessage;@JsonKey(name: 'display_title') String? get displayTitle;/// 마지막 이벤트의 발생 시각(epoch ms, **이벤트를 낸 기계의 시계**).
 @JsonKey(name: 'last_occurred_at') int? get lastOccurredAt;/// 세션 첫 이벤트 수신 시각(epoch ms, 서버 시계).
 @JsonKey(name: 'created_at') int get createdAt;/// 프로젝션 마지막 갱신 시각(epoch ms, 서버 시계).
 @JsonKey(name: 'updated_at') int get updatedAt;/// 마지막 **진척** 신호를 서버가 **수신한** 시각(epoch ms, 서버 시계).
@@ -47,16 +47,16 @@ $SessionViewDtoCopyWith<SessionViewDto> get copyWith => _$SessionViewDtoCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionViewDto&&(identical(other.key, key) || other.key == key)&&(identical(other.state, state) || other.state == state)&&(identical(other.source, source) || other.source == source)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.lastEvent, lastEvent) || other.lastEvent == lastEvent)&&(identical(other.lastMessage, lastMessage) || other.lastMessage == lastMessage)&&(identical(other.lastOccurredAt, lastOccurredAt) || other.lastOccurredAt == lastOccurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.lastProgressAt, lastProgressAt) || other.lastProgressAt == lastProgressAt)&&(identical(other.stale, stale) || other.stale == stale)&&(identical(other.lastTransitionId, lastTransitionId) || other.lastTransitionId == lastTransitionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionViewDto&&(identical(other.key, key) || other.key == key)&&(identical(other.state, state) || other.state == state)&&(identical(other.source, source) || other.source == source)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.lastEvent, lastEvent) || other.lastEvent == lastEvent)&&(identical(other.lastMessage, lastMessage) || other.lastMessage == lastMessage)&&(identical(other.displayTitle, displayTitle) || other.displayTitle == displayTitle)&&(identical(other.lastOccurredAt, lastOccurredAt) || other.lastOccurredAt == lastOccurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.lastProgressAt, lastProgressAt) || other.lastProgressAt == lastProgressAt)&&(identical(other.stale, stale) || other.stale == stale)&&(identical(other.lastTransitionId, lastTransitionId) || other.lastTransitionId == lastTransitionId));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,key,state,source,sessionId,project,host,lastEvent,lastMessage,lastOccurredAt,createdAt,updatedAt,lastProgressAt,stale,lastTransitionId);
+int get hashCode => Object.hash(runtimeType,key,state,source,sessionId,project,host,lastEvent,lastMessage,displayTitle,lastOccurredAt,createdAt,updatedAt,lastProgressAt,stale,lastTransitionId);
 
 @override
 String toString() {
-  return 'SessionViewDto(key: $key, state: $state, source: $source, sessionId: $sessionId, project: $project, host: $host, lastEvent: $lastEvent, lastMessage: $lastMessage, lastOccurredAt: $lastOccurredAt, createdAt: $createdAt, updatedAt: $updatedAt, lastProgressAt: $lastProgressAt, stale: $stale, lastTransitionId: $lastTransitionId)';
+  return 'SessionViewDto(key: $key, state: $state, source: $source, sessionId: $sessionId, project: $project, host: $host, lastEvent: $lastEvent, lastMessage: $lastMessage, displayTitle: $displayTitle, lastOccurredAt: $lastOccurredAt, createdAt: $createdAt, updatedAt: $updatedAt, lastProgressAt: $lastProgressAt, stale: $stale, lastTransitionId: $lastTransitionId)';
 }
 
 
@@ -67,7 +67,7 @@ abstract mixin class $SessionViewDtoCopyWith<$Res>  {
   factory $SessionViewDtoCopyWith(SessionViewDto value, $Res Function(SessionViewDto) _then) = _$SessionViewDtoCopyWithImpl;
 @useResult
 $Res call({
- String key, String state, String source,@JsonKey(name: 'session_id') String sessionId, String project, String? host,@JsonKey(name: 'last_event') String lastEvent,@JsonKey(name: 'last_message') String? lastMessage,@JsonKey(name: 'last_occurred_at') int? lastOccurredAt,@JsonKey(name: 'created_at') int createdAt,@JsonKey(name: 'updated_at') int updatedAt,@JsonKey(name: 'last_progress_at') int? lastProgressAt, bool stale,@JsonKey(name: 'last_transition_id') int? lastTransitionId
+ String key, String state, String source,@JsonKey(name: 'session_id') String sessionId, String project, String? host,@JsonKey(name: 'last_event') String lastEvent,@JsonKey(name: 'last_message') String? lastMessage,@JsonKey(name: 'display_title') String? displayTitle,@JsonKey(name: 'last_occurred_at') int? lastOccurredAt,@JsonKey(name: 'created_at') int createdAt,@JsonKey(name: 'updated_at') int updatedAt,@JsonKey(name: 'last_progress_at') int? lastProgressAt, bool stale,@JsonKey(name: 'last_transition_id') int? lastTransitionId
 });
 
 
@@ -84,7 +84,7 @@ class _$SessionViewDtoCopyWithImpl<$Res>
 
 /// Create a copy of SessionViewDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? key = null,Object? state = null,Object? source = null,Object? sessionId = null,Object? project = null,Object? host = freezed,Object? lastEvent = null,Object? lastMessage = freezed,Object? lastOccurredAt = freezed,Object? createdAt = null,Object? updatedAt = null,Object? lastProgressAt = freezed,Object? stale = null,Object? lastTransitionId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? key = null,Object? state = null,Object? source = null,Object? sessionId = null,Object? project = null,Object? host = freezed,Object? lastEvent = null,Object? lastMessage = freezed,Object? displayTitle = freezed,Object? lastOccurredAt = freezed,Object? createdAt = null,Object? updatedAt = null,Object? lastProgressAt = freezed,Object? stale = null,Object? lastTransitionId = freezed,}) {
   return _then(_self.copyWith(
 key: null == key ? _self.key : key // ignore: cast_nullable_to_non_nullable
 as String,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
@@ -94,6 +94,7 @@ as String,project: null == project ? _self.project : project // ignore: cast_nul
 as String,host: freezed == host ? _self.host : host // ignore: cast_nullable_to_non_nullable
 as String?,lastEvent: null == lastEvent ? _self.lastEvent : lastEvent // ignore: cast_nullable_to_non_nullable
 as String,lastMessage: freezed == lastMessage ? _self.lastMessage : lastMessage // ignore: cast_nullable_to_non_nullable
+as String?,displayTitle: freezed == displayTitle ? _self.displayTitle : displayTitle // ignore: cast_nullable_to_non_nullable
 as String?,lastOccurredAt: freezed == lastOccurredAt ? _self.lastOccurredAt : lastOccurredAt // ignore: cast_nullable_to_non_nullable
 as int?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as int,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
@@ -185,10 +186,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SessionViewDto() when $default != null:
-return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
+return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.displayTitle,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
   return orElse();
 
 }
@@ -206,10 +207,10 @@ return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)  $default,) {final _that = this;
 switch (_that) {
 case _SessionViewDto():
-return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
+return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.displayTitle,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -226,10 +227,10 @@ return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String key,  String state,  String source, @JsonKey(name: 'session_id')  String sessionId,  String project,  String? host, @JsonKey(name: 'last_event')  String lastEvent, @JsonKey(name: 'last_message')  String? lastMessage, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'last_occurred_at')  int? lastOccurredAt, @JsonKey(name: 'created_at')  int createdAt, @JsonKey(name: 'updated_at')  int updatedAt, @JsonKey(name: 'last_progress_at')  int? lastProgressAt,  bool stale, @JsonKey(name: 'last_transition_id')  int? lastTransitionId)?  $default,) {final _that = this;
 switch (_that) {
 case _SessionViewDto() when $default != null:
-return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
+return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project,_that.host,_that.lastEvent,_that.lastMessage,_that.displayTitle,_that.lastOccurredAt,_that.createdAt,_that.updatedAt,_that.lastProgressAt,_that.stale,_that.lastTransitionId);case _:
   return null;
 
 }
@@ -241,7 +242,7 @@ return $default(_that.key,_that.state,_that.source,_that.sessionId,_that.project
 @JsonSerializable()
 
 class _SessionViewDto extends SessionViewDto {
-  const _SessionViewDto({required this.key, required this.state, this.source = '', @JsonKey(name: 'session_id') this.sessionId = '', this.project = '', this.host, @JsonKey(name: 'last_event') this.lastEvent = '', @JsonKey(name: 'last_message') this.lastMessage, @JsonKey(name: 'last_occurred_at') this.lastOccurredAt, @JsonKey(name: 'created_at') this.createdAt = 0, @JsonKey(name: 'updated_at') this.updatedAt = 0, @JsonKey(name: 'last_progress_at') this.lastProgressAt, this.stale = false, @JsonKey(name: 'last_transition_id') this.lastTransitionId}): super._();
+  const _SessionViewDto({required this.key, required this.state, this.source = '', @JsonKey(name: 'session_id') this.sessionId = '', this.project = '', this.host, @JsonKey(name: 'last_event') this.lastEvent = '', @JsonKey(name: 'last_message') this.lastMessage, @JsonKey(name: 'display_title') this.displayTitle, @JsonKey(name: 'last_occurred_at') this.lastOccurredAt, @JsonKey(name: 'created_at') this.createdAt = 0, @JsonKey(name: 'updated_at') this.updatedAt = 0, @JsonKey(name: 'last_progress_at') this.lastProgressAt, this.stale = false, @JsonKey(name: 'last_transition_id') this.lastTransitionId}): super._();
   factory _SessionViewDto.fromJson(Map<String, dynamic> json) => _$SessionViewDtoFromJson(json);
 
 /// `<source>:<session_id>`. 프로젝션·전이·push가 공유하는 식별자다.
@@ -254,6 +255,7 @@ class _SessionViewDto extends SessionViewDto {
 @override final  String? host;
 @override@JsonKey(name: 'last_event') final  String lastEvent;
 @override@JsonKey(name: 'last_message') final  String? lastMessage;
+@override@JsonKey(name: 'display_title') final  String? displayTitle;
 /// 마지막 이벤트의 발생 시각(epoch ms, **이벤트를 낸 기계의 시계**).
 @override@JsonKey(name: 'last_occurred_at') final  int? lastOccurredAt;
 /// 세션 첫 이벤트 수신 시각(epoch ms, 서버 시계).
@@ -291,16 +293,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SessionViewDto&&(identical(other.key, key) || other.key == key)&&(identical(other.state, state) || other.state == state)&&(identical(other.source, source) || other.source == source)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.lastEvent, lastEvent) || other.lastEvent == lastEvent)&&(identical(other.lastMessage, lastMessage) || other.lastMessage == lastMessage)&&(identical(other.lastOccurredAt, lastOccurredAt) || other.lastOccurredAt == lastOccurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.lastProgressAt, lastProgressAt) || other.lastProgressAt == lastProgressAt)&&(identical(other.stale, stale) || other.stale == stale)&&(identical(other.lastTransitionId, lastTransitionId) || other.lastTransitionId == lastTransitionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SessionViewDto&&(identical(other.key, key) || other.key == key)&&(identical(other.state, state) || other.state == state)&&(identical(other.source, source) || other.source == source)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.lastEvent, lastEvent) || other.lastEvent == lastEvent)&&(identical(other.lastMessage, lastMessage) || other.lastMessage == lastMessage)&&(identical(other.displayTitle, displayTitle) || other.displayTitle == displayTitle)&&(identical(other.lastOccurredAt, lastOccurredAt) || other.lastOccurredAt == lastOccurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.lastProgressAt, lastProgressAt) || other.lastProgressAt == lastProgressAt)&&(identical(other.stale, stale) || other.stale == stale)&&(identical(other.lastTransitionId, lastTransitionId) || other.lastTransitionId == lastTransitionId));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,key,state,source,sessionId,project,host,lastEvent,lastMessage,lastOccurredAt,createdAt,updatedAt,lastProgressAt,stale,lastTransitionId);
+int get hashCode => Object.hash(runtimeType,key,state,source,sessionId,project,host,lastEvent,lastMessage,displayTitle,lastOccurredAt,createdAt,updatedAt,lastProgressAt,stale,lastTransitionId);
 
 @override
 String toString() {
-  return 'SessionViewDto(key: $key, state: $state, source: $source, sessionId: $sessionId, project: $project, host: $host, lastEvent: $lastEvent, lastMessage: $lastMessage, lastOccurredAt: $lastOccurredAt, createdAt: $createdAt, updatedAt: $updatedAt, lastProgressAt: $lastProgressAt, stale: $stale, lastTransitionId: $lastTransitionId)';
+  return 'SessionViewDto(key: $key, state: $state, source: $source, sessionId: $sessionId, project: $project, host: $host, lastEvent: $lastEvent, lastMessage: $lastMessage, displayTitle: $displayTitle, lastOccurredAt: $lastOccurredAt, createdAt: $createdAt, updatedAt: $updatedAt, lastProgressAt: $lastProgressAt, stale: $stale, lastTransitionId: $lastTransitionId)';
 }
 
 
@@ -311,7 +313,7 @@ abstract mixin class _$SessionViewDtoCopyWith<$Res> implements $SessionViewDtoCo
   factory _$SessionViewDtoCopyWith(_SessionViewDto value, $Res Function(_SessionViewDto) _then) = __$SessionViewDtoCopyWithImpl;
 @override @useResult
 $Res call({
- String key, String state, String source,@JsonKey(name: 'session_id') String sessionId, String project, String? host,@JsonKey(name: 'last_event') String lastEvent,@JsonKey(name: 'last_message') String? lastMessage,@JsonKey(name: 'last_occurred_at') int? lastOccurredAt,@JsonKey(name: 'created_at') int createdAt,@JsonKey(name: 'updated_at') int updatedAt,@JsonKey(name: 'last_progress_at') int? lastProgressAt, bool stale,@JsonKey(name: 'last_transition_id') int? lastTransitionId
+ String key, String state, String source,@JsonKey(name: 'session_id') String sessionId, String project, String? host,@JsonKey(name: 'last_event') String lastEvent,@JsonKey(name: 'last_message') String? lastMessage,@JsonKey(name: 'display_title') String? displayTitle,@JsonKey(name: 'last_occurred_at') int? lastOccurredAt,@JsonKey(name: 'created_at') int createdAt,@JsonKey(name: 'updated_at') int updatedAt,@JsonKey(name: 'last_progress_at') int? lastProgressAt, bool stale,@JsonKey(name: 'last_transition_id') int? lastTransitionId
 });
 
 
@@ -328,7 +330,7 @@ class __$SessionViewDtoCopyWithImpl<$Res>
 
 /// Create a copy of SessionViewDto
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? key = null,Object? state = null,Object? source = null,Object? sessionId = null,Object? project = null,Object? host = freezed,Object? lastEvent = null,Object? lastMessage = freezed,Object? lastOccurredAt = freezed,Object? createdAt = null,Object? updatedAt = null,Object? lastProgressAt = freezed,Object? stale = null,Object? lastTransitionId = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? key = null,Object? state = null,Object? source = null,Object? sessionId = null,Object? project = null,Object? host = freezed,Object? lastEvent = null,Object? lastMessage = freezed,Object? displayTitle = freezed,Object? lastOccurredAt = freezed,Object? createdAt = null,Object? updatedAt = null,Object? lastProgressAt = freezed,Object? stale = null,Object? lastTransitionId = freezed,}) {
   return _then(_SessionViewDto(
 key: null == key ? _self.key : key // ignore: cast_nullable_to_non_nullable
 as String,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
@@ -338,6 +340,7 @@ as String,project: null == project ? _self.project : project // ignore: cast_nul
 as String,host: freezed == host ? _self.host : host // ignore: cast_nullable_to_non_nullable
 as String?,lastEvent: null == lastEvent ? _self.lastEvent : lastEvent // ignore: cast_nullable_to_non_nullable
 as String,lastMessage: freezed == lastMessage ? _self.lastMessage : lastMessage // ignore: cast_nullable_to_non_nullable
+as String?,displayTitle: freezed == displayTitle ? _self.displayTitle : displayTitle // ignore: cast_nullable_to_non_nullable
 as String?,lastOccurredAt: freezed == lastOccurredAt ? _self.lastOccurredAt : lastOccurredAt // ignore: cast_nullable_to_non_nullable
 as int?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as int,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
@@ -356,7 +359,7 @@ as int?,
 mixin _$TransitionDto {
 
 /// AUTOINCREMENT 커서. 서버에서 단조 증가하고 재사용되지 않는다.
- int get id;@JsonKey(name: 'session_key') String get sessionKey;@JsonKey(name: 'to_state') String get toState;@JsonKey(name: 'from_state') String? get fromState; String get source; String? get project; String? get host; String? get message;/// 이벤트 발생 시각(epoch ms, 이벤트를 낸 기계의 시계).
+ int get id;@JsonKey(name: 'session_key') String get sessionKey;@JsonKey(name: 'to_state') String get toState;@JsonKey(name: 'from_state') String? get fromState; String get source; String? get project; String? get host; String? get message;@JsonKey(name: 'display_title') String? get displayTitle;/// 이벤트 발생 시각(epoch ms, 이벤트를 낸 기계의 시계).
 @JsonKey(name: 'occurred_at') int get occurredAt;/// 전이 기록 시각(epoch ms, 서버 시계).
 @JsonKey(name: 'created_at') int get createdAt;
 /// Create a copy of TransitionDto
@@ -371,16 +374,16 @@ $TransitionDtoCopyWith<TransitionDto> get copyWith => _$TransitionDtoCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TransitionDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sessionKey, sessionKey) || other.sessionKey == sessionKey)&&(identical(other.toState, toState) || other.toState == toState)&&(identical(other.fromState, fromState) || other.fromState == fromState)&&(identical(other.source, source) || other.source == source)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.message, message) || other.message == message)&&(identical(other.occurredAt, occurredAt) || other.occurredAt == occurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TransitionDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sessionKey, sessionKey) || other.sessionKey == sessionKey)&&(identical(other.toState, toState) || other.toState == toState)&&(identical(other.fromState, fromState) || other.fromState == fromState)&&(identical(other.source, source) || other.source == source)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.message, message) || other.message == message)&&(identical(other.displayTitle, displayTitle) || other.displayTitle == displayTitle)&&(identical(other.occurredAt, occurredAt) || other.occurredAt == occurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,sessionKey,toState,fromState,source,project,host,message,occurredAt,createdAt);
+int get hashCode => Object.hash(runtimeType,id,sessionKey,toState,fromState,source,project,host,message,displayTitle,occurredAt,createdAt);
 
 @override
 String toString() {
-  return 'TransitionDto(id: $id, sessionKey: $sessionKey, toState: $toState, fromState: $fromState, source: $source, project: $project, host: $host, message: $message, occurredAt: $occurredAt, createdAt: $createdAt)';
+  return 'TransitionDto(id: $id, sessionKey: $sessionKey, toState: $toState, fromState: $fromState, source: $source, project: $project, host: $host, message: $message, displayTitle: $displayTitle, occurredAt: $occurredAt, createdAt: $createdAt)';
 }
 
 
@@ -391,7 +394,7 @@ abstract mixin class $TransitionDtoCopyWith<$Res>  {
   factory $TransitionDtoCopyWith(TransitionDto value, $Res Function(TransitionDto) _then) = _$TransitionDtoCopyWithImpl;
 @useResult
 $Res call({
- int id,@JsonKey(name: 'session_key') String sessionKey,@JsonKey(name: 'to_state') String toState,@JsonKey(name: 'from_state') String? fromState, String source, String? project, String? host, String? message,@JsonKey(name: 'occurred_at') int occurredAt,@JsonKey(name: 'created_at') int createdAt
+ int id,@JsonKey(name: 'session_key') String sessionKey,@JsonKey(name: 'to_state') String toState,@JsonKey(name: 'from_state') String? fromState, String source, String? project, String? host, String? message,@JsonKey(name: 'display_title') String? displayTitle,@JsonKey(name: 'occurred_at') int occurredAt,@JsonKey(name: 'created_at') int createdAt
 });
 
 
@@ -408,7 +411,7 @@ class _$TransitionDtoCopyWithImpl<$Res>
 
 /// Create a copy of TransitionDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sessionKey = null,Object? toState = null,Object? fromState = freezed,Object? source = null,Object? project = freezed,Object? host = freezed,Object? message = freezed,Object? occurredAt = null,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sessionKey = null,Object? toState = null,Object? fromState = freezed,Object? source = null,Object? project = freezed,Object? host = freezed,Object? message = freezed,Object? displayTitle = freezed,Object? occurredAt = null,Object? createdAt = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,sessionKey: null == sessionKey ? _self.sessionKey : sessionKey // ignore: cast_nullable_to_non_nullable
@@ -418,6 +421,7 @@ as String?,source: null == source ? _self.source : source // ignore: cast_nullab
 as String,project: freezed == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
 as String?,host: freezed == host ? _self.host : host // ignore: cast_nullable_to_non_nullable
 as String?,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,displayTitle: freezed == displayTitle ? _self.displayTitle : displayTitle // ignore: cast_nullable_to_non_nullable
 as String?,occurredAt: null == occurredAt ? _self.occurredAt : occurredAt // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as int,
@@ -505,10 +509,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _TransitionDto() when $default != null:
-return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.occurredAt,_that.createdAt);case _:
+return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.displayTitle,_that.occurredAt,_that.createdAt);case _:
   return orElse();
 
 }
@@ -526,10 +530,10 @@ return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.so
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _TransitionDto():
-return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.occurredAt,_that.createdAt);case _:
+return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.displayTitle,_that.occurredAt,_that.createdAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -546,10 +550,10 @@ return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.so
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id, @JsonKey(name: 'session_key')  String sessionKey, @JsonKey(name: 'to_state')  String toState, @JsonKey(name: 'from_state')  String? fromState,  String source,  String? project,  String? host,  String? message, @JsonKey(name: 'display_title')  String? displayTitle, @JsonKey(name: 'occurred_at')  int occurredAt, @JsonKey(name: 'created_at')  int createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _TransitionDto() when $default != null:
-return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.occurredAt,_that.createdAt);case _:
+return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.source,_that.project,_that.host,_that.message,_that.displayTitle,_that.occurredAt,_that.createdAt);case _:
   return null;
 
 }
@@ -561,7 +565,7 @@ return $default(_that.id,_that.sessionKey,_that.toState,_that.fromState,_that.so
 @JsonSerializable()
 
 class _TransitionDto extends TransitionDto {
-  const _TransitionDto({required this.id, @JsonKey(name: 'session_key') required this.sessionKey, @JsonKey(name: 'to_state') required this.toState, @JsonKey(name: 'from_state') this.fromState, this.source = '', this.project, this.host, this.message, @JsonKey(name: 'occurred_at') this.occurredAt = 0, @JsonKey(name: 'created_at') this.createdAt = 0}): super._();
+  const _TransitionDto({required this.id, @JsonKey(name: 'session_key') required this.sessionKey, @JsonKey(name: 'to_state') required this.toState, @JsonKey(name: 'from_state') this.fromState, this.source = '', this.project, this.host, this.message, @JsonKey(name: 'display_title') this.displayTitle, @JsonKey(name: 'occurred_at') this.occurredAt = 0, @JsonKey(name: 'created_at') this.createdAt = 0}): super._();
   factory _TransitionDto.fromJson(Map<String, dynamic> json) => _$TransitionDtoFromJson(json);
 
 /// AUTOINCREMENT 커서. 서버에서 단조 증가하고 재사용되지 않는다.
@@ -573,6 +577,7 @@ class _TransitionDto extends TransitionDto {
 @override final  String? project;
 @override final  String? host;
 @override final  String? message;
+@override@JsonKey(name: 'display_title') final  String? displayTitle;
 /// 이벤트 발생 시각(epoch ms, 이벤트를 낸 기계의 시계).
 @override@JsonKey(name: 'occurred_at') final  int occurredAt;
 /// 전이 기록 시각(epoch ms, 서버 시계).
@@ -591,16 +596,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TransitionDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sessionKey, sessionKey) || other.sessionKey == sessionKey)&&(identical(other.toState, toState) || other.toState == toState)&&(identical(other.fromState, fromState) || other.fromState == fromState)&&(identical(other.source, source) || other.source == source)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.message, message) || other.message == message)&&(identical(other.occurredAt, occurredAt) || other.occurredAt == occurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TransitionDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sessionKey, sessionKey) || other.sessionKey == sessionKey)&&(identical(other.toState, toState) || other.toState == toState)&&(identical(other.fromState, fromState) || other.fromState == fromState)&&(identical(other.source, source) || other.source == source)&&(identical(other.project, project) || other.project == project)&&(identical(other.host, host) || other.host == host)&&(identical(other.message, message) || other.message == message)&&(identical(other.displayTitle, displayTitle) || other.displayTitle == displayTitle)&&(identical(other.occurredAt, occurredAt) || other.occurredAt == occurredAt)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,sessionKey,toState,fromState,source,project,host,message,occurredAt,createdAt);
+int get hashCode => Object.hash(runtimeType,id,sessionKey,toState,fromState,source,project,host,message,displayTitle,occurredAt,createdAt);
 
 @override
 String toString() {
-  return 'TransitionDto(id: $id, sessionKey: $sessionKey, toState: $toState, fromState: $fromState, source: $source, project: $project, host: $host, message: $message, occurredAt: $occurredAt, createdAt: $createdAt)';
+  return 'TransitionDto(id: $id, sessionKey: $sessionKey, toState: $toState, fromState: $fromState, source: $source, project: $project, host: $host, message: $message, displayTitle: $displayTitle, occurredAt: $occurredAt, createdAt: $createdAt)';
 }
 
 
@@ -611,7 +616,7 @@ abstract mixin class _$TransitionDtoCopyWith<$Res> implements $TransitionDtoCopy
   factory _$TransitionDtoCopyWith(_TransitionDto value, $Res Function(_TransitionDto) _then) = __$TransitionDtoCopyWithImpl;
 @override @useResult
 $Res call({
- int id,@JsonKey(name: 'session_key') String sessionKey,@JsonKey(name: 'to_state') String toState,@JsonKey(name: 'from_state') String? fromState, String source, String? project, String? host, String? message,@JsonKey(name: 'occurred_at') int occurredAt,@JsonKey(name: 'created_at') int createdAt
+ int id,@JsonKey(name: 'session_key') String sessionKey,@JsonKey(name: 'to_state') String toState,@JsonKey(name: 'from_state') String? fromState, String source, String? project, String? host, String? message,@JsonKey(name: 'display_title') String? displayTitle,@JsonKey(name: 'occurred_at') int occurredAt,@JsonKey(name: 'created_at') int createdAt
 });
 
 
@@ -628,7 +633,7 @@ class __$TransitionDtoCopyWithImpl<$Res>
 
 /// Create a copy of TransitionDto
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sessionKey = null,Object? toState = null,Object? fromState = freezed,Object? source = null,Object? project = freezed,Object? host = freezed,Object? message = freezed,Object? occurredAt = null,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sessionKey = null,Object? toState = null,Object? fromState = freezed,Object? source = null,Object? project = freezed,Object? host = freezed,Object? message = freezed,Object? displayTitle = freezed,Object? occurredAt = null,Object? createdAt = null,}) {
   return _then(_TransitionDto(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,sessionKey: null == sessionKey ? _self.sessionKey : sessionKey // ignore: cast_nullable_to_non_nullable
@@ -638,6 +643,7 @@ as String?,source: null == source ? _self.source : source // ignore: cast_nullab
 as String,project: freezed == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
 as String?,host: freezed == host ? _self.host : host // ignore: cast_nullable_to_non_nullable
 as String?,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,displayTitle: freezed == displayTitle ? _self.displayTitle : displayTitle // ignore: cast_nullable_to_non_nullable
 as String?,occurredAt: null == occurredAt ? _self.occurredAt : occurredAt // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as int,

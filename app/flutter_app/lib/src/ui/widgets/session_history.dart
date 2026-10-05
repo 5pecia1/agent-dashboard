@@ -223,6 +223,7 @@ class _HistoryRow extends ConsumerWidget {
       thenMs: event.receivedAt,
     );
     final message = event.message;
+    final displayTitle = event.displayTitle;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -244,6 +245,16 @@ class _HistoryRow extends ConsumerWidget {
               ),
             ],
           ),
+          if (displayTitle != null && displayTitle.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                displayTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: tokens.fg2, fontSize: 11),
+              ),
+            ),
           if (message != null && message.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2),

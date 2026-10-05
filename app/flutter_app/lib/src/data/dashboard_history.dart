@@ -8,6 +8,7 @@ class DashboardHistoryEvent {
     required this.source,
     required this.event,
     required this.message,
+    this.displayTitle,
     required this.receivedAt,
   });
 
@@ -18,6 +19,7 @@ class DashboardHistoryEvent {
         source: json['source'] as String,
         event: json['event'] as String,
         message: json['message'] as String?,
+        displayTitle: json['display_title'] as String?,
         receivedAt: json['received_at'] as int,
       );
 
@@ -26,6 +28,8 @@ class DashboardHistoryEvent {
   final String source;
   final String event;
   final String? message;
+
+  final String? displayTitle;
   final int receivedAt;
 
   bool get isUserPrompt => event == 'UserPromptSubmit';

@@ -38,12 +38,14 @@ Map<String, dynamic> _eventJson({
   String sessionKey = 'claude-code:s1',
   String event = 'Notification',
   String? message,
+  String? displayTitle,
 }) => <String, dynamic>{
   'id': id,
   'session_key': sessionKey,
   'source': 'claude-code',
   'event': event,
   'message': message,
+  'display_title': displayTitle,
   'received_at': 1757300000000,
 };
 
@@ -128,6 +130,23 @@ void main() {
       expect(page.events[1].isUserPrompt, isFalse);
       expect(page.hasMore, isTrue);
       expect(page.nextBeforeId, 8);
+    });
+
+    test('display_title은 additive 필드 — 있으면 담고 없으면 null로 접는다', () async {
+      final recorder = _json(
+        200,
+        _pageJson(<Map<String, dynamic>>[
+          _eventJson(id: 9, displayTitle: '그때의 작업명'),
+          _eventJson(id: 8),
+          _eventJson(id: 7)..remove('display_title'),
+        ]),
+      );
+
+      final page = await _api(recorder).history(sessionKey: 'claude-code:s1');
+
+      expect(page.events[0].displayTitle, '그때의 작업명');
+      expect(page.events[1].displayTitle, isNull);
+      expect(page.events[2].displayTitle, isNull);
     });
 
     test('has_more인데 next_before_id가 없거나 어긋나면 malformed다(조용한 절단 금지)', () async {

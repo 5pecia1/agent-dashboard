@@ -234,7 +234,7 @@ privacy_payload() {
     --arg include_content "${MY_DASHBOARD_INCLUDE_CONTENT:-0}" \
     --arg project "${MY_DASHBOARD_PROJECT_LABEL:-}" \
     --arg host "${MY_DASHBOARD_HOST_LABEL:-}" \
-    'if $include_content == "1" then . else .message = null | del(.raw) end
+    'if $include_content == "1" then . else .message = null | del(.raw, .display_title) end
      | if $project != "" then .project = $project else . end
      | if $host != "" then .host = $host else . end' 2>/dev/null
 }
@@ -602,7 +602,7 @@ if [ -n "$INPUT" ] && command -v jq >/dev/null 2>&1; then
           elif $final_event == "UserInputRequest" then
             (first_question_text | if . == null then null else (tostring | .[0:300]) end)
           else
-            ((.message // .prompt // .last_assistant_message // null)
+            ((.message // .prompt // .last_assistant_message // (if $source == "grok" then .lastAssistantMessage else null end) // null)
               | if . == null then null else (tostring | .[0:300]) end)
           end
         ) as $final_message
@@ -685,6 +685,14 @@ if [ -n "$PAYLOAD" ] && [ "$EVENT_NAME" = "PostToolUse" ]; then
     else
       printf '%s' "$NOW_S" > "$HB_FILE" 2>/dev/null
     fi
+  fi
+fi
+
+if [ "$SKIP_SEND" -eq 0 ] && [ -n "$PAYLOAD" ] && [ "${MY_DASHBOARD_INCLUDE_CONTENT:-0}" = "1" ] && [ "${HERDR_ENV:-}" = "1" ] && command -v python3 >/dev/null 2>&1; then
+  HERDR_CONTEXT="$(MY_DASHBOARD_INCLUDE_CONTENT=1 python3 "$(dirname "$0")/herdr-context.py" "$SOURCE" "$SESSION_ID" 2>/dev/null)"
+  if [ -n "$HERDR_CONTEXT" ]; then
+    ENRICHED_PAYLOAD="$(printf '%s' "$PAYLOAD" | jq -c --argjson context "$HERDR_CONTEXT" '. + $context' 2>/dev/null)"
+    [ -n "$ENRICHED_PAYLOAD" ] && PAYLOAD="$ENRICHED_PAYLOAD"
   fi
 fi
 

@@ -5,7 +5,7 @@
 #   curl -fsSL <서버 origin>/setup.sh | MY_DASHBOARD_TOKEN=... bash  # 비대화형
 #   curl -fsSL <서버 origin>/setup.sh | bash -s -- --dry-run         # 미리보기(아무것도 안 씀)
 #
-# 재실행 = 업데이트다: 훅 파일 6종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+# 재실행 = 업데이트다: 훅 파일 7종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 # ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 # 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 #
@@ -38,7 +38,7 @@ Agent Dashboard 원클릭 부트스트랩. repo를 clone하지 않고도 새 기
   --dry-run   실제로 아무것도 쓰지 않고 무엇을 할지만 보여준다.
   -h, --help  이 도움말을 출력한다.
 
-재실행 = 업데이트다: 훅 파일 6종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+재실행 = 업데이트다: 훅 파일 7종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 HELP_EOF
@@ -80,9 +80,9 @@ HOOKS_DIR="$DATA_HOME/my-dashboard/hooks"
 CONFIG_DIR="$HOME/.config/my-dashboard"
 CONFIG_FILE="$CONFIG_DIR/env"
 
-# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 6종만 GET /hooks/files/<name>로 받는다.
+# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 7종만 GET /hooks/files/<name>로 받는다.
 EXECUTABLE_FILES="agent-event-hook.sh codex-notify.sh install.sh send-generic.sh test-hooks.sh"
-NON_EXECUTABLE_FILES="codex-hooks.toml"
+NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py"
 ALL_FILES="$EXECUTABLE_FILES $NON_EXECUTABLE_FILES"
 
 log "== my-dashboard hooks 설치/갱신: $ORIGIN =="
