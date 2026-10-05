@@ -18,6 +18,7 @@ import expectedCodexHooksToml from "../../hooks/codex-hooks.toml?raw";
 import expectedInstall from "../../hooks/install.sh?raw";
 import expectedSendGeneric from "../../hooks/send-generic.sh?raw";
 import expectedTestHooks from "../../hooks/test-hooks.sh?raw";
+import expectedHerdrContext from "../../hooks/herdr-context.py?raw";
 
 const app = worker as unknown as {
   fetch(request: Request, env: unknown, ctx: ExecutionContext): Response | Promise<Response>;
@@ -76,6 +77,7 @@ describe("GET /hooks/files/:name", () => {
     ["install.sh", expectedInstall],
     ["send-generic.sh", expectedSendGeneric],
     ["test-hooks.sh", expectedTestHooks],
+    ["herdr-context.py", expectedHerdrContext],
   ];
 
   for (const [name, expected] of cases) {
@@ -123,6 +125,7 @@ describe("응답 본문에 토큰류 문자열이 없다", () => {
       "/hooks/files/install.sh",
       "/hooks/files/test-hooks.sh",
       "/hooks/files/codex-hooks.toml",
+      "/hooks/files/herdr-context.py",
     ];
     for (const path of paths) {
       const res = await call(path);

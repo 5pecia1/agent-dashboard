@@ -16,6 +16,7 @@ _SessionViewDto _$SessionViewDtoFromJson(Map<String, dynamic> json) =>
       host: json['host'] as String?,
       lastEvent: json['last_event'] as String? ?? '',
       lastMessage: json['last_message'] as String?,
+      displayTitle: json['display_title'] as String?,
       lastOccurredAt: (json['last_occurred_at'] as num?)?.toInt(),
       createdAt: (json['created_at'] as num?)?.toInt() ?? 0,
       updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
@@ -34,6 +35,7 @@ Map<String, dynamic> _$SessionViewDtoToJson(_SessionViewDto instance) =>
       'host': instance.host,
       'last_event': instance.lastEvent,
       'last_message': instance.lastMessage,
+      'display_title': instance.displayTitle,
       'last_occurred_at': instance.lastOccurredAt,
       'created_at': instance.createdAt,
       'updated_at': instance.updatedAt,
@@ -52,6 +54,7 @@ _TransitionDto _$TransitionDtoFromJson(Map<String, dynamic> json) =>
       project: json['project'] as String?,
       host: json['host'] as String?,
       message: json['message'] as String?,
+      displayTitle: json['display_title'] as String?,
       occurredAt: (json['occurred_at'] as num?)?.toInt() ?? 0,
       createdAt: (json['created_at'] as num?)?.toInt() ?? 0,
     );
@@ -66,6 +69,7 @@ Map<String, dynamic> _$TransitionDtoToJson(_TransitionDto instance) =>
       'project': instance.project,
       'host': instance.host,
       'message': instance.message,
+      'display_title': instance.displayTitle,
       'occurred_at': instance.occurredAt,
       'created_at': instance.createdAt,
     };

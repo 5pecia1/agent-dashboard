@@ -15,6 +15,7 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/widgets/relative_time.dart';
 import 'package:my_dashboard/src/ui/widgets/state_chip.dart';
+import 'package:my_dashboard/src/util/session_display.dart';
 
 class CatchupPanel extends ConsumerStatefulWidget {
   const CatchupPanel({super.key, required this.pendingAlerts, this.nowMs});
@@ -123,13 +124,21 @@ class _AlertRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = sessionStateDtoFromCode(alert.toState);
-    final project = (alert.project?.isNotEmpty ?? false) ? alert.project! : alert.sessionIdFromKey;
+    final project = (alert.displayTitle?.trim().isNotEmpty ?? false)
+        ? sessionDisplayName(
+            project: alert.project,
+            fallback: alert.sessionIdFromKey,
+            displayTitle: alert.displayTitle,
+          )
+        : ((alert.project?.isNotEmpty ?? false)
+            ? alert.project!
+            : alert.sessionIdFromKey);
     final timeText = relativeTimeText(ref, nowMs: nowMs, thenMs: alert.occurredAt);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          StateChip(state: state),
+          Flexible(child: StateChip(state: state)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

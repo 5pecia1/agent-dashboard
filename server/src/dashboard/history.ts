@@ -14,6 +14,7 @@ export interface HistoryEvent {
   source: string;
   event: string;
   message: string | null;
+  display_title: string | null;
   received_at: number;
 }
 
@@ -54,7 +55,7 @@ export async function readHistory(db: D1Database, query: HistoryQuery) {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { results } = await db
     .prepare(
-      `SELECT id, session_key, source, event, message, received_at FROM dashboard_events ${where} ORDER BY id DESC LIMIT ?`,
+      `SELECT id, session_key, source, event, message, display_title, received_at FROM dashboard_events ${where} ORDER BY id DESC LIMIT ?`,
     )
     .bind(...bindings, query.limit + 1)
     .all<HistoryEvent>();

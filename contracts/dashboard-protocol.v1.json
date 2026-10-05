@@ -3,7 +3,7 @@
   "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
   "title": "Agent Dashboard protocol",
   "protocol_version": 1,
-  "revision": "2026-09-29",
+  "revision": "2026-10-05",
   "copies": {
     "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
     "package": "server/contracts/dashboard-protocol.v1.json"
@@ -639,6 +639,16 @@
         "description": "선택한 짧은 문구. hook MY_DASHBOARD_INCLUDE_CONTENT=1 및 서버 DASHBOARD_STORE_MESSAGE=1에서만 수집·저장·표시한다. 기본은 null이다.",
         "max_length_stored": 300
       },
+      "display_title": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "required": false,
+        "description": "Optional additive task title for display (a human-readable name a pane manager such as Herdr attaches at send time). Presentation metadata only — never used for session_key, state resolution, project identity, or pane navigation. Whitespace is folded, Unicode Cc/Cf controls are removed, and blank or non-string values normalize to null. Stored cap: 120 Unicode codepoints. Treated as personal content like message: hooks only attach it under MY_DASHBOARD_INCLUDE_CONTENT=1 and the server only stores it under DASHBOARD_STORE_MESSAGE=1. Opting out rejects NEW title ingestion and re-filters the on-disk spool on replay; it does NOT retroactively erase rows already stored — those persist until normal retention or approved cleanup.",
+        "example": "로그인 리팩터링",
+        "max_codepoints_stored": 120
+      },
       "hook_rev": {
         "type": "string",
         "required": false,
@@ -686,6 +696,7 @@
       "event_id",
       "occurred_at",
       "message",
+      "display_title",
       "notification_type",
       "hook_rev",
       "prompt_id",
@@ -825,6 +836,10 @@
         "type": "string",
         "description": "표시용 제목. 서버가 i18n 라벨로 완성해 보낸다."
       },
+      "display_title": {
+        "type": "string",
+        "description": "Task title at transition time. Empty string when absent or when the server suppressed it at dispatch because content storage is off (DASHBOARD_STORE_MESSAGE=0) — same 'absent means empty' convention as host."
+      },
       "body": {
         "type": "string",
         "description": "표시용 본문. message가 있으면 그것, 없으면 상태 문구."
@@ -842,6 +857,7 @@
       "source",
       "project",
       "host",
+      "display_title",
       "title",
       "body",
       "link"
@@ -1090,6 +1106,13 @@
           ],
           "description": "마지막 message(300자 이내). DASHBOARD_STORE_MESSAGE=0이면 항상 null."
         },
+        "display_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Current session task title (<=120 codepoints). Tracks the display_title of the last applied state event verbatim — assignment, not merge, so a title-less new state event clears it to null. Only populated for events ingested while DASHBOARD_STORE_MESSAGE=1; rows written while the flag was on keep their stored title after the flag turns off (opt-out is not retroactive). Same-state title changes do not create transitions and sync delta carries transitions only, so a delta-only client may not learn a new title until the next transition or a reset snapshot — the agreed name-only sync limitation: this field is never promoted into an artificial transition."
+        },
         "last_occurred_at": {
           "type": [
             "integer",
@@ -1208,6 +1231,13 @@
           ],
           "description": "전이를 만든 이벤트의 message."
         },
+        "display_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "display_title snapshot of the event that created the transition. A preserved historical value — it does not follow later title changes. Null when absent at ingest; already-stored values are returned as-is regardless of the current DASHBOARD_STORE_MESSAGE flag."
+        },
         "occurred_at": {
           "type": "integer",
           "description": "이벤트 발생 시각(epoch ms)."
@@ -1252,6 +1282,7 @@
       "state.stalled": "멈춘 듯",
       "push.title": "{project} · {host} · {label}",
       "push.title_no_host": "{project} · {label}",
+      "push.title_titled": "{project} · {display_title}",
       "push.body_fallback": "{source} 세션이 '{label}' 상태가 되었습니다.",
       "push.test_body": "테스트 알림입니다. 이 문구가 보이면 기기 등록이 살아 있습니다."
     },
@@ -1260,9 +1291,10 @@
       "host": "기계 이름(hostname).",
       "project": "project 경로의 마지막 조각.",
       "label": "state_keys로 찾은 상태 라벨.",
-      "source": "에이전트 종류."
+      "source": "에이전트 종류.",
+      "display_title": "전이를 만든 이벤트의 작업 제목 스냅샷."
     },
-    "$note": "0001의 STATE_LABEL 5개 문구를 그대로 유지하고 stalled만 추가했다. push.title은 project를 맨 앞에 둔다(revision 2026-09-12): 알림 센터는 제목의 뒤쪽부터 잘라내는데 host는 한 기계의 모든 세션이 공유하는 값이라, 배너끼리 구분되는 유일한 조각인 project가 맨 앞에 있어야 잘리지 않는다 - push.title_no_host가 이미 쓰던 순서와도 맞는다. 앱 로컬 알림(app/flutter_app/lib/src/state/notify_provider.dart의 payloadForAlert)도 같은 이유로 project를 맨 앞에 두며, 그쪽은 제목을 project와 label에만 내주고 host는 본문 접두로 옮긴다."
+    "$note": "0001의 STATE_LABEL 5개 문구를 그대로 유지하고 stalled만 추가했다. push.title은 project를 맨 앞에 둔다(revision 2026-09-12): 알림 센터는 제목의 뒤쪽부터 잘라내는데 host는 한 기계의 모든 세션이 공유하는 값이라, 배너끼리 구분되는 유일한 조각인 project가 맨 앞에 있어야 잘리지 않는다 - push.title_no_host가 이미 쓰던 순서와도 맞는다. 앱 로컬 알림(app/flutter_app/lib/src/state/notify_provider.dart의 payloadForAlert)도 같은 이유로 project를 맨 앞에 두며, 그쪽은 제목을 project와 label에만 내주고 host는 본문 접두로 옮긴다. Titled case (revision 2026-10-05): when a transition carries a non-empty display_title (and server content storage is on), the notification title uses push.title_titled instead — the state label and host move into the body as '[host · ]{label}[ · {message}]'. This same '{project} · {display_title}' form is the canonical session display name the app renders for cards, detail, tray, history, and catch-up rows (sessionDisplayName); when display_title equals the project basename the name collapses to just '{project}' so 'demo · demo' is never rendered. Title-less transitions keep the byte-identical legacy formats."
   },
   "retention": {
     "description": "시간별 cron이 stalled 전이와 함께 정리도 맡는다. 전부 env로 조정한다.",
@@ -1314,7 +1346,7 @@
     },
     "order": "id DESC (서버 삽입 순서)",
     "response": {
-      "events": "id, session_key, source, event, message, received_at을 가진 행 배열.",
+      "events": "id, session_key, source, event, message, display_title, received_at을 가진 행 배열.",
       "has_more": "다음 페이지 존재 여부.",
       "next_before_id": "다음 요청의 before_id. 더 없으면 null."
     },
@@ -1332,12 +1364,13 @@
       "0002_dashboard_v2.sql",
       "0003_dashboard_v3.sql",
       "0004_dashboard_seen.sql",
-      "0005_devin_input_tracking.sql"
+      "0005_devin_input_tracking.sql",
+      "0006_display_title.sql"
     ],
     "tables": {
-      "dashboard_events": "append-only 이벤트 로그. raw 원본 4096바이트 보존, event_id 부분 유니크 인덱스로 멱등. 0005부터 Devin 상관 식별자(prompt_id·tool_use_id·tool_name)를 별도 컬럼에 보존해 raw 절단과 무관하게 재생 가능하다.",
-      "dashboard_sessions": "이벤트에서 만든 현재 상태 프로젝션. 0004부터 last_transition_id, 0005부터 input_state(Devin 대기 추적 JSON)·projection_token(쓰기 CAS 토큰) 컬럼을 갖는다.",
-      "dashboard_transitions": "상태 전이 로그. AUTOINCREMENT id가 sync 커서.",
+      "dashboard_events": "append-only 이벤트 로그. raw 원본 4096바이트 보존, event_id 부분 유니크 인덱스로 멱등. 0005부터 Devin 상관 식별자(prompt_id·tool_use_id·tool_name)를 별도 컬럼에 보존해 raw 절단과 무관하게 재생 가능하다. 0006부터 display_title도 별도 컬럼이다 — 같은 이유(잘린 raw에 의존하지 않는다)로 재생 입력이 전용 컬럼에서 온다.",
+      "dashboard_sessions": "이벤트에서 만든 현재 상태 프로젝션. 0004부터 last_transition_id, 0005부터 input_state(Devin 대기 추적 JSON)·projection_token(쓰기 CAS 토큰), 0006부터 display_title 컬럼을 갖는다.",
+      "dashboard_transitions": "상태 전이 로그. AUTOINCREMENT id가 sync 커서. 0006부터 display_title(전이 시점 제목 스냅샷) 컬럼을 갖는다.",
       "dashboard_meta": "서버 내부 상태(pruned_below_id 등). key='hook_revs' 행은 '훅 구버전 배너' 원장이다 — value가 {host: {rev, at, project}} 모양의 JSON 하나이고(마이그레이션 없이 기존 범용 key-value 테이블에 얹었다), POST /dashboard/events가 host·occurred_at이 명시적으로 있을 때만 host별로 마지막 보고 rev·project를 절대값으로 덮어쓴다(seen처럼 MAX-merge가 아니다 — hook_contract.rules의 '서버보다 앞선 rev 없음' 규칙 참고). project는 devcontainer 등 host(hostname)만으로는 식별 불가능한 환경을 구분하기 위한 additive 힌트로, 그 host가 마지막으로 hook_rev를 신고한 이벤트의 project(cwd)를 그대로 얹은 값이다 — rev·at과 같은 WHERE 가드를 공유하므로 project만 바뀌어서는(rev·24시간 조건이 전부 거짓이면) 갱신되지 않는다. rebuild는 이 키를 절대 건드리지 않는다 — dashboard_seen과 같은 '재생 불가침' tier이지만 이유는 다르다: dashboard_seen은 재생 결과에 맞춰 다시 정의할 수 있는 파생값이라 리베이스 규칙이 있지만, hook_revs는 raw가 4096바이트로 잘리는 한계 때문에 dashboard_events에서 신뢰성 있게 복원할 수 없고, 애초에 재생해야 하는 과거 프로젝션이 아니라 '지금 이 순간의 사실'이다. 정리는 maintenance.ts의 pruneRetention이 30일 지난 항목 삭제 + 32개 초과 시 오래된 것부터 절단으로 전담한다. sync.response.fields.hook_skew가 이 원장을 읽는 쪽이다.",
       "dashboard_settings": "사람이 바꾸는 설정(mute_until 등).",
       "dashboard_push_subscriptions": "Web Push 구독(endpoint, p256dh, auth).",

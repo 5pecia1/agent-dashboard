@@ -139,6 +139,7 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     // 배너끼리 구분되는 유일한 조각인 project가 맨 앞에 있어야 한다.
     "push.title"           => "{project} · {host} · {label}",
     "push.title_no_host"   => "{project} · {label}",
+    "push.title_titled"    => "{project} · {display_title}",
     "push.body_fallback"   => "{source} session is now '{label}'.",
     "push.test_body"       => "This is a test notification. If you see this, device registration is working.",
 
@@ -456,6 +457,7 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     // 배너끼리 구분되는 유일한 조각인 project가 맨 앞에 있어야 한다.
     "push.title"           => "{project} · {host} · {label}",
     "push.title_no_host"   => "{project} · {label}",
+    "push.title_titled"    => "{project} · {display_title}",
     "push.body_fallback"   => "{source} 세션이 '{label}' 상태가 되었습니다.",
     "push.test_body"       => "테스트 알림입니다. 이 문구가 보이면 기기 등록이 살아 있습니다.",
 

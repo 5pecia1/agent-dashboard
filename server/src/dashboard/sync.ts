@@ -40,6 +40,7 @@ export interface SyncSession {
   state: string;
   last_event: string;
   last_message: string | null;
+  display_title: string | null;
   last_occurred_at: number | null;
   /**
    * 마지막 진척 신호를 서버가 받은 시각(epoch ms, 서버 시계). 상태를 바꾼 이벤트와
@@ -78,6 +79,7 @@ export interface SyncTransition {
   project: string | null;
   host: string | null;
   message: string | null;
+  display_title: string | null;
   occurred_at: number;
   created_at: number;
 }
@@ -274,7 +276,7 @@ async function readHeader(env: SyncEnv): Promise<{
  */
 async function readSessions(env: SyncEnv, includeEnded: boolean, now: number): Promise<SyncSession[]> {
   const columns =
-    "key, source, session_id, project, host, state, last_event, last_message, " +
+    "key, source, session_id, project, host, state, last_event, last_message, display_title, " +
     "last_occurred_at, last_progress_at, last_transition_id, created_at, updated_at";
   const stmt = includeEnded
     ? env.DB.prepare(`SELECT ${columns} FROM dashboard_sessions ORDER BY updated_at DESC`)
@@ -319,7 +321,7 @@ async function readTransitions(
   limit: number,
 ): Promise<{ transitions: SyncTransition[]; hasMore: boolean }> {
   const { results } = await env.DB.prepare(
-    `SELECT id, session_key, from_state, to_state, source, project, host, message, occurred_at, created_at
+    `SELECT id, session_key, from_state, to_state, source, project, host, message, display_title, occurred_at, created_at
        FROM dashboard_transitions
       WHERE id > ?
       ORDER BY id ASC

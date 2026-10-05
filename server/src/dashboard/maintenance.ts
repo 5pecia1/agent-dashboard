@@ -50,6 +50,7 @@ interface StalledCandidate {
   project: string | null;
   host: string | null;
   last_message: string | null;
+  display_title: string | null;
   last_progress_at: number | null;
 }
 
@@ -73,7 +74,7 @@ async function stallWorkingSessions(env: MaintenanceEnv, now: number): Promise<n
   const cutoff = now - stallMs(env);
 
   const { results } = await env.DB.prepare(
-    `SELECT key, state, source, project, host, last_message, last_progress_at
+    `SELECT key, state, source, project, host, last_message, display_title, last_progress_at
        FROM dashboard_sessions
       WHERE state = 'working' AND COALESCE(last_progress_at, 0) < ?`,
   )
@@ -100,6 +101,7 @@ async function stallWorkingSessions(env: MaintenanceEnv, now: number): Promise<n
         project: row.project,
         host: row.host,
         message: row.last_message,
+        display_title: env.DASHBOARD_STORE_MESSAGE === "1" ? row.display_title : null,
         occurred_at: now,
       },
       now,

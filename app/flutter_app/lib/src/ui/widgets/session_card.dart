@@ -25,6 +25,7 @@ import 'package:my_dashboard/src/ui/widgets/delete_session_dialog.dart';
 import 'package:my_dashboard/src/ui/widgets/relative_time.dart';
 import 'package:my_dashboard/src/ui/widgets/state_chip.dart';
 import 'package:my_dashboard/src/util/project_path.dart';
+import 'package:my_dashboard/src/util/session_display.dart';
 
 /// [projectBasename]은 이제 `util/project_path.dart`에 산다 — 알림 제목
 /// (`state/notify_provider.dart`)이 같은 규칙을 쓰게 되면서 ui/state 두
@@ -142,9 +143,11 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     // 비면 기존과 같이 sessionId 폴백을 쓴다(그때는 basename을 뽑을 대상
     // 자체가 없다). 알림 제목도 같은 함수를 쓴다 — 배너를 받고 목록을
     // 열었을 때 같은 이름을 봐야 한다(`state/notify_provider.dart`).
-    final title = hasProject
-        ? projectBasename(session.project)
-        : session.sessionId;
+    final title = sessionDisplayName(
+      project: hasProject ? session.project : null,
+      fallback: session.sessionId,
+      displayTitle: session.displayTitle,
+    );
     final fullProjectPath = hasProject ? session.project : session.sessionId;
     final hostText = (session.host?.isNotEmpty ?? false)
         ? session.host!

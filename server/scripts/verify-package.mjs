@@ -31,7 +31,9 @@ try {
   const required = ['dist/index.js','dist/index.d.ts','contracts/dashboard-protocol.v1.json','contracts/hooks-manifest.json'];
   async function assertComplete() {
     for (const name of required) await readFile(path.join(installed, name));
-    assert.equal((await readdir(path.join(installed, 'migrations'))).filter(name => name.endsWith('.sql')).length, 5);
+    const contract = JSON.parse(await readFile(path.join(installed, 'contracts/dashboard-protocol.v1.json'), 'utf8'));
+    const actual = (await readdir(path.join(installed, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
+    assert.deepEqual(actual, [...contract.storage.migrations].sort());
   }
   await assertComplete();
   for (const name of ['contracts/dashboard-protocol.v1.json','contracts/hooks-manifest.json']) {

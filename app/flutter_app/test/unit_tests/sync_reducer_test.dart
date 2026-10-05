@@ -12,138 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/data/sync_reducer.dart';
 
-/// 서버 없이 `GET /dashboard/sync`의 두 응답(스냅샷/델타)을 만드는 가짜 서버.
-///
-/// `dashboard-server/src/features/dashboard/routes.ts`의 프로젝션 규칙과 `sync.ts`의
-/// 응답 조립을 그대로 옮긴 것이다 - "델타를 다 적용하면 스냅샷과 같아지는가"를
-/// 물으려면 비교 대상 스냅샷을 서버와 같은 규칙으로 만들어야 하기 때문이다.
-/// 옮긴 규칙은 넷이다:
-///
-///  * 순서 역행 방어: `occurred_at < last_occurred_at`이면 상태를 안 바꾼다.
-///  * ended 불변식: 끝난 세션은 `SessionStart`로만 되살아난다.
-///  * COALESCE: 이벤트가 모르는 값(host·message가 null)은 기존 값을 안 지운다.
-///  * 같은 상태 재진입은 전이가 아니다(커서도 알림도 늘지 않는다).
-///
-/// (아직 이 파일 하나만 쓰므로 test_helpers/로 빼지 않았다 - 그 디렉터리의
-/// README가 정한 "두 번 이상 반복되면 그때 추출한다" 규칙을 따른다.)
-/// 프로젝션과 전이 로그를 함께 들고 있는 가짜 서버.
-class FakeDashboard {
-  final Map<String, SessionViewDto> _sessions = <String, SessionViewDto>{};
-  final List<TransitionDto> _transitions = <TransitionDto>[];
-  int _nextTransitionId = 1;
-
-  /// 보존 정리로 사라진 전이 경계(`pruned_below_id`).
-  int prunedBelowId = 0;
-
-  List<TransitionDto> get transitions =>
-      List<TransitionDto>.unmodifiable(_transitions);
-
-  Map<String, SessionViewDto> get sessions =>
-      Map<String, SessionViewDto>.unmodifiable(_sessions);
-
-  int get cursor => _transitions.isEmpty ? 0 : _transitions.last.id;
-
-  /// hook 이벤트 하나를 먹인다(`POST /dashboard/events`와 같은 순서로 처리).
-  void ingest({
-    required String source,
-    required String sessionId,
-    required String event,
-    required String state,
-    required int occurredAt,
-    required int receivedAt,
-    String project = '/w/demo',
-    String? host,
-    String? message,
-  }) {
-    final key = '$source:$sessionId';
-    final current = _sessions[key];
-
-    final lastOccurred = current?.lastOccurredAt;
-    if (lastOccurred != null && occurredAt < lastOccurred) return;
-    if (current?.state == 'ended' && event != 'SessionStart') return;
-
-    _sessions[key] = current == null
-        ? SessionViewDto(
-            key: key,
-            state: state,
-            source: source,
-            sessionId: sessionId,
-            project: project,
-            host: host,
-            lastEvent: event,
-            lastMessage: message,
-            lastOccurredAt: occurredAt,
-            createdAt: receivedAt,
-            updatedAt: receivedAt,
-          )
-        : current.copyWith(
-            state: state,
-            project: project,
-            host: host ?? current.host,
-            lastEvent: event,
-            lastMessage: message ?? current.lastMessage,
-            lastOccurredAt: occurredAt,
-            updatedAt: receivedAt,
-          );
-
-    if (current?.state == state) return;
-
-    _transitions.add(
-      TransitionDto(
-        id: _nextTransitionId++,
-        sessionKey: key,
-        fromState: current?.state,
-        toState: state,
-        source: source,
-        project: project,
-        host: host,
-        message: message,
-        occurredAt: occurredAt,
-        createdAt: receivedAt,
-      ),
-    );
-  }
-
-  /// `reset:true` 응답(전체 스냅샷).
-  SyncResponseDto snapshot({
-    required int serverTime,
-    bool includeEnded = true,
-  }) {
-    final rows = _sessions.values
-        .where((SessionViewDto s) => includeEnded || !s.isEnded)
-        .toList(growable: false);
-    return SyncResponseDto(
-      reset: true,
-      cursor: cursor,
-      serverTime: serverTime,
-      prunedBelowId: prunedBelowId,
-      sessions: rows,
-    );
-  }
-
-  /// `reset:false` 응답(`since` 이후 전이 델타).
-  SyncResponseDto delta({
-    required int since,
-    required int serverTime,
-    int limit = 200,
-  }) {
-    final rows = _transitions
-        .where((TransitionDto t) => t.id > since)
-        .toList(growable: false);
-    final page = rows.length > limit ? rows.sublist(0, limit) : rows;
-    return SyncResponseDto(
-      reset: false,
-      cursor: page.isEmpty ? since : page.last.id,
-      hasMore: rows.length > limit,
-      serverTime: serverTime,
-      prunedBelowId: prunedBelowId,
-      transitions: page,
-      sessionsTouched: <String>{
-        for (final TransitionDto t in page) t.sessionKey,
-      }.toList(growable: false),
-    );
-  }
-}
+import '../test_helpers/fake_dashboard.dart';
 
 /// 정본 예시의 시각. 여기서부터 30초 간격으로 이벤트를 흘린다.
 const int _base = 1757300000000;
@@ -791,107 +660,110 @@ void main() {
     });
   });
 
-  group('Opus escalation 판정 E 리뷰 지적(high) 수정: lastProgressAt은 전이마다 서버 시계로 밀린다', () {
-    // 배경: session_card.dart의 stale 배지·last_signal 라벨은 lastProgressAt과
-    // serverTime(둘 다 서버 시계)만 비교한다(교차 시계 오염 방지). 그런데 리듀서가
-    // lastProgressAt을 갱신하지 않으면, 델타로만 세션을 받는 흔한 경로(sync.ts는 델타
-    // 응답에 sessions를 담지 않는다 - reset일 때만 세션 객체가 내려온다)에서 그 값이
-    // 스냅샷 당시 시각에 영원히 얼어붙는다. 전이는 정의상 상태를 바꾼 이벤트 = 진척이고
-    // `transition.createdAt`은 서버 수신 시각이라, 계약의 last_progress_at 정의와 그대로
-    // 맞는다.
-    test('전이만으로 새로 만든 세션은 전이의 createdAt(서버 수신 시각)을 lastProgressAt으로 갖는다', () {
-      final state = reduceSync(
-        const SyncState(cursor: 0),
-        SyncResponseDto(
-          cursor: 1,
-          serverTime: _base,
-          transitions: <TransitionDto>[
-            TransitionDto(
-              id: 1,
-              sessionKey: 'claude-code:new1',
-              toState: 'working',
-              occurredAt: _base,
-              createdAt: _base + 500,
-            ),
-          ],
-        ),
-        nowMs: _base,
-      );
-      expect(state.sessions['claude-code:new1']?.lastProgressAt, _base + 500);
-    });
-
-    test('기존 세션에 전이가 이어지면 lastProgressAt이 그 전이의 createdAt으로 밀린다', () {
-      const seeded = SyncState(
-        cursor: 0,
-        sessions: <String, SessionViewDto>{
-          'claude-code:c1': SessionViewDto(
-            key: 'claude-code:c1',
-            state: 'working',
-            source: 'claude-code',
-            sessionId: 'c1',
-            lastOccurredAt: _base,
-            lastProgressAt: _base,
+  group(
+    'Opus escalation 판정 E 리뷰 지적(high) 수정: lastProgressAt은 전이마다 서버 시계로 밀린다',
+    () {
+      // 배경: session_card.dart의 stale 배지·last_signal 라벨은 lastProgressAt과
+      // serverTime(둘 다 서버 시계)만 비교한다(교차 시계 오염 방지). 그런데 리듀서가
+      // lastProgressAt을 갱신하지 않으면, 델타로만 세션을 받는 흔한 경로(sync.ts는 델타
+      // 응답에 sessions를 담지 않는다 - reset일 때만 세션 객체가 내려온다)에서 그 값이
+      // 스냅샷 당시 시각에 영원히 얼어붙는다. 전이는 정의상 상태를 바꾼 이벤트 = 진척이고
+      // `transition.createdAt`은 서버 수신 시각이라, 계약의 last_progress_at 정의와 그대로
+      // 맞는다.
+      test('전이만으로 새로 만든 세션은 전이의 createdAt(서버 수신 시각)을 lastProgressAt으로 갖는다', () {
+        final state = reduceSync(
+          const SyncState(cursor: 0),
+          SyncResponseDto(
+            cursor: 1,
+            serverTime: _base,
+            transitions: <TransitionDto>[
+              TransitionDto(
+                id: 1,
+                sessionKey: 'claude-code:new1',
+                toState: 'working',
+                occurredAt: _base,
+                createdAt: _base + 500,
+              ),
+            ],
           ),
-        },
-      );
-      final state = reduceSync(
-        seeded,
-        SyncResponseDto(
-          cursor: 1,
-          serverTime: _base + 9000,
-          transitions: <TransitionDto>[
-            TransitionDto(
-              id: 1,
-              sessionKey: 'claude-code:c1',
-              toState: 'done',
-              occurredAt: _base + 8000,
-              createdAt: _base + 9000,
-            ),
-          ],
-        ),
-        nowMs: _base + 9000,
-      );
-      // 델타 경로는 sync.ts가 sessions를 내려주지 않는 정상 경로다 - 리듀서가 전이만으로
-      // lastProgressAt을 밀지 않으면 이 값이 스냅샷 당시(_base)에 영원히 얼어붙는다(회귀).
-      expect(state.sessions['claude-code:c1']?.lastProgressAt, _base + 9000);
-    });
+          nowMs: _base,
+        );
+        expect(state.sessions['claude-code:new1']?.lastProgressAt, _base + 500);
+      });
 
-    test('lastProgressAt은 뒤로 가지 않는다(도착 순서와 무관하게 max)', () {
-      const seeded = SyncState(
-        cursor: 0,
-        sessions: <String, SessionViewDto>{
-          'claude-code:c2': SessionViewDto(
-            key: 'claude-code:c2',
-            state: 'working',
-            source: 'claude-code',
-            sessionId: 'c2',
-            lastOccurredAt: _base,
-            lastProgressAt: _base + 5000,
-          ),
-        },
-      );
-      // 같은 응답 안에서 id 오름차순으로 정렬돼 적용되지만(파일 상단 불변식), createdAt
-      // 자체는 그 전이보다 작을 수 있다 - 그래도 기존 lastProgressAt보다 뒤로는 가지 않는다.
-      final state = reduceSync(
-        seeded,
-        SyncResponseDto(
-          cursor: 2,
-          serverTime: _base + 5000,
-          transitions: <TransitionDto>[
-            TransitionDto(
-              id: 2,
-              sessionKey: 'claude-code:c2',
-              toState: 'done',
-              occurredAt: _base + 6000,
-              createdAt: _base + 1000, // 기존 lastProgressAt(_base+5000)보다 과거
+      test('기존 세션에 전이가 이어지면 lastProgressAt이 그 전이의 createdAt으로 밀린다', () {
+        const seeded = SyncState(
+          cursor: 0,
+          sessions: <String, SessionViewDto>{
+            'claude-code:c1': SessionViewDto(
+              key: 'claude-code:c1',
+              state: 'working',
+              source: 'claude-code',
+              sessionId: 'c1',
+              lastOccurredAt: _base,
+              lastProgressAt: _base,
             ),
-          ],
-        ),
-        nowMs: _base + 5000,
-      );
-      expect(state.sessions['claude-code:c2']?.lastProgressAt, _base + 5000);
-    });
-  });
+          },
+        );
+        final state = reduceSync(
+          seeded,
+          SyncResponseDto(
+            cursor: 1,
+            serverTime: _base + 9000,
+            transitions: <TransitionDto>[
+              TransitionDto(
+                id: 1,
+                sessionKey: 'claude-code:c1',
+                toState: 'done',
+                occurredAt: _base + 8000,
+                createdAt: _base + 9000,
+              ),
+            ],
+          ),
+          nowMs: _base + 9000,
+        );
+        // 델타 경로는 sync.ts가 sessions를 내려주지 않는 정상 경로다 - 리듀서가 전이만으로
+        // lastProgressAt을 밀지 않으면 이 값이 스냅샷 당시(_base)에 영원히 얼어붙는다(회귀).
+        expect(state.sessions['claude-code:c1']?.lastProgressAt, _base + 9000);
+      });
+
+      test('lastProgressAt은 뒤로 가지 않는다(도착 순서와 무관하게 max)', () {
+        const seeded = SyncState(
+          cursor: 0,
+          sessions: <String, SessionViewDto>{
+            'claude-code:c2': SessionViewDto(
+              key: 'claude-code:c2',
+              state: 'working',
+              source: 'claude-code',
+              sessionId: 'c2',
+              lastOccurredAt: _base,
+              lastProgressAt: _base + 5000,
+            ),
+          },
+        );
+        // 같은 응답 안에서 id 오름차순으로 정렬돼 적용되지만(파일 상단 불변식), createdAt
+        // 자체는 그 전이보다 작을 수 있다 - 그래도 기존 lastProgressAt보다 뒤로는 가지 않는다.
+        final state = reduceSync(
+          seeded,
+          SyncResponseDto(
+            cursor: 2,
+            serverTime: _base + 5000,
+            transitions: <TransitionDto>[
+              TransitionDto(
+                id: 2,
+                sessionKey: 'claude-code:c2',
+                toState: 'done',
+                occurredAt: _base + 6000,
+                createdAt: _base + 1000, // 기존 lastProgressAt(_base+5000)보다 과거
+              ),
+            ],
+          ),
+          nowMs: _base + 5000,
+        );
+        expect(state.sessions['claude-code:c2']?.lastProgressAt, _base + 5000);
+      });
+    },
+  );
 
   group('상태 편의 API', () {
     test('activeSessions는 종료된 세션을 뺀다', () {

@@ -617,6 +617,34 @@ void main() {
       expect(items[6].key, TrayCommand.quit.menuItemKey);
     });
 
+    testWidgets('작업 표시 제목이 있으면 라벨의 project 자리가 "프로젝트 · 제목"이 된다', (
+      tester,
+    ) async {
+      late List<MenuItem> items;
+      await _pumpProbe(
+        tester,
+        [stateLabelKeyFnProvider.overrideWithValue((s) => 'label.${s.name}')],
+        (ref) {
+          items = tray_native.buildTrayMenuItems(
+            ref,
+            unseen: const [
+              SessionViewDto(
+                key: 'claude_code:s1',
+                state: 'waiting_input',
+                project: '/repo/my-dashboard',
+                displayTitle: '작업 A',
+              ),
+            ],
+          );
+        },
+      );
+
+      expect(
+        items[2].label,
+        'tray.unseen_item|project=my-dashboard · 작업 A,state=label.waitingInput',
+      );
+    });
+
     testWidgets('project가 비면 카드와 같은 폴백으로 sessionId를 라벨에 쓴다', (tester) async {
       late List<MenuItem> items;
       await _pumpProbe(

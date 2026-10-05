@@ -8,6 +8,7 @@ import {
   type PushTransport,
   type TransportDeps,
 } from "./push";
+import { normalizeDisplayTitle } from "./display-title";
 import { PUSH_STATES, STATE_LABEL, type SessionState } from "./state";
 
 /**
@@ -55,6 +56,7 @@ export interface PushTransition {
   project: string | null;
   host: string | null;
   message: string | null;
+  display_title?: string | null;
   /** 이벤트 발생 시각(epoch ms). */
   occurred_at: number;
 }
@@ -82,6 +84,7 @@ export interface PushPayload {
     source: string;
     project: string;
     host: string;
+    display_title: string;
     title: string;
     body: string;
     link: string;
@@ -131,16 +134,35 @@ export function buildPushPayload(
 ): PushPayload {
   const label = STATE_LABEL_V2[transition.to_state] ?? transition.to_state;
   const name = projectName(transition.project);
+  const displayTitle = storeMessage(env) ? normalizeDisplayTitle(transition.display_title) : null;
   // 정본 i18n.ko.push.title = "{project} · {host} · {label}" (계약 i18n 절의 $note 참고).
   // project가 맨 앞이다: 알림 센터는 제목의 뒤쪽부터 잘라내고 host는 한 기계의 모든
   // 세션이 공유하는 값이라, 배너끼리 구분되는 유일한 조각인 project가 잘리면 안 된다.
   // 앱 로컬 알림(app/flutter_app/.../notify_provider.dart의 payloadForAlert)도 같은 이유로
   // project를 맨 앞에 둔다 - 두 경로의 제목 순서가 갈리면 같은 전이가 기기마다 다른
   // 제목으로 보인다.
-  const title = transition.host ? `${name} · ${transition.host} · ${label}` : `${name} · ${label}`;
+  const title = displayTitle
+    ? displayTitle === name
+      ? name
+      : `${name} · ${displayTitle}`
+    : transition.host
+      ? `${name} · ${transition.host} · ${label}`
+      : `${name} · ${label}`;
   const fallback = `${transition.source} 세션이 '${label}' 상태가 되었습니다.`;
+  const titledBody = [
+    transition.host,
+    label,
+    transition.message && transition.message.length > 0 ? transition.message : null,
+  ]
+    .filter((part): part is string => part !== null && part.length > 0)
+    .join(" · ");
   const body =
-    opts.bodyOverride ?? (storeMessage(env) && transition.message ? transition.message : fallback);
+    opts.bodyOverride ??
+    (displayTitle
+      ? titledBody
+      : storeMessage(env) && transition.message
+        ? transition.message
+        : fallback);
   const link = `/?session=${encodeURIComponent(transition.session_key)}`;
 
   return {
@@ -153,6 +175,7 @@ export function buildPushPayload(
       source: transition.source,
       project: transition.project ?? "",
       host: transition.host ?? "",
+      display_title: displayTitle ?? "",
       title,
       body,
       link,

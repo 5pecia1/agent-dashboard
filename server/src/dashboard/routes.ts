@@ -3,6 +3,7 @@ import type { Env } from "../env";
 import { HOOK_REV } from "../hooks/routes";
 import { RESERVED_CLIENT_ACTION_EVENTS, resolveUserAckTransition } from "./client-actions";
 import { readDevinCorrelation, resolveDevinInput } from "./devin-input";
+import { normalizeDisplayTitle } from "./display-title";
 import { dispatchPush, type DispatchEnv, type PushTransition } from "./dispatch";
 import { resolveHeartbeatPromotion } from "./heartbeat";
 import { parseHistoryQuery, readHistory, type HistoryQuery } from "./history";
@@ -58,6 +59,7 @@ interface EventRow {
   prompt_id: string | null;
   tool_use_id: string | null;
   tool_name: string | null;
+  display_title: string | null;
 }
 
 /**
@@ -72,8 +74,8 @@ async function insertEvent(db: D1Database, row: EventRow, now: number): Promise<
   const inserted = await db
     .prepare(
       `INSERT INTO dashboard_events
-         (session_key, source, event, message, received_at, event_id, occurred_at, occurred_at_provided, host, raw, prompt_id, tool_use_id, tool_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (session_key, source, event, message, received_at, event_id, occurred_at, occurred_at_provided, host, raw, prompt_id, tool_use_id, tool_name, display_title)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(event_id) WHERE event_id IS NOT NULL DO NOTHING
        RETURNING id`,
     )
@@ -91,6 +93,7 @@ async function insertEvent(db: D1Database, row: EventRow, now: number): Promise<
       row.prompt_id,
       row.tool_use_id,
       row.tool_name,
+      row.display_title,
     )
     .first<{ id: number }>();
 
@@ -115,6 +118,7 @@ interface CommitTransitionInput {
   project: string;
   host: string | null;
   message: string | null;
+  displayTitle: string | null;
   /** dashboard_sessions.last_event로 남길 이벤트 이름. ended 불변식(REVIVAL_EVENT 비교)도 이 값을 본다. */
   event: string;
   occurredAt: number;
@@ -152,7 +156,7 @@ interface CommitTransitionResult {
  * 실수(가드가 갈라짐)를 컴파일러가 잡아주지 못한다.
  */
 async function commitStateTransition(input: CommitTransitionInput): Promise<CommitTransitionResult | null> {
-  const { db, env, key, source, sessionId, project, host, message, event, occurredAt, now, current, newState, inputState, waitUntil } =
+  const { db, env, key, source, sessionId, project, host, message, displayTitle, event, occurredAt, now, current, newState, inputState, waitUntil } =
     input;
 
   // 5-b) 순서 역행 방어. 스풀이 며칠 뒤에 밀려와도 과거가 현재를 덮어쓰지 못한다.
@@ -175,22 +179,22 @@ async function commitStateTransition(input: CommitTransitionInput): Promise<Comm
       db
         .prepare(
           `INSERT INTO dashboard_sessions
-             (key, source, session_id, project, host, state, last_event, last_message, last_occurred_at, last_progress_at, created_at, updated_at, input_state, projection_token)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (key, source, session_id, project, host, state, last_event, last_message, display_title, last_occurred_at, last_progress_at, created_at, updated_at, input_state, projection_token)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(key) DO NOTHING
            RETURNING key`,
         )
-        .bind(key, source, sessionId, project, host, newState, event, message, occurredAt, now, now, now, inputState, projectionToken),
+        .bind(key, source, sessionId, project, host, newState, event, message, displayTitle, occurredAt, now, now, now, inputState, projectionToken),
     );
   } else {
     statements.push(
       db
         .prepare(
-          `UPDATE dashboard_sessions SET state = ?, project = ?, host = COALESCE(?, host), last_event = ?, last_message = COALESCE(?, last_message), last_occurred_at = ?, last_progress_at = ?, updated_at = ?, input_state = ?, projection_token = ?
+          `UPDATE dashboard_sessions SET state = ?, project = ?, host = COALESCE(?, host), last_event = ?, last_message = COALESCE(?, last_message), display_title = ?, last_occurred_at = ?, last_progress_at = ?, updated_at = ?, input_state = ?, projection_token = ?
            WHERE key = ? AND projection_token IS ? AND state = ? AND last_occurred_at IS ?
            RETURNING key`,
         )
-        .bind(newState, project, host, event, message, occurredAt, now, now, inputState, projectionToken, key, current.projection_token, current.state, current.last_occurred_at),
+        .bind(newState, project, host, event, message, displayTitle, occurredAt, now, now, inputState, projectionToken, key, current.projection_token, current.state, current.last_occurred_at),
     );
   }
 
@@ -208,6 +212,7 @@ async function commitStateTransition(input: CommitTransitionInput): Promise<Comm
           project,
           host,
           message,
+          display_title: displayTitle,
           occurred_at: occurredAt,
         },
         now,
@@ -239,6 +244,7 @@ async function commitStateTransition(input: CommitTransitionInput): Promise<Comm
         project,
         host,
         message,
+        display_title: displayTitle,
         occurred_at: occurredAt,
       };
     }
@@ -360,6 +366,7 @@ dashboard.post("/events", async (c) => {
   const storeMessage = env.DASHBOARD_STORE_MESSAGE === "1";
   const message =
     storeMessage && typeof body.message === "string" ? body.message.slice(0, MESSAGE_MAX_CHARS) : null;
+  const displayTitle = storeMessage ? normalizeDisplayTitle(body.display_title) : null;
   const correlation =
     source === "devin"
       ? readDevinCorrelation(body)
@@ -391,6 +398,7 @@ dashboard.post("/events", async (c) => {
     prompt_id: correlation.prompt_id,
     tool_use_id: correlation.tool_use_id,
     tool_name: correlation.tool_name,
+    display_title: displayTitle,
   };
 
   // 2) 미등록 source: 거절하지 않는다. 원본까지 보존해 두면 나중에 어댑터를 붙여 다시 읽을 수 있다.
@@ -543,6 +551,7 @@ dashboard.post("/events", async (c) => {
       project,
       host,
       message,
+      displayTitle,
       event,
       occurredAt,
       now,
@@ -561,7 +570,7 @@ dashboard.get("/sessions", async (c) => {
   const includeEnded = c.req.query("include_ended") === "1";
   const now = Date.now();
   const { results } = await c.env.DB.prepare(
-    "SELECT key, source, session_id, project, state, last_event, last_message, created_at, updated_at FROM dashboard_sessions ORDER BY updated_at DESC",
+    "SELECT key, source, session_id, project, state, last_event, last_message, display_title, created_at, updated_at FROM dashboard_sessions ORDER BY updated_at DESC",
   ).all<{ state: SessionState; updated_at: number }>();
   const sessions = (results ?? [])
     .filter((s) => includeEnded || s.state !== "ended")
@@ -667,7 +676,7 @@ dashboard.post("/sessions/:key/ack", async (c) => {
 
   const current = await db
     .prepare(
-      "SELECT source, session_id, project, host, state, last_occurred_at, last_transition_id, input_state, projection_token FROM dashboard_sessions WHERE key = ?",
+      "SELECT source, session_id, project, host, state, last_occurred_at, last_transition_id, input_state, projection_token, display_title FROM dashboard_sessions WHERE key = ?",
     )
     .bind(key)
     .first<{
@@ -680,6 +689,7 @@ dashboard.post("/sessions/:key/ack", async (c) => {
       last_transition_id: number | null;
       input_state: string | null;
       projection_token: string | null;
+      display_title: string | null;
     }>();
 
   if (!current) {
@@ -715,6 +725,8 @@ dashboard.post("/sessions/:key/ack", async (c) => {
     occurred_at: occurredAt,
   });
 
+  const displayTitle = env.DASHBOARD_STORE_MESSAGE === "1" ? current.display_title : null;
+
   const eventRow: EventRow = {
     session_key: key,
     source: current.source,
@@ -728,6 +740,7 @@ dashboard.post("/sessions/:key/ack", async (c) => {
     prompt_id: null,
     tool_use_id: null,
     tool_name: null,
+    display_title: displayTitle,
   };
   await insertEvent(db, eventRow, now);
 
@@ -789,6 +802,7 @@ dashboard.post("/sessions/:key/ack", async (c) => {
       project: fresh.project,
       host: fresh.host,
       message: null,
+      displayTitle,
       event: "UserAck",
       occurredAt,
       now,

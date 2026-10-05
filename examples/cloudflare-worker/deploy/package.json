@@ -26,7 +26,7 @@
     "deploy": "npm run migrate:remote && wrangler deploy"
   },
   "dependencies": {
-    "@5pecia1/agent-dashboard-server": "https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.5/5pecia1-agent-dashboard-server-0.1.0-alpha.5.tgz",
+    "@5pecia1/agent-dashboard-server": "https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.6/5pecia1-agent-dashboard-server-0.1.0-alpha.6.tgz",
     "hono": "4.13.7"
   },
   "devDependencies": {

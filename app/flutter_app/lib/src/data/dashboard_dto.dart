@@ -107,6 +107,8 @@ abstract class SessionViewDto with _$SessionViewDto {
     @JsonKey(name: 'last_event') @Default('') String lastEvent,
     @JsonKey(name: 'last_message') String? lastMessage,
 
+    @JsonKey(name: 'display_title') String? displayTitle,
+
     /// 마지막 이벤트의 발생 시각(epoch ms, **이벤트를 낸 기계의 시계**).
     @JsonKey(name: 'last_occurred_at') int? lastOccurredAt,
 
@@ -194,6 +196,8 @@ abstract class TransitionDto with _$TransitionDto {
     String? project,
     String? host,
     String? message,
+
+    @JsonKey(name: 'display_title') String? displayTitle,
 
     /// 이벤트 발생 시각(epoch ms, 이벤트를 낸 기계의 시계).
     @JsonKey(name: 'occurred_at') @Default(0) int occurredAt,

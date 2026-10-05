@@ -30,12 +30,14 @@ Map<String, dynamic> _eventJson(
   String event = 'Notification',
   String sessionKey = _sessionKey,
   String? message,
+  String? displayTitle,
 }) => <String, dynamic>{
   'id': id,
   'session_key': sessionKey,
   'source': 'claude-code',
   'event': event,
   'message': message,
+  'display_title': displayTitle,
   'received_at': 1757300000000 - id,
 };
 
@@ -386,6 +388,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('서버B 발언', findRichText: true), findsOneWidget);
     expect(find.text('서버A 발언', findRichText: true), findsNothing);
+  });
+
+  testWidgets('이벤트에 display_title이 있으면 그 시점의 제목 스냅샷을 행에 보여준다', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        handler: (_) async => _page(
+          <Map<String, dynamic>>[
+            _eventJson(
+              2,
+              displayTitle: '그때의 작업명',
+              message: '본문',
+            ),
+            _eventJson(1, message: '제목 없는 이벤트'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('그때의 작업명'), findsOneWidget);
+    expect(find.text('본문', findRichText: true), findsOneWidget);
+    expect(find.text('제목 없는 이벤트', findRichText: true), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('이력이 비어 있으면 empty 문구를 보여준다', (tester) async {

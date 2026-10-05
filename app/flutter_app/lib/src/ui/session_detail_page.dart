@@ -21,9 +21,10 @@ import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/widgets/delete_session_dialog.dart';
 import 'package:my_dashboard/src/ui/widgets/relative_time.dart';
 import 'package:my_dashboard/src/ui/widgets/session_card.dart'
-    show projectBasename, sourceLabelKeyFor;
+    show sourceLabelKeyFor;
 import 'package:my_dashboard/src/ui/widgets/session_history.dart';
 import 'package:my_dashboard/src/ui/widgets/state_chip.dart';
+import 'package:my_dashboard/src/util/session_display.dart';
 
 class SessionDetailPage extends ConsumerStatefulWidget {
   const SessionDetailPage({super.key, required this.session});
@@ -111,6 +112,21 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
               ),
             ),
           StateChip(state: state),
+          if (current.displayTitle?.isNotEmpty ?? false) ...[
+            const SizedBox(height: 8),
+            Text(
+              sessionDisplayName(
+                project: current.project.isNotEmpty ? current.project : null,
+                fallback: current.sessionId,
+                displayTitle: current.displayTitle,
+              ),
+              style: TextStyle(
+                color: tokens.fg,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _SummaryRow(
             tokens: tokens,
@@ -174,9 +190,11 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
   /// 뒤로가기를 했으면 `canPop`이 false라 no-op이다).
   Future<void> _confirmAndDelete(BuildContext context, SessionViewDto current) async {
     final navigator = Navigator.of(context);
-    final title = current.project.isNotEmpty
-        ? projectBasename(current.project)
-        : current.sessionId;
+    final title = sessionDisplayName(
+      project: current.project.isNotEmpty ? current.project : null,
+      fallback: current.sessionId,
+      displayTitle: current.displayTitle,
+    );
     final confirmed = await showDeleteSessionDialog(
       context,
       ref,

@@ -50,6 +50,8 @@ import 'package:my_dashboard/src/state/notify_bridge_io.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/state/notify_bridge_web.dart'
     as bridge;
 import 'package:my_dashboard/src/util/project_path.dart' show projectBasename;
+import 'package:my_dashboard/src/util/session_display.dart'
+    show sessionDisplayName;
 
 // ─── 값 ──────────────────────────────────────────────────────────────────
 
@@ -194,11 +196,25 @@ NotifyPayload payloadForAlert(
   // 않는다.
   final host = alert.host;
   final hasHost = host != null && host.isNotEmpty;
+  final displayTitle = alert.displayTitle?.trim();
+  final hasDisplayTitle = displayTitle != null && displayTitle.isNotEmpty;
 
   return NotifyPayload(
     id: alert.id,
-    title: '$projectText · $label',
-    body: hasHost ? '$host · $bodyText' : bodyText,
+    title: hasDisplayTitle
+        ? sessionDisplayName(
+            project: project,
+            fallback: alert.sessionKey,
+            displayTitle: displayTitle,
+          )
+        : '$projectText · $label',
+    body: hasDisplayTitle
+        ? <String>[
+            if (hasHost) host,
+            label,
+            if (message != null && message.isNotEmpty) message,
+          ].join(' · ')
+        : (hasHost ? '$host · $bodyText' : bodyText),
     sessionKey: alert.sessionKey,
     project: alert.project,
     host: alert.host,
