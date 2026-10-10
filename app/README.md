@@ -15,6 +15,14 @@ For a specific version, use `bash -s -- --version v0.1.1` at the end of the comm
 
 The current release has an ad-hoc signature and is not Developer ID signed or notarized. See the [quickstart](../docs/quickstart.md#macos-installation-and-updates) for the first-launch approval, installer options, and server setup. Open the app and enter your own server origin and client token.
 
+## Delete project sessions
+
+Projects with multiple sessions have a **Delete all sessions** icon beside their session count. The confirmation shows the full project path, hosts, and number of sessions. It deletes the sessions shown when you opened it, including their saved event history. Sessions added afterward are kept. Failed deletions are restored, and the result reports the successful and failed counts. Active sessions may reappear after new activity.
+
+Groups use the exact full project path across hosts and agent types. Unknown projects use individual deletion. Ended sessions hidden from the default list are excluded. Another device's cached list may keep deleted sessions until its next full snapshot.
+
+If the server connection changes while confirming or deleting, the app stops the remaining requests and asks you to review the current list before trying again.
+
 ## Build from source
 
 For Linux web development, open the repository root in VS Code and select **Dev Containers: Reopen in Container**. The root [Devcontainer configuration](../.devcontainer/devcontainer.json) mounts the whole repository and initializes the app from `app/`. It uses Linux x86_64; native macOS builds require a macOS host. Server development separately requires Node.js 22 or newer and npm, as described in the [server guide](../server/README.md).

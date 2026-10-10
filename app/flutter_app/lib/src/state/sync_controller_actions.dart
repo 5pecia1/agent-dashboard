@@ -1,5 +1,18 @@
 part of 'sync_controller.dart';
 
+@immutable
+class SessionDeletionResult {
+  const SessionDeletionResult({
+    required this.deletedCount,
+    required this.failedCount,
+    this.connectionChanged = false,
+  });
+
+  final int deletedCount;
+  final int failedCount;
+  final bool connectionChanged;
+}
+
 /// 서버 세션에 대한 사용자 액션과 낙관적 상태 변경.
 mixin SyncControllerActions on Notifier<SyncControllerState> {
   int get _connectionRevision =>
@@ -143,12 +156,25 @@ mixin SyncControllerActions on Notifier<SyncControllerState> {
     final previous = state.sync.sessions[key];
     if (previous == null) return false;
     final revision = _connectionRevision;
+    final alertIds = {
+      for (final alert in state.sync.pendingAlerts)
+        if (alert.sessionKey == key) alert.id,
+    };
     _removeSession(key);
     final nowMsFn = ref.read(syncNowMsFnProvider);
     try {
       final api = ref.read(dashboardApiProvider);
       await api.deleteSession(key);
-      return _connectionRevision == revision;
+      if (_connectionRevision != revision) return false;
+      // 삭제 중에 도착한 새 활동은 남기고, 삭제 전에 있던 알림만 정리한다.
+      state = state.copyWith(
+        sync: state.sync.copyWith(
+          pendingAlerts: state.sync.pendingAlerts
+              .where((alert) => !alertIds.contains(alert.id))
+              .toList(growable: false),
+        ),
+      );
+      return true;
     } catch (error) {
       if (_connectionRevision != revision) return false;
       _restoreSession(key, previous);
@@ -157,6 +183,40 @@ mixin SyncControllerActions on Notifier<SyncControllerState> {
       );
       return false;
     }
+  }
+
+  /// 확인창에 표시했던 키만 삭제한다. 단건 API를 순차 호출하므로 실패한
+  /// 세션은 개별 복구하고 나머지는 계속 처리한다. 연결이 바뀌면 중단한다.
+  Future<SessionDeletionResult> deleteSessions(
+    Iterable<String> keys, {
+    required int expectedConnectionRevision,
+  }) async {
+    final targets = keys.toSet().toList(growable: false);
+    var deleted = 0;
+    var failed = 0;
+    for (final key in targets) {
+      if (_connectionRevision != expectedConnectionRevision) {
+        return SessionDeletionResult(
+          deletedCount: deleted,
+          failedCount: failed,
+          connectionChanged: true,
+        );
+      }
+      final success = await deleteSession(key);
+      if (_connectionRevision != expectedConnectionRevision) {
+        return SessionDeletionResult(
+          deletedCount: deleted,
+          failedCount: failed,
+          connectionChanged: true,
+        );
+      }
+      if (success) {
+        deleted++;
+      } else {
+        failed++;
+      }
+    }
+    return SessionDeletionResult(deletedCount: deleted, failedCount: failed);
   }
 
   /// [ackSession]이 낙관 갱신·성공 반영·실패 되돌리기 세 자리에서 공유하는
