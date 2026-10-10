@@ -4,6 +4,14 @@ Golden tests (`test/widget_tests/goldens_test.dart`) render with the Ahem fallba
 
 This directory provides entry points for manual visual QA using `flutter run -t tool/visual_qa/<scenario>_main.dart -d <device>`. Each scenario uses real widgets and Provider overrides. Input and storage isolation vary by scenario; entry points that exercise native features require macOS plugins and the Rust bundle. Run the commands below from `app/flutter_app`.
 
+## Delete project sessions
+
+```sh
+mise exec -- flutter run -d macos -t tool/visual_qa/project_deletion_main.dart
+```
+
+This scenario uses the real project list, deletion dialog, and Rust translations. Settings and deletion requests stay in memory. Check cancellation, progress, success, partial failure, and preservation of the other project with the same basename. Toggle English and large text, resize the window, and use **Reset fixture** between runs. Rebuild the normal entry point before installing a production app.
+
 ## Account period dates
 
 ```sh

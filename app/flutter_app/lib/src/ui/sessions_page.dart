@@ -31,6 +31,7 @@ import 'package:my_dashboard/src/ui/diagnostics_page.dart';
 import 'package:my_dashboard/src/ui/setup_page.dart';
 import 'package:my_dashboard/src/ui/widgets/alert_banner.dart';
 import 'package:my_dashboard/src/ui/widgets/catchup_panel.dart';
+import 'package:my_dashboard/src/ui/widgets/delete_project_sessions_dialog.dart';
 import 'package:my_dashboard/src/ui/widgets/session_card.dart';
 
 /// 목록 화면이 지금 무엇을 그려야 하는지의 순수 판정. 위젯을 펌프하지
@@ -563,6 +564,21 @@ class _SessionGroupHeader extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             Text(countText, style: TextStyle(color: tokens.fg2, fontSize: 12)),
+            if (hasProject) ...[
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.delete_sweep_outlined),
+                tooltip: t(ref, 'session.group.delete_tooltip'),
+                onPressed: () => unawaited(
+                  showDeleteProjectSessionsDialog(
+                    context,
+                    ref,
+                    project: group.project,
+                    sessions: group.sessions,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

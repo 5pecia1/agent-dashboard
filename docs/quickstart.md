@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
   | bash -s -- --replace
 ```
 
-The installer replaces only the app bundle, keeps a backup of the previous bundle, and leaves saved connection settings alone. Without `--replace`, it refuses to overwrite an installed app. If you installed into a different folder, pass the same `--dir` again. Use `--version v0.1.1 --replace` to intentionally install that app version.
+The installer replaces only the app bundle, keeps a backup of the previous bundle, and leaves saved connection settings alone. Without `--replace`, it refuses to overwrite an installed app. If you installed into a different folder, pass the same `--dir` again. Use `--version v0.1.7 --replace` to intentionally install that app version.
 
 ## Set up your Cloudflare server
 
@@ -98,7 +98,7 @@ Hook versions come from your server, so `hooks` does not accept `--version`. The
 |---|---|
 | No component, or `app` | Installs the macOS app; defaults to the latest stable app release. |
 | `server` | Creates a server project from the latest stable server starter. |
-| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.1` or `0.1.1` for the app, and `server-v0.1.0-alpha.5` or `0.1.0-alpha.5` for the server. |
+| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.7` or `0.1.7` for the app, and `server-v0.1.0-alpha.6` or `0.1.0-alpha.6` for the server. |
 | `--prerelease` | Includes prereleases when resolving the latest version. Explicit prerelease versions do not need this flag. |
 | `--dir DIR` | Sets the app installation parent or the new server project directory. |
 | `--replace` | Allows replacing an existing app, retaining a backup and its settings. Does not overwrite server projects. |
