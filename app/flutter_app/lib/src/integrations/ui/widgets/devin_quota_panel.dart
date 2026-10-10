@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/account_period_end.dart';
 import 'package:my_dashboard/src/integrations/data/devin_usage_models.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
@@ -143,7 +144,8 @@ class _QuotaBody extends ConsumerWidget {
     final width = kDevinMetricWidth * scale;
     final showWeekly = quota.weeklyUsedPercent != null;
     final showDaily = !quota.hideDailyQuota && quota.dailyUsedPercent != null;
-    final showAcu = quota.weeklyUsedPercent == null &&
+    final showAcu =
+        quota.weeklyUsedPercent == null &&
         quota.dailyUsedPercent == null &&
         quota.acuConsumed != null;
     return Column(
@@ -157,6 +159,10 @@ class _QuotaBody extends ConsumerWidget {
               style: TextStyle(color: tokens.fg2, fontSize: 11),
             ),
           ),
+        AccountPeriodEnd(
+          labelKey: 'devin.plan_period_end',
+          endsAt: quota.planEndsAt,
+        ),
         Wrap(
           spacing: 12,
           runSpacing: 12,

@@ -99,6 +99,7 @@ void main() {
     final quota = DevinQuota.fromUserStatus(userStatusFixture());
     expect(quota.accountName, 'tester');
     expect(quota.planName, 'Max');
+    expect(quota.planEndsAt, DateTime.utc(2027, 10, 14, 14, 21, 6));
     expect(quota.billingStrategy, 'BILLING_STRATEGY_QUOTA');
     expect(quota.weeklyRemainingPercent, 48);
     expect(quota.weeklyUsedPercent, 52);
@@ -350,6 +351,7 @@ void main() {
     expect(failed.quota, same(original.quota));
     expect(failed.updatedAt, original.updatedAt);
     expect(failed.errorKey, 'devin.unauthorized');
+    expect(failed.quota?.planEndsAt, original.quota?.planEndsAt);
     fail = false;
     controller.configure(
       const DevinConnection(baseUrl: 'https://new.test', apiKey: 'new-key'),

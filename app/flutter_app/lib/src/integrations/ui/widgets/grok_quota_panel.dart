@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/account_period_end.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/data/grok_usage_models.dart';
 import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
@@ -168,6 +169,10 @@ class _GrokQuotaPanelState extends ConsumerState<GrokQuotaPanel>
                     ),
                 ],
               ),
+            AccountPeriodEnd(
+              labelKey: 'grok.billing_period_end',
+              endsAt: reading?.billingPeriodEndsAt,
+            ),
           ],
         ),
       ),
