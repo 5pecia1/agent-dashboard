@@ -9,6 +9,8 @@
 /// 프로토콜 관용대로 본문 메타데이터에 실린다.
 library;
 
+import 'package:my_dashboard/src/integrations/data/account_period.dart';
+
 /// 배포 배포판(devin/windsurf)마다 `api_server_url`이 다를 수 있으므로
 /// 설정값으로 받되, 비우면 표준 서버로 접는다.
 const String kDevinDefaultApiServer = 'https://server.codeium.com';
@@ -105,6 +107,7 @@ class DevinQuota {
     this.weeklyRemainingPercent,
     this.dailyResetAt,
     this.weeklyResetAt,
+    this.planEndsAt,
     this.hideDailyQuota = false,
     this.overageBalanceMicros,
     this.acuConsumed,
@@ -128,6 +131,9 @@ class DevinQuota {
   final int? weeklyRemainingPercent;
   final DateTime? dailyResetAt;
   final DateTime? weeklyResetAt;
+
+  /// `planStatus.planEnd`: end of the reported plan period, not a promised charge.
+  final DateTime? planEndsAt;
 
   /// 플랜이 일간 쿼터를 감추라고 명시한 경우(Max 등). 이 때
   /// [dailyRemainingPercent]가 와도 화면은 일간 칸을 그리지 않는다.
@@ -188,6 +194,7 @@ class DevinQuota {
       weeklyRemainingPercent: weeklyRemaining,
       dailyResetAt: dailyResetAt,
       weeklyResetAt: weeklyResetAt,
+      planEndsAt: parseAccountPeriodEnd(planMap['planEnd']),
       hideDailyQuota: infoMap['hideDailyQuota'] == true,
       overageBalanceMicros: _int(planMap['overageBalanceMicros']),
       acuConsumed: acuConsumed,

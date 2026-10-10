@@ -92,6 +92,7 @@ const _devinUserStatus = {
       },
       'dailyQuotaRemainingPercent': 100,
       'weeklyQuotaRemainingPercent': 48,
+      'planEnd': '2026-10-14T14:21:06Z',
       'overageBalanceMicros': '7462105',
       'dailyQuotaResetAtUnix': '1789545600',
       'weeklyQuotaResetAtUnix': '1789891200',

@@ -11,6 +11,14 @@ Grok usage is available in the macOS app. Open **Settings**, expand **Grok**, an
 
 Grok Bot weekly usage is a separate switch in that same section. The macOS app reads the Grok Bot login already on that Mac and requests that usage figure itself. It does not store the login token. The web app does not call that endpoint. The endpoint is the one the Grok Bot app uses and is not a public API, so an app update can require an integration update.
 
+## Account period dates
+
+When the existing usage response supplies a valid period boundary, the home screen shows **Plan period ends** for Devin or **Billing period ends** for Grok CLI. These dates are separate from usage resets and are displayed in your device's local time. Missing dates, invalid calendar dates, and timestamps without a timezone are hidden. A failed refresh keeps the last successful date with the panel's stale-reading indicator; disconnecting clears it.
+
+A period end does not confirm automatic renewal or a scheduled payment. Past dates remain as reported. The app does not extrapolate the next month or use a Grok Bot usage reset as a Grok subscription billing date. No extra billing request is made to fill in a missing date.
+
+## Connection and credentials
+
 The web app requires HTTPS service URLs, and each integration server must allow the web app's origin through CORS. A public HTTPS page may be unable to call an HTTP address on a private network directly. In that case, use the macOS app or configure an HTTPS relay that you operate. The dashboard server does not store integration keys on your behalf or automatically proxy requests.
 
 Keys are stored in the current device's app settings or the browser's localStorage. Do not include keys entered in Settings or real account responses in issues or screenshots. Devin usage relies on a CLI-compatible query endpoint separate from the official public API, so provider changes may require integration updates. Devin session-status hook support is independent of usage queries.

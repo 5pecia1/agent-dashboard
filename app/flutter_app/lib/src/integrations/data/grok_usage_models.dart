@@ -3,6 +3,8 @@
 /// 접근 토큰은 조회 요청을 만드는 동안에만 있고, 설정과 로그에는 남기지 않는다.
 library;
 
+import 'package:my_dashboard/src/integrations/data/account_period.dart';
+
 const String kGrokAuthIssuer = 'https://auth.x.ai';
 const String kGrokDefaultBillingBase = 'https://cli-chat-proxy.grok.com/v1';
 const String kGrokClientTokenAuth = 'xai-grok-cli';
@@ -54,6 +56,7 @@ class GrokUsageReading {
     this.accountLabel,
     this.plan,
     this.resetsAt,
+    this.billingPeriodEndsAt,
   });
 
   /// 0–100.
@@ -62,6 +65,9 @@ class GrokUsageReading {
   final String? accountLabel;
   final String? plan;
   final DateTime? resetsAt;
+
+  /// Explicit billing period end; independent of the usage window's reset.
+  final DateTime? billingPeriodEndsAt;
 }
 
 bool grokTokenIsFresh(DateTime? expiresAt, DateTime now) =>
@@ -150,6 +156,7 @@ GrokUsageReading? grokUsageReadingFromJson(
   if (config == null) return null;
   final plan = _optionalString(config['subscriptionTier']);
   final resetsAt = _resetAt(config);
+  final billingPeriodEndsAt = parseAccountPeriodEnd(config['billingPeriodEnd']);
   final label = _blankToNull(accountLabel);
   GrokUsageReading weeklyReading(double usedPercent) => GrokUsageReading(
     usedPercent: usedPercent.clamp(0, 100).toDouble(),
@@ -157,6 +164,7 @@ GrokUsageReading? grokUsageReadingFromJson(
     accountLabel: label,
     plan: plan,
     resetsAt: resetsAt,
+    billingPeriodEndsAt: billingPeriodEndsAt,
   );
   if (config.containsKey('creditUsagePercent')) {
     final weekly = _finite(config['creditUsagePercent']);
@@ -175,6 +183,7 @@ GrokUsageReading? grokUsageReadingFromJson(
     accountLabel: label,
     plan: plan,
     resetsAt: resetsAt,
+    billingPeriodEndsAt: billingPeriodEndsAt,
   );
 }
 
@@ -235,8 +244,6 @@ DateTime? _resetAt(Map<String, dynamic> config) {
     final parsed = DateTime.tryParse(end);
     if (parsed != null) return parsed;
   }
-  final billingEnd = config['billingPeriodEnd'];
-  if (billingEnd is String) return DateTime.tryParse(billingEnd);
   return null;
 }
 

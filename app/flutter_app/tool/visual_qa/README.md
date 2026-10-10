@@ -4,6 +4,16 @@ Golden tests (`test/widget_tests/goldens_test.dart`) render with the Ahem fallba
 
 This directory provides entry points for manual visual QA using `flutter run -t tool/visual_qa/<scenario>_main.dart -d <device>`. Each scenario uses real widgets and Provider overrides. Input and storage isolation vary by scenario; entry points that exercise native features require macOS plugins and the Rust bundle. Run the commands below from `app/flutter_app`.
 
+## Account period dates
+
+```sh
+mise exec -- flutter run -d macos -t tool/visual_qa/account_periods_main.dart
+```
+
+This scenario renders the real Devin and Grok cards with synthetic period dates and no personal settings or network requests. Switch between Korean and English, missing dates, stale readings, and large text. Resize the window to verify wrapping. The plan and billing period boundaries must remain separate from weekly usage resets. Past dates must remain unchanged; they do not establish a future payment or cancellation.
+
+For screenshot-only environments, pass `--dart-define=QA_ENGLISH=true`, `--dart-define=QA_STALE=true`, `--dart-define=QA_MISSING=true`, `--dart-define=QA_LARGE_TEXT=true`, or `--dart-define=QA_CARD_WIDTH=320` to select the initial scenario without clicking controls.
+
 ## Switch to a task window from the tray
 
 ```sh
