@@ -64,6 +64,23 @@ extension UsageDashboardConfig on DashboardConfigValues {
 
   DashboardConfigValues withGrokBot(bool enabled) => _grokFlags(bot: enabled);
 
+  bool get agyEnabled {
+    final raw = extra['antigravity'];
+    return raw is Map && raw['enabled'] == true;
+  }
+
+  /// Store only the switch, retaining unknown fields and all other connections.
+  DashboardConfigValues withAgy(bool enabled) {
+    final retained = Map<String, Object?>.from(extra);
+    final raw = retained['antigravity'];
+    final settings = <String, Object?>{
+      if (raw is Map) ...Map<String, Object?>.from(raw),
+      'enabled': enabled,
+    };
+    retained['antigravity'] = settings;
+    return copyWith(extra: Map.unmodifiable(retained));
+  }
+
   /// CLI와 Grok Bot은 따로 켜고, 둘 다 꺼질 때만 `grok` 키를 지운다.
   /// 토큰은 이 맵에 넣지 않는다.
   DashboardConfigValues _grokFlags({bool? cli, bool? bot}) {

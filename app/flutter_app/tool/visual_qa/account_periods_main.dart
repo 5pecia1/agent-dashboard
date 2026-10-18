@@ -93,7 +93,6 @@ class _ScenarioState extends State<_Scenario> {
                 window: GrokUsageWindow.weekly,
                 plan: 'SuperGrok',
                 resetsAt: DateTime.utc(2026, 10, 12),
-                billingPeriodEndsAt: end,
               ),
               errorKey: _stale ? 'grok.network_error' : null,
             ),

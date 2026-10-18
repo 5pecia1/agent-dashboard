@@ -17,11 +17,22 @@ ANTIGRAVITY_QUESTION = {
     'toolCall': {'name': 'ask_question',
                  'args': {'questions': [{'question': CANARY, 'options': [CANARY]}]}},
 }
+# OpenCode 플러그인이 hook 에 넘기는 평탄한 stdin. 프롬프트·질문 요약·원본 메타에 비밀 표식을 심는다.
+OPENCODE_PROMPT = {
+    'session_id': 'ses_privacy', 'cwd': '/workspace/example', 'hook_event_name': 'UserPromptSubmit',
+    'prompt': CANARY, 'opencode': {'type': 'session.execution.started', 'event_id': 'evt_1'},
+}
+OPENCODE_QUESTION = {
+    'session_id': 'ses_privacy', 'cwd': '/workspace/example', 'hook_event_name': 'UserInputRequest',
+    'message': f'shell: {CANARY}', 'opencode': {'type': 'permission.asked', 'request_id': f'per_{CANARY}'},
+}
 
 
 class HookPrivacyTests(unittest.TestCase):
-    def run_hook(self, name, include=None, aliases=False, offline=False, backlog=False, antigravity=None):
-        """antigravity=(event, payload)면 agent-event-hook.sh를 agy처럼 부른다. stdout은 self.last_stdout."""
+    def run_hook(self, name, include=None, aliases=False, offline=False, backlog=False, antigravity=None,
+                 opencode=None):
+        """antigravity=(event, payload)면 agent-event-hook.sh를 agy처럼, opencode=payload면 OpenCode 플러그인처럼
+        부른다. stdout은 self.last_stdout."""
         received = []
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -64,6 +75,9 @@ class HookPrivacyTests(unittest.TestCase):
                     if antigravity is not None:
                         event, payload = antigravity
                         args.extend(['antigravity', event])
+                    elif opencode is not None:
+                        payload = opencode
+                        args.append('opencode')
                     elif name == 'agent-event-hook.sh':
                         args.append('devin')
                         payload.update(prompt_id='p1', tool_use_id='t1', tool_name='exec')
@@ -142,3 +156,36 @@ class HookPrivacyTests(unittest.TestCase):
         self.assertEqual(payloads, [])
         self.assertIn('"event":"Stop"', spool)
         self.assertNotIn(CANARY, spool)
+
+    # OpenCode 플러그인은 수집 정책을 읽지 않고 prompt·message 를 그대로 넘긴다 - 게이트는 hook 하나뿐이다.
+    def test_opencode_기본값은_프롬프트와_질문_요약을_보내지_않는다(self):
+        for label, payload in (('prompt', OPENCODE_PROMPT), ('question', OPENCODE_QUESTION)):
+            with self.subTest(label):
+                payloads, _ = self.run_hook('agent-event-hook.sh', opencode=payload)
+                self.assertEqual(self.last_stdout, '')
+                self.assertEqual(len(payloads), 1)
+                self.assertEqual(payloads[0]['source'], 'opencode')
+                self.assertEqual(payloads[0]['session_id'], 'ses_privacy')
+                self.assertEqual(payloads[0]['project'], '/workspace/example')
+                self.assertEqual(payloads[0]['event'], payload['hook_event_name'])
+                self.assertIsNone(payloads[0]['message'])
+                self.assertNotIn('raw', payloads[0])
+                self.assertNotIn(CANARY, json.dumps(payloads))
+
+    def test_opencode_명시적_선택이면_프롬프트와_질문_요약을_보낸다(self):
+        payloads, _ = self.run_hook('agent-event-hook.sh', include=1, opencode=OPENCODE_PROMPT)
+        self.assertEqual(payloads[0]['message'], CANARY)
+        payloads, _ = self.run_hook('agent-event-hook.sh', include=1, opencode=OPENCODE_QUESTION)
+        self.assertEqual(payloads[0]['message'], f'shell: {CANARY}')
+        self.assertIn(CANARY, payloads[0]['raw'])
+
+    def test_opencode_오프라인_스풀에도_원문이_없다(self):
+        payloads, spool = self.run_hook('agent-event-hook.sh', offline=True, opencode=OPENCODE_QUESTION)
+        self.assertEqual(payloads, [])
+        self.assertIn('"event":"UserInputRequest"', spool)
+        self.assertNotIn(CANARY, spool)
+
+    def test_opencode_project는_hook_프로세스_cwd로_폴백하지_않는다(self):
+        payload = {k: v for k, v in OPENCODE_PROMPT.items() if k != 'cwd'}
+        payloads, _ = self.run_hook('agent-event-hook.sh', opencode=payload)
+        self.assertEqual(payloads[0]['project'], 'unknown')

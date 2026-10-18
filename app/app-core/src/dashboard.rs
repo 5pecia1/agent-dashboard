@@ -122,6 +122,12 @@ pub enum EventSource {
     /// 실행하고, hook이 이벤트를 계약 어휘로 번역해 보낸다. SessionEnd에
     /// 해당하는 hook이 없어 `ended`로 가지 않고 `done`에 머문다.
     Antigravity,
+    /// OpenCode CLI v2. lifecycle hook이 없어 전역 플러그인
+    /// (`hooks/opencode-plugin.mjs`)이 `api.event.subscribe` 이벤트를 계약
+    /// 어휘로 번역해 hook 스크립트로 넘긴다. SessionStart에 해당하는 신호가
+    /// 없어 세션은 첫 `UserPromptSubmit`으로 생기고, `session.deleted`·
+    /// `location.shutdown`이 SessionEnd로 번역되어 `ended`까지 간다.
+    OpenCode,
 }
 
 impl EventSource {
@@ -135,6 +141,7 @@ impl EventSource {
             Self::Generic => "generic",
             Self::Grok => "grok",
             Self::Antigravity => "antigravity",
+            Self::OpenCode => "opencode",
         }
     }
 }
@@ -231,6 +238,23 @@ pub static EVENT_STATE_MAP: &[(EventSource, &str, SessionState)] = &[
         SessionState::Working,
     ),
     (EventSource::Antigravity, "Stop", SessionState::Done),
+    (
+        EventSource::OpenCode,
+        "UserPromptSubmit",
+        SessionState::Working,
+    ),
+    (
+        EventSource::OpenCode,
+        "UserInputRequest",
+        SessionState::WaitingInput,
+    ),
+    (
+        EventSource::OpenCode,
+        "UserInputResolved",
+        SessionState::Working,
+    ),
+    (EventSource::OpenCode, "Stop", SessionState::Done),
+    (EventSource::OpenCode, "SessionEnd", SessionState::Ended),
 ];
 
 /// `EVENT_STATE_MAP`에서 `(source, event)`를 조회한다. 표에 없는 조합은
@@ -362,6 +386,7 @@ mod tests {
             ("generic", EventSource::Generic),
             ("grok", EventSource::Grok),
             ("antigravity", EventSource::Antigravity),
+            ("opencode", EventSource::OpenCode),
         ] {
             let entries = contract["event_state_map"]["by_source"][source_code]
                 .as_array()
@@ -397,6 +422,40 @@ mod tests {
             None
         );
         assert_eq!(state_for_event(EventSource::Generic, "anything"), None);
+    }
+
+    #[test]
+    fn opencode는_sessionstart_없이_userpromptsubmit으로_시작해_sessionend로_끝난다() {
+        // SessionStart에 해당하는 OpenCode 신호가 없어 표에도 줄이 없다.
+        assert_eq!(state_for_event(EventSource::OpenCode, "SessionStart"), None);
+        assert_eq!(
+            state_for_event(EventSource::OpenCode, "UserPromptSubmit"),
+            Some(SessionState::Working)
+        );
+        assert_eq!(
+            state_for_event(EventSource::OpenCode, "UserInputRequest"),
+            Some(SessionState::WaitingInput)
+        );
+        assert_eq!(
+            state_for_event(EventSource::OpenCode, "UserInputResolved"),
+            Some(SessionState::Working)
+        );
+        assert_eq!(
+            state_for_event(EventSource::OpenCode, "Stop"),
+            Some(SessionState::Done)
+        );
+        // antigravity와 달리 플러그인이 session.deleted·location.shutdown을
+        // SessionEnd로 번역하므로 ended까지 간다.
+        assert_eq!(
+            state_for_event(EventSource::OpenCode, "SessionEnd"),
+            Some(SessionState::Ended)
+        );
+        assert_eq!(
+            state_for_event(EventSource::Antigravity, "SessionEnd"),
+            None
+        );
+        // 하트비트는 표에 없다 — 상태를 바꾸지 않는다.
+        assert_eq!(state_for_event(EventSource::OpenCode, "PostToolUse"), None);
     }
 
     #[test]

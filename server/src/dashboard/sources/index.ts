@@ -4,6 +4,7 @@ import { codexAdapter } from "./codex";
 import { devinAdapter } from "./devin";
 import { genericAdapter } from "./generic";
 import { grokAdapter } from "./grok";
+import { opencodeAdapter } from "./opencode";
 import type { SessionState } from "../state";
 
 /**
@@ -66,6 +67,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [devinAdapter.source]: devinAdapter,
   [genericAdapter.source]: genericAdapter,
   [grokAdapter.source]: grokAdapter,
+  [opencodeAdapter.source]: opencodeAdapter,
 };
 
 /**

@@ -25,6 +25,7 @@ import 'package:my_dashboard/src/state/window_connections_provider.dart';
 import 'package:my_dashboard/src/state/window_navigation_provider.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/window_connections_page.dart';
+import 'package:my_dashboard/src/ui/sessions_page.dart';
 import 'package:my_dashboard/src/ui/window_navigation_actions.dart';
 import 'package:tray_manager/tray_manager.dart';
 
@@ -350,6 +351,12 @@ class _WindowNavigationQaState extends ConsumerState<_WindowNavigationQa> {
                   ),
                 ),
                 child: const Text('창 연결 관리'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(builder: (_) => const SessionsPage()),
+                ),
+                child: const Text('메인 카드 확인'),
               ),
               FilledButton(
                 onPressed: hideResidentWindow,

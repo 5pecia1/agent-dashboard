@@ -93,6 +93,7 @@ void main() {
     });
     expect(monthly!.window, GrokUsageWindow.monthly);
     expect(monthly.usedPercent, closeTo(20, 0.001));
+    expect(monthly.resetsAt, DateTime.utc(2026, 10, 1));
   });
 
   test('주간 구간인데 사용률 키가 없으면 0%이고 같은 본문의 월간 금액은 보지 않는다', () {

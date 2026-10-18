@@ -39,10 +39,11 @@ class HookInstallTests(unittest.TestCase):
                 shutil.copy2(ROOT / 'hooks' / name, install / name)
             (install / 'agent-event-hook.sh').write_text('#!/bin/sh\nprintf "%s" "$1" > "$HOOK_CALL_RESULT"\n')
             (install / 'agent-event-hook.sh').chmod(0o755)
+            (install / 'opencode-plugin.mjs').write_text('export default { id: "my-dashboard", setup() {} };\n')
             environment = {'HOME': temporary, 'PATH': os.environ['PATH']}
             for _ in range(2):
-                subprocess.run(['bash', str(install / 'install.sh'), '--claude', '--codex', '--devin', '--antigravity'],
-                               env=environment, capture_output=True, check=True, timeout=20)
+                subprocess.run(['bash', str(install / 'install.sh'), '--claude', '--codex', '--devin', '--antigravity',
+                                '--opencode'], env=environment, capture_output=True, check=True, timeout=20)
             codex = tomllib.loads((root / '.codex/config.toml').read_text())
             commands = []
             for groups in codex['hooks'].values():
@@ -68,6 +69,13 @@ class HookInstallTests(unittest.TestCase):
             for groups in codex['hooks'].values():
                 for group in groups:
                     self.assertEqual(len(group['hooks']), 1)
+            # OpenCode 는 명령이 아니라 래퍼 모듈이다: 기본 경로($HOME/.config/opencode/plugins)에 하나만 생기고
+            # 설치기 옆의 opencode-plugin.mjs 를 file:// URL 로 가리킨다(공백·따옴표가 든 경로도 그대로).
+            plugins = root / '.config/opencode/plugins'
+            self.assertEqual([p.name for p in plugins.iterdir()], ['my-dashboard.js'])
+            wrapper = (plugins / 'my-dashboard.js').read_text()
+            self.assertIn(Path(os.path.abspath(install / 'opencode-plugin.mjs')).as_uri(), wrapper)
+            self.assertIn('export default plugin;', wrapper)
 
 
 # 셸이 특수하게 다루는 문자를 다 넣은 폴더 이름. hook 경로가 명령 문자열 안에서 정확히 인용되는지 본다.
@@ -147,6 +155,7 @@ class AntigravityInstallTests(unittest.TestCase):
             'MY_DASHBOARD_CODEX_CONFIG': str(self.root / 'codex/config.toml'),
             'MY_DASHBOARD_DEVIN_CONFIG': str(self.root / 'devin/config.json'),
             'MY_DASHBOARD_ANTIGRAVITY_HOOKS': str(self.hooks_json),
+            'MY_DASHBOARD_OPENCODE_PLUGIN_DIR': str(self.root / 'opencode/plugins'),
             **extra,
         }
 
@@ -506,23 +515,24 @@ class AntigravityInstallTests(unittest.TestCase):
 
     def test_대상_플래그는_서로의_파일을_건드리지_않는다(self):
         others = [self.root / 'claude/settings.json', self.root / 'codex/config.toml',
-                  self.root / 'devin/config.json']
+                  self.root / 'devin/config.json', self.root / 'opencode/plugins/my-dashboard.js']
         self.assertEqual(self.install('--antigravity').returncode, 0)
         self.assertTrue(self.hooks_json.exists())
         for path in others:
             self.assertFalse(path.exists(), path)
 
         self.hooks_json.unlink()
-        for flag, path in zip(('--claude', '--codex', '--devin'), others):
+        for flag, path in zip(('--claude', '--codex', '--devin', '--opencode'), others):
             self.assertEqual(self.install(flag).returncode, 0)
             self.assertTrue(path.exists(), flag)
             self.assertFalse(self.hooks_json.exists(), f'{flag}는 hooks.json을 건드리지 않는다')
 
-    def test_네_대상을_한_번에_쓴다(self):
-        result = self.install('--claude', '--codex', '--devin', '--antigravity')
+    def test_다섯_대상을_한_번에_쓴다(self):
+        result = self.install('--claude', '--codex', '--devin', '--antigravity', '--opencode')
         self.assertEqual(result.returncode, 0, result.stderr)
         for path in (self.root / 'claude/settings.json', self.root / 'codex/config.toml',
-                     self.root / 'devin/config.json', self.hooks_json):
+                     self.root / 'devin/config.json', self.hooks_json,
+                     self.root / 'opencode/plugins/my-dashboard.js'):
             self.assertTrue(path.exists(), path)
         self.assertEqual(len(self.commands()), 4)
 
@@ -532,7 +542,9 @@ class AntigravityInstallTests(unittest.TestCase):
         # 도움말은 헤더 주석의 줄 범위를 그대로 출력한다. 범위가 짧으면 사용법이 잘리고 길면 코드가 섞인다.
         self.assertIn('bash hooks/install.sh --antigravity ', result.stdout)
         self.assertIn('~/.gemini/config/hooks.json만 실제로 쓴다', result.stdout)
-        self.assertIn('bash hooks/install.sh --claude --codex --devin --antigravity ', result.stdout)
+        self.assertIn('bash hooks/install.sh --opencode ', result.stdout)
+        self.assertIn('~/.config/opencode/plugins/my-dashboard.js만 실제로 쓴다', result.stdout)
+        self.assertIn('bash hooks/install.sh --claude --codex --devin --antigravity --opencode ', result.stdout)
         self.assertNotIn('set -euo pipefail', result.stdout)
         self.assertFalse(self.hooks_json.exists())
 
@@ -650,3 +662,156 @@ class AntigravityInstallTests(unittest.TestCase):
                 bash_env = self.root / f'{label}.env'
                 bash_env.write_text(content)
                 self.assert_real_hook_answers(BASH_ENV=str(bash_env))
+
+
+class OpenCodeInstallTests(unittest.TestCase):
+    """install.sh --opencode: 래퍼 파일 하나를 멱등으로 쓰고 같은 폴더의 다른 파일은 건드리지 않는다."""
+
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (self.root / 'home').mkdir()
+        self.plugin_dir = self.root / 'opencode plugins'
+        self.wrapper = self.plugin_dir / 'my-dashboard.js'
+
+    def env(self, **extra):
+        return {
+            'PATH': os.environ['PATH'],
+            'HOME': str(self.root / 'home'),
+            'MY_DASHBOARD_CLAUDE_SETTINGS': str(self.root / 'claude/settings.json'),
+            'MY_DASHBOARD_CODEX_CONFIG': str(self.root / 'codex/config.toml'),
+            'MY_DASHBOARD_DEVIN_CONFIG': str(self.root / 'devin/config.json'),
+            'MY_DASHBOARD_ANTIGRAVITY_HOOKS': str(self.root / 'gemini/hooks.json'),
+            'MY_DASHBOARD_OPENCODE_PLUGIN_DIR': str(self.plugin_dir),
+            **extra,
+        }
+
+    def install(self, *flags, installer=None, env=None):
+        script = (installer or ROOT / 'hooks') / 'install.sh'
+        return subprocess.run(['bash', str(script), *flags], env=env or self.env(), text=True,
+                              capture_output=True, timeout=20)
+
+    def make_installer(self, name, with_module=True):
+        directory = self.root / f'{name}{NASTY_SUFFIX}'
+        directory.mkdir()
+        shutil.copy2(ROOT / 'hooks' / 'install.sh', directory / 'install.sh')
+        if with_module:
+            shutil.copy2(ROOT / 'hooks' / 'opencode-plugin.mjs', directory / 'opencode-plugin.mjs')
+        return directory
+
+    def backups(self):
+        return sorted(self.plugin_dir.glob('my-dashboard.js.bak.*'))
+
+    def registration(self):
+        contract = json.loads(CONTRACT.read_text(encoding='utf-8'))
+        return contract['event_state_map']['opencode_plugin_translation']['registration']
+
+    def test_래퍼는_설치기_옆_모듈을_file_URL로_import해_그대로_내보낸다(self):
+        result = self.install('--opencode')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = self.wrapper.read_text(encoding='utf-8')
+        module_uri = Path(os.path.abspath(ROOT / 'hooks' / 'opencode-plugin.mjs')).as_uri()
+        self.assertIn(f'import plugin from "{module_uri}";', text)
+        self.assertIn('export default plugin;', text)
+        self.assertTrue(text.endswith('\n'))
+        self.assertEqual(self.backups(), [], '원본이 없으니 백업도 없다')
+        # 래퍼는 OpenCode 가 import 하는 ES 모듈이다 - node 로 import 해 계약의 plugin_id 가 나오는지 본다.
+        # (debian:12 CI 컨테이너에는 node 가 없다 - 그때는 import 확인만 건너뛴다.)
+        if not shutil.which('node'):
+            return
+        loaded = subprocess.run(
+            ['node', '--input-type=module', '-e',
+             'import(process.argv[1]).then(m => { console.log(m.default.id, typeof m.default.setup); })',
+             str(self.wrapper)], text=True, capture_output=True, timeout=20)
+        self.assertEqual(loaded.returncode, 0, loaded.stderr)
+        self.assertEqual(loaded.stdout.split(), [self.registration()['plugin_id'], 'function'])
+
+    def test_공백과_따옴표가_든_설치_경로도_URL로_정확히_인코딩한다(self):
+        installer = self.make_installer('nasty')
+        self.assertEqual(self.install('--opencode', installer=installer).returncode, 0)
+        text = self.wrapper.read_text(encoding='utf-8')
+        self.assertIn(Path(os.path.abspath(installer / 'opencode-plugin.mjs')).as_uri(), text)
+        self.assertNotIn(NASTY_SUFFIX, text, '경로는 percent-encoding 된 채로만 들어간다')
+        if not shutil.which('node'):
+            return
+        loaded = subprocess.run(
+            ['node', '--input-type=module', '-e', 'import(process.argv[1]).then(m => console.log(m.default.id))',
+             str(self.wrapper)], text=True, capture_output=True, timeout=20)
+        self.assertEqual(loaded.returncode, 0, loaded.stderr)
+        self.assertEqual(loaded.stdout.strip(), 'my-dashboard')
+
+    def test_두_번째_실행은_변경_없음이고_백업을_늘리지_않는다(self):
+        first = self.install('--opencode')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = self.wrapper.read_bytes()
+        second = self.install('--opencode')
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertIn('변경 없음', second.stdout)
+        self.assertNotIn('백업', second.stdout)
+        self.assertEqual(self.wrapper.read_bytes(), before)
+        self.assertEqual(self.backups(), [])
+
+    def test_다른_내용의_기존_파일은_백업하고_바꾼다(self):
+        self.plugin_dir.mkdir(parents=True)
+        stale = '// old\nimport plugin from "file:///old/place/opencode-plugin.mjs";\nexport default plugin;\n'
+        self.wrapper.write_text(stale)
+        result = self.install('--opencode')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('/old/place', self.wrapper.read_text())
+        self.assertEqual([b.read_text() for b in self.backups()], [stale])
+
+    def test_같은_폴더의_다른_플러그인_파일은_읽지도_쓰지도_않는다(self):
+        self.plugin_dir.mkdir(parents=True)
+        others = {'herdr-agent-state.js': 'export default { id: "herdr", setup() {} };\n',
+                  'broken.js': 'this is not { valid js',
+                  '한글.js': '// 유니코드\n'}
+        for name, content in others.items():
+            (self.plugin_dir / name).write_text(content, encoding='utf-8')
+        result = self.install('--opencode')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(p.name for p in self.plugin_dir.iterdir()), sorted([*others, 'my-dashboard.js']))
+        for name, content in others.items():
+            self.assertEqual((self.plugin_dir / name).read_text(encoding='utf-8'), content, name)
+
+    def test_dry_run은_파일도_폴더도_만들지_않고_쓸_내용을_보여준다(self):
+        for flags in (('--dry-run',), ()):
+            with self.subTest(flags=flags):
+                result = self.install(*flags)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                section = result.stdout.split('== OpenCode:')[1]
+                self.assertIn('--dry-run', section)
+                self.assertIn('export default plugin;', section)
+                self.assertFalse(self.wrapper.exists())
+                self.assertFalse(self.plugin_dir.exists())
+
+    def test_dry_run은_있는_파일을_바꾸지_않고_백업도_남기지_않는다(self):
+        self.plugin_dir.mkdir(parents=True)
+        self.wrapper.write_text('// something else\n')
+        result = self.install('--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.wrapper.read_text(), '// something else\n')
+        self.assertEqual(self.backups(), [])
+
+    def test_모듈이_없으면_쓰지_않고_멈춘다(self):
+        installer = self.make_installer('nomodule', with_module=False)
+        result = self.install('--opencode', installer=installer)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('opencode-plugin.mjs', result.stderr)
+        self.assertFalse(self.wrapper.exists())
+
+    def test_기본_경로는_OPENCODE_CONFIG_DIR_아래_plugins다(self):
+        env = self.env()
+        del env['MY_DASHBOARD_OPENCODE_PLUGIN_DIR']
+        env['OPENCODE_CONFIG_DIR'] = str(self.root / 'xdg-opencode')
+        result = self.install('--opencode', env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / 'xdg-opencode/plugins/my-dashboard.js').exists())
+        del env['OPENCODE_CONFIG_DIR']
+        result = self.install('--opencode', env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / 'home/.config/opencode/plugins/my-dashboard.js').exists())
+        self.assertFalse(self.plugin_dir.exists())
+
+    def test_opencode_플래그는_다른_대상의_파일을_만들지_않는다(self):
+        self.assertEqual(self.install('--opencode').returncode, 0)
+        for path in ('claude/settings.json', 'codex/config.toml', 'devin/config.json', 'gemini/hooks.json'):
+            self.assertFalse((self.root / path).exists(), path)

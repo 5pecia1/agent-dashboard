@@ -26,9 +26,12 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/routing/app_router.dart'
     show sessionDetailRouteName;
 import 'package:my_dashboard/src/state/sync_controller.dart';
+import 'package:my_dashboard/src/state/window_navigation_provider.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/diagnostics_page.dart';
+import 'package:my_dashboard/src/ui/prompt_library_page.dart';
 import 'package:my_dashboard/src/ui/setup_page.dart';
+import 'package:my_dashboard/src/ui/window_navigation_actions.dart';
 import 'package:my_dashboard/src/ui/widgets/alert_banner.dart';
 import 'package:my_dashboard/src/ui/widgets/catchup_panel.dart';
 import 'package:my_dashboard/src/ui/widgets/delete_project_sessions_dialog.dart';
@@ -333,6 +336,15 @@ class SessionsPage extends ConsumerWidget {
         title: Text(t(ref, 'session.list.title')),
         actions: [
           IconButton(
+            icon: const Icon(Icons.text_snippet_outlined),
+            tooltip: t(ref, 'prompt.title'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PromptLibraryPage(),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: t(ref, 'session.list.action.refresh'),
             onPressed: refreshing ? null : () => unawaited(_refresh(ref)),
@@ -485,14 +497,15 @@ class _SessionGroupSection extends StatelessWidget {
 /// [_SessionGroupSection]과 헤더 없는 병합 런([SessionRenderRun])이 공유하는
 /// 카드 그리드 자체 — 헤더 유무만 다르고 그리드 구조(열 수 계산·카드
 /// extent·shrinkWrap/`NeverScrollableScrollPhysics`)는 완전히 같다.
-class _SessionCardGrid extends StatelessWidget {
+class _SessionCardGrid extends ConsumerWidget {
   const _SessionCardGrid({required this.sessions, required this.columnCount});
 
   final List<SessionViewDto> sessions;
   final int columnCount;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canOpenWindow = ref.watch(windowNavigationSupportedProvider);
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final compact =
         MediaQuery.sizeOf(context).width > kSessionGridNarrowMaxWidth &&
@@ -510,17 +523,17 @@ class _SessionCardGrid extends StatelessWidget {
       itemCount: sessions.length,
       itemBuilder: (context, index) {
         final session = sessions[index];
+        void showDetails() => Navigator.of(
+          context,
+        ).pushNamed(sessionDetailRouteName(session.key));
         return SessionCard(
           key: ValueKey(session.key),
           session: session,
           compact: compact,
-          // T-wire: 세션 상세로 가는 유일한 경로(`routing/app_router.dart`)를
-          // 통해 push한다 — macOS 알림 클릭 딥링크(`app.dart`의
-          // `handleNotificationTap`)와 웹 해시(`#/session/<key>`)가
-          // 들어오는 라우트와 완전히 같은 라우트다.
-          onTap: () => Navigator.of(
-            context,
-          ).pushNamed(sessionDetailRouteName(session.key)),
+          onTap: canOpenWindow
+              ? () => unawaited(openSessionWindow(context, ref, session))
+              : showDetails,
+          onShowDetails: showDetails,
         );
       },
     );

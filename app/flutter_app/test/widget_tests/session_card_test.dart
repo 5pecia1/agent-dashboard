@@ -177,10 +177,10 @@ void main() {
     },
   );
 
-  group('UserAck-impl: 칩 탭이 카드의 상세 이동 탭과 겹치지 않는다', () {
+  group('UserAck-impl: 칩 탭이 카드 본문 동작과 겹치지 않는다', () {
     testWidgets(
       'waiting_input 카드에서 상태 칩을 탭하면 ack API를 1회 부르고, '
-      '카드 자체의 onTap(상세 이동)은 트리거되지 않는다',
+      '카드 본문 동작은 트리거되지 않는다',
       (tester) async {
         const session = SessionViewDto(
           key: 'claude-code:s1',
@@ -258,7 +258,7 @@ void main() {
         expect(
           navigated,
           0,
-          reason: '칩 탭은 중첩된 제스처 감지기가 먼저 받아 카드의 상세 이동 onTap까지 '
+          reason: '칩 탭은 중첩된 제스처 감지기가 먼저 받아 카드 본문의 onTap까지 '
               '번지면 안 된다',
         );
         expect(apiCalls, 1, reason: '칩 탭이 ackSession -> api.ack()을 정확히 1회 불러야 한다');

@@ -14,9 +14,13 @@ import 'package:my_dashboard/src/platform/tray_command.dart';
 import 'package:my_dashboard/src/platform/tray_native.dart';
 import 'package:my_dashboard/src/rust/api/i18n.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/agy_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/data/agy_usage_models.dart';
 import 'package:my_dashboard/src/state/sync_controller.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
+
+import '../fixtures/agy_usage_fixture.dart';
 
 const _team = TeamClaudeConnection(
   baseUrl: 'https://team.test',
@@ -30,6 +34,42 @@ class _FixedSync extends SyncController {
 }
 
 void main() {
+  testWidgets('숨긴 창의 트레이 새로고침에 agy를 포함하고 느린 중복 조회를 합친다', (tester) async {
+    late WidgetRef ref;
+    var calls = 0;
+    final response = Completer<AgyUsageReading>();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...usageDashboardUiOverrides,
+          agyUsageSupportedProvider.overrideWithValue(true),
+          agyUsageFetchProvider.overrideWithValue(() {
+            calls++;
+            return response.future;
+          }),
+        ],
+        child: Consumer(
+          builder: (context, value, child) {
+            ref = value;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    ref.read(agyUsageControllerProvider.notifier)
+      ..setActive(false)
+      ..configure(true);
+    final first = ref.read(trayUsageRefreshFnProvider)();
+    final second = ref.read(trayUsageRefreshFnProvider)();
+    await tester.pump();
+    expect(calls, 1);
+    response.complete(agyUsageReadingFromJson(agyUsageFixtureData()));
+    await Future.wait([first, second]);
+    expect(ref.read(agyUsageControllerProvider).reading, isNotNull);
+    await tester.pump(const Duration(minutes: 2));
+    expect(calls, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('메뉴 설치가 실패해도 다음 열기는 다시 시도하며 실패한 메뉴를 띄우지 않는다', (tester) async {
     late WidgetRef ref;
     var installs = 0;

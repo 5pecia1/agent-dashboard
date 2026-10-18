@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
+import 'package:my_dashboard/src/i18n/usage_catalog.dart';
+import 'package:my_dashboard/src/rust/api/i18n.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/quota_widgets.dart';
 
@@ -11,36 +13,40 @@ void main() {
     expect(formatDashboardDate(DateTime(2026, 12, 31)), '2026-12-31');
   });
 
-  testWidgets('리셋 표시와 툴팁은 로케일 날짜가 아니라 yyyy-MM-dd를 쓴다', (tester) async {
+  testWidgets('모든 제공자는 남은 시간만 표시하고 초기화 날짜와 툴팁은 표시하지 않는다', (tester) async {
     final reset = DateTime.now().add(const Duration(days: 3));
-    final expected = formatDashboardDate(reset);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          i18nTranslateOverride.overrideWithValue(
-            (key, locale) => key.split('.').last,
-          ),
-          // 인자를 그대로 이어 붙이는 가짜 — 위젯이 넘긴 날짜 문자열을 검증한다.
-          i18nTranslateArgsOverride.overrideWithValue(
-            (key, locale, names, values) => values.join(' '),
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: Scaffold(
-            body: QuotaResetTime(keyPrefix: 'devin', reset: reset),
+    for (final locale in [LocaleDto.ko, LocaleDto.en]) {
+      await tester.pumpWidget(
+        ProviderScope(
+          key: ValueKey(locale),
+          overrides: [
+            localeProvider.overrideWithValue(locale),
+            extensionTranslationProvider.overrideWithValue(usageTranslation),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: Scaffold(
+              body: Column(
+                children: [
+                  for (final provider in ['teamclaude', 'devin', 'grok'])
+                    QuotaResetTime(keyPrefix: provider, reset: reset),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    final clockTexts = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((w) => w.data)
-        .whereType<String>();
-    final clockText = clockTexts.firstWhere((d) => d.startsWith(expected));
-    expect(clockText, matches(RegExp(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$')));
-    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
-    expect(tooltip.message, startsWith(expected));
-    expect(tooltip.message, matches(RegExp(r'^\d{4}-\d{2}-\d{2}')));
+      );
+      final texts = tester.widgetList<Text>(find.byType(Text)).toList();
+      expect(texts, hasLength(3));
+      final remaining = locale == LocaleDto.ko
+          ? RegExp(r'^\d+일 \d+시간 후$')
+          : RegExp(r'^\d+d \d+h to reset$');
+      for (final text in texts) {
+        expect(text.data, matches(remaining));
+        expect(text.data, isNot(contains(formatDashboardDate(reset))));
+      }
+      expect(find.byType(Tooltip), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
   });
 }

@@ -3,7 +3,7 @@
   "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
   "title": "Agent Dashboard protocol",
   "protocol_version": 1,
-  "revision": "2026-10-05",
+  "revision": "2026-10-18",
   "copies": {
     "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
     "package": "server/contracts/dashboard-protocol.v1.json"
@@ -129,6 +129,12 @@
         "event_vocabulary": "antigravity",
         "state_field_allowed": false,
         "$note": "agy에는 SessionEnd에 해당하는 hook이 없어서 antigravity 세션은 ended로 가지 않고 done에 머문다(한계는 antigravity_hook_translation.limitations)."
+      },
+      "opencode": {
+        "description": "OpenCode CLI v2(실측 2.0.31). 전역 플러그인(hooks/opencode-plugin.mjs, $OPENCODE_CONFIG_DIR/plugins/my-dashboard.js 래퍼로 설치)이 api.event.subscribe 이벤트를 계약 어휘로 번역해 agent-event-hook.sh opencode에 stdin JSON으로 넘긴다. 상태표는 event_state_map.by_source.opencode, 번역 규칙은 event_state_map.opencode_plugin_translation이 정본이다.",
+        "event_vocabulary": "opencode",
+        "state_field_allowed": false,
+        "$note": "플러그인은 수집 정책(MY_DASHBOARD_INCLUDE_CONTENT 등)을 읽지 않고 번역만 한다 — 프라이버시 게이트·하트비트 스로틀·스풀·멱등 event_id는 모두 hook 스크립트가 적용한다. session_id는 OpenCode 세션 ID(ses_…), project는 세션 location의 디렉터리(realpath)다."
       }
     },
     "unregistered": {
@@ -227,10 +233,11 @@
           "codex",
           "devin",
           "grok",
-          "antigravity"
+          "antigravity",
+          "opencode"
         ],
         "throttle_ms": 60000,
-        "description": "도구 실행마다 발생하므로 hook이 60초에 한 번만 보낸다.",
+        "description": "도구 실행마다 발생하므로 hook이 60초에 한 번만 보낸다. OpenCode는 플러그인이 session.step.started·session.tool.called·session.tool.success·session.tool.failed를 이 이름으로 번역해 보내고, 60초 스로틀은 hook 스크립트가 같은 규칙으로 적용한다.",
         "promote_from": [
           "done",
           "idle",
@@ -454,6 +461,33 @@
           "state": "done",
           "description": "Stop(턴 실행 마침). fullyIdle이 false여도 done이다 — 백그라운드 작업(서브에이전트 등)이 남아 있어도 턴 실행은 끝났고, agy가 다시 모델을 호출하면 Stop 뒤 처음 오는 PreInvocation이 working으로 되돌린다."
         }
+      ],
+      "opencode": [
+        {
+          "event": "UserPromptSubmit",
+          "state": "working",
+          "description": "플러그인이 session.execution.started를 번역한 턴 시작. message는 같은 세션의 가장 최근 session.inbox.enqueued의 item.payload.text 앞 300자(없으면 null)."
+        },
+        {
+          "event": "UserInputRequest",
+          "state": "waiting_input",
+          "description": "플러그인이 permission.asked(권한 승인 대기)와 form.created(질문 도구 등 모든 form)를 번역한 합성 대기 이벤트(opencode_plugin_translation 참고). 스로틀 없이 즉시 보낸다."
+        },
+        {
+          "event": "UserInputResolved",
+          "state": "working",
+          "description": "플러그인이 permission.replied·form.replied·form.cancelled를 번역한 해소 이벤트 — 대기와 1:1로 대응하는 전용 해소 신호다."
+        },
+        {
+          "event": "Stop",
+          "state": "done",
+          "description": "플러그인이 session.execution.succeeded·failed·interrupted를 번역한 턴 끝. 어느 것이었는지와 error.type·reason은 raw(stdin 원문의 opencode 객체)에 남는다."
+        },
+        {
+          "event": "SessionEnd",
+          "state": "ended",
+          "description": "플러그인이 session.deleted를 번역한 세션 종료. 자기 location의 location.shutdown 때는 그 인스턴스가 아는, 아직 ended가 아닌 모든 루트 세션에 보낸다."
+        }
       ]
     },
     "generic_rule": {
@@ -568,6 +602,61 @@
         "서브에이전트의 질문은 부모 세션에 연결할 식별자가 없어 추적하지 않는다.",
         "ask_permission은 다른 agy 연동 구현의 처리를 따라 포함했고 payload는 실측하지 못했다(ask_question은 실측).",
         "서브에이전트 이벤트는 보내지 않으므로, 부모의 턴이 서브에이전트를 남긴 채 끝나면 그동안 부모 세션은 done으로 보인다(agy가 부모를 다시 호출하면 working으로 돌아온다)."
+      ]
+    },
+    "opencode_plugin_translation": {
+      "description": "OpenCode CLI v2 플러그인(hooks/opencode-plugin.mjs)이 api.event.subscribe로 받은 이벤트를 계약 어휘로 번역해 agent-event-hook.sh opencode에 넘기는 규칙. 근거는 OpenCode 2.0.31 실측(standalone·공유 서비스·전용 서버 3경로)이다. 플러그인은 번역과 소유 판정만 하고 상태 판단은 서버만 한다.",
+      "registration": {
+        "file": "${MY_DASHBOARD_OPENCODE_PLUGIN_DIR:-${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/plugins}/my-dashboard.js",
+        "plugin_id": "my-dashboard",
+        "module": "hooks/opencode-plugin.mjs",
+        "wrapper": "import plugin from \"file:///<설치 디렉터리 절대경로>/opencode-plugin.mjs\"; export default plugin; — 설치기는 이 두 줄짜리 래퍼 파일 하나만 쓴다. 원본 모듈이 agent-event-hook.sh와 같은 디렉터리에 있으므로 hook 경로는 모듈이 import.meta.url 기준 ./agent-event-hook.sh로 계산한다.",
+        "plugin_contract": "OpenCode 2.0.31은 default export { id, setup(api) }만 호출한다(v1의 named export 훅 형태는 무시된다). setup(api)는 정리 함수를 반환하고, 정리 함수는 event.subscribe의 AbortController를 abort한다. 이벤트는 api.event.subscribe({ signal })이 돌려주는 AsyncIterable을 for await로 소비한다.",
+        "hook_invocation": "bash <hook 경로> opencode 를 stdin JSON과 함께 비동기로 실행한다(stdio: pipe/ignore/ignore, detached: true, unref, 끝나기를 기다리지 않고 오류는 무시). detached가 필요한 이유(실측): standalone은 location.shutdown 직후 자식 서버의 프로세스 그룹을 SIGTERM으로 정리해서, 같은 그룹에 있는 hook은 Stop·SessionEnd를 보내기 전에 죽는다. 플러그인은 절대 throw하지 않고 어떤 훅 반환값도 바꾸지 않는다.",
+        "reload": "플러그인 파일을 저장하면 OpenCode가 dispose 뒤 setup을 다시 부른다(hot-reload). 공유 서비스에 새 설치를 반영하는 방법도 같다(파일 쓰기 또는 opencode reload). 확인은 opencode plugin list."
+      },
+      "stdin_contract": {
+        "description": "플러그인이 hook에 넘기는 평탄한 stdin JSON. hook은 session_id·cwd·hook_event_name·prompt·message를 claude-code 어휘와 같은 경로로 읽는다.",
+        "fields": {
+          "session_id": "루트 세션의 OpenCode 세션 ID(ses_…). 자식 세션에서 올라온 대기·해소 이벤트는 루트 세션 ID로 바꿔 보낸다.",
+          "cwd": "세션 location의 디렉터리(이벤트의 location.directory 또는 레지스트리의 directory). hook은 이것을 project로 쓴다.",
+          "hook_event_name": "번역된 계약 이벤트 이름(UserPromptSubmit·UserInputRequest·UserInputResolved·PostToolUse·Stop·SessionEnd).",
+          "prompt": "UserPromptSubmit만. 같은 세션의 가장 최근 session.inbox.enqueued의 item.payload.text 앞 300자. 없으면 키 자체가 없다.",
+          "message": "UserInputRequest만. permission.asked는 `<action>: <resources를 쉼표로 이은 요약>`, form.created는 fields[0].description(없으면 fields[0].title, 그것도 없으면 form.title). 300자로 자른다.",
+          "opencode": "원본 이벤트 메타: { type, event_id, tool?, error_type?(execution.failed의 error.type), reason?(execution.interrupted의 reason), form_id?, form_kind?(form.created의 metadata.kind), request_id?, reply?(permission.replied의 reply), child_session_id?·parent_session_id?(자식 세션에서 루트로 올린 대기·해소 이벤트) }. hook은 읽지 않고 raw에만 남는다."
+        }
+      },
+      "heartbeat_types": [
+        "session.step.started",
+        "session.tool.called",
+        "session.tool.success",
+        "session.tool.failed"
+      ],
+      "stop_types": [
+        "session.execution.succeeded",
+        "session.execution.failed",
+        "session.execution.interrupted"
+      ],
+      "rules": [
+        "session.execution.started → UserPromptSubmit. prompt는 같은 세션의 가장 최근 session.inbox.enqueued의 item.payload.text 앞 300자이고, 플러그인이 세션별로 기억한다(없으면 prompt 없음).",
+        "permission.asked → UserInputRequest(message는 action과 resources 요약). form.created → UserInputRequest(metadata.kind와 상관없이 모든 form, message는 fields[0].description).",
+        "permission.replied, form.replied, form.cancelled → UserInputResolved.",
+        "session.execution.succeeded, session.execution.failed, session.execution.interrupted → Stop. 어느 것이었는지와 error.type(failed)·reason(interrupted)은 stdin의 opencode 객체에 남긴다.",
+        "session.deleted → SessionEnd. 자기 location의 location.shutdown → 그 location에서 이 플러그인 인스턴스가 알고 있는, 아직 ended가 아닌 모든 루트 세션에 SessionEnd. 다른 location의 location.shutdown은 무시한다.",
+        "session.step.started, session.tool.called, session.tool.success, session.tool.failed → PostToolUse 하트비트(heartbeat_events.events.PostToolUse.throttle_ms 스로틀은 hook 스크립트가 적용한다).",
+        "소유 판정: 전역 플러그인은 location(디렉터리)마다 인스턴스가 하나씩 생기고 모든 인스턴스가 서버의 모든 이벤트를 받으므로, 프로세스 전역 레지스트리 globalThis[Symbol.for(\"my-dashboard.opencode\")]에 sessionID → { directory, rootSessionID, ended, prompt } 맵을 둔다. location이 있는 이벤트는 location.directory === api.location.directory인 인스턴스만 처리하고, 처리하면서 sessionID → directory를 기록한다(session.created의 data.location.directory도 같은 방식으로 기록한다). location이 없는 이벤트(session.execution.*, session.deleted)는 맵에서 directory를 찾아 자기 directory인 인스턴스만 처리하고, 맵에 없으면 버린다(실측상 session.inbox.enqueued가 session.execution.started보다 먼저 와서 맵이 채워진다).",
+        "서브에이전트: session.created에 parentID가 있으면 자식으로 기록하고 부모를 거슬러 루트를 찾는다. 자식 세션의 이벤트는 permission.asked·permission.replied·form.created·form.replied·form.cancelled만 루트 세션 ID로 바꿔 보내고(사용자가 부모 화면에서 답해야 하므로), 나머지(session.execution.*, 하트비트, session.deleted)는 보내지 않는다. 부모의 상태는 부모 자신의 session.execution.*로만 정해진다.",
+        "session_id는 data.sessionID(form.created는 data.form.sessionID, form.replied·form.cancelled와 permission.replied는 data.sessionID)이고 project(cwd)는 이벤트의 location.directory 또는 레지스트리의 directory다.",
+        "비대화형 opencode run은 플러그인에서 구분할 신호가 없으므로 제외하지 않는다.",
+        "그 밖의 이벤트(session.renamed, session.usage.updated, *.updated, shell.* 등)는 보내지 않는다. 플러그인은 환경변수를 읽지 않으며 모든 수집 정책은 hook 스크립트가 적용한다."
+      ],
+      "limitations": [
+        "standalone(opencode run --standalone)에서는 플러그인이 세션 생성 뒤에 로드되어 루트 세션의 session.created를 보지 못한다(자식 created는 본다). 첫 이벤트는 session.inbox.enqueued라 소유 판정에는 지장이 없다.",
+        "standalone 실행 중 SIGINT로 끊으면 session.execution.interrupted 없이 location.shutdown만 오므로 Stop 없이 SessionEnd만 간다.",
+        "공유 서비스에서는 플러그인 프로세스에 Herdr 환경변수(HERDR_*)가 없어 herdr-context.py가 display_title을 붙이지 못한다. herdr-context.py의 AGENTS에도 opencode를 넣지 않았다.",
+        "비대화형 opencode run은 permission.asked 뒤 수 ms 만에 자동으로 reject하므로 waiting_input이 수 ms만 유지된다. 그런 실행도 세션 카드로 올라온다.",
+        "플러그인 파일 저장으로 hot-reload가 일어나면 레지스트리는 globalThis[Symbol.for(\"my-dashboard.opencode\")]에 있어 같은 서버 프로세스 안에서는 남지만, dispose와 재setup 사이에 도착한 이벤트는 구독이 끊겨 있어 놓칠 수 있고, 그 사이 시작된 세션은 session.inbox.enqueued를 못 봐 레지스트리에 오르지 않으므로 location 없는 session.execution.* 이벤트가 버려지고 location.shutdown 때 SessionEnd를 받지 못할 수 있다(session.deleted는 레지스트리에 있어야만 보낸다). 서버 프로세스 자체가 재시작되면(standalone은 매 실행, 공유 서비스는 재시작) 레지스트리도 사라진다.",
+        "OpenCode에는 SessionStart에 해당하는 신호가 없다(session.created는 standalone에서 못 본다). 세션은 UserPromptSubmit으로 생긴다."
       ]
     }
   },

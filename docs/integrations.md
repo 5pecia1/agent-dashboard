@@ -7,15 +7,15 @@ Agent Dashboard includes TeamClaude and Devin usage integrations. Distribution f
 3. Check the usage values and last fetch time in the home screen's usage panels. The same usage information is available in the macOS tray.
 4. To disconnect, clear that integration's settings. Your dashboard server, session, and notification settings remain unchanged.
 
-Grok usage is available in the macOS app. Open **Settings**, expand **Grok**, and turn usage on. The app reads the Grok CLI login on that Mac and requests the usage figure itself. It does not store the login token. The web app does not call the usage endpoint. The endpoint is the one the Grok CLI uses and is not a public API, so a CLI change can require an integration update.
+Grok usage is available in the macOS app. Sign in with Grok CLI on that Mac, then open **Settings**, expand **Grok**, and turn usage on. The app reads the Grok CLI login and requests the usage figure itself. It does not store the login token. The web app does not call the usage endpoint. The endpoint is the one the Grok CLI uses and is not a public API, so a CLI change can require an integration update.
 
-Grok Bot weekly usage is a separate switch in that same section. The macOS app reads the Grok Bot login already on that Mac and requests that usage figure itself. It does not store the login token. The web app does not call that endpoint. The endpoint is the one the Grok Bot app uses and is not a public API, so an app update can require an integration update.
+Grok Bot weekly usage is a separate switch in that same section. Sign in with Grok Bot on that Mac before enabling it. The macOS app reads that login and requests the usage figure itself. It does not store the login token. The web app does not call that endpoint. The endpoint is the one the Grok Bot app uses and is not a public API, so an app update can require an integration update.
 
 ## Account period dates
 
-When the existing usage response supplies a valid period boundary, the home screen shows **Plan period ends** for Devin or **Billing period ends** for Grok CLI. These dates are separate from usage resets and are displayed in your device's local time. Missing dates, invalid calendar dates, and timestamps without a timezone are hidden. A failed refresh keeps the last successful date with the panel's stale-reading indicator; disconnecting clears it.
+When the existing usage response supplies a valid plan boundary, the home screen shows **Plan period ends** for Devin. This date is separate from usage resets and is displayed in your device's local time. Missing dates, invalid calendar dates, and timestamps without a timezone are hidden. A failed refresh keeps the last successful date with the panel's stale-reading indicator; disconnecting clears it.
 
-A period end does not confirm automatic renewal or a scheduled payment. Past dates remain as reported. The app does not extrapolate the next month or use a Grok Bot usage reset as a Grok subscription billing date. No extra billing request is made to fill in a missing date.
+A plan end does not confirm automatic renewal or a scheduled payment. Past dates remain as reported. Usage panels show only the time remaining until reset. Grok CLI's `billingPeriodEnd` describes a weekly credit or calendar-month spending period, so the app does not display it as a subscription billing date. Grok Bot, Claude, and Codex also report usage resets through the current integrations; subscription renewal dates are not available through these integrations.
 
 ## Connection and credentials
 

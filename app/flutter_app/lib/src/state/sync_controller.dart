@@ -55,6 +55,7 @@ import 'package:my_dashboard/src/data/dashboard_dto.dart'
         kDashboardStates;
 import 'package:my_dashboard/src/data/sync_reducer.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
+import 'package:my_dashboard/src/state/prompt_history_provider.dart';
 import 'package:my_dashboard/src/platform/background_activity_native.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/platform/background_activity_web.dart'
     as wake_bridge;

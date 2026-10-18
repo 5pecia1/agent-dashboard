@@ -51,31 +51,41 @@ void main() {
     }
   });
 
-  test('Grok의 주간 초기화와 청구 기간 종료일을 각각 보존한다', () {
+  test('Grok credits 응답의 billingPeriodEnd는 주간 사용량 구간이다', () {
+    // Period shape observed from /billing?format=credits on 2026-10-11.
     final reading = grokUsageReadingFromJson({
       'config': {
         'creditUsagePercent': 25,
-        'currentPeriod': {'end': '2020-01-03T00:00:00Z'},
-        'billingPeriodEnd': '2020-01-20T00:00:00Z',
+        'currentPeriod': {
+          'type': 'USAGE_PERIOD_TYPE_WEEKLY',
+          'start': '2026-10-05T09:19:26.641555+00:00',
+          'end': '2026-10-12T09:19:26.641555+00:00',
+        },
+        'billingPeriodStart': '2026-10-05T09:19:26.641555+00:00',
+        'billingPeriodEnd': '2026-10-12T09:19:26.641555+00:00',
       },
     });
-    expect(reading?.resetsAt, DateTime.utc(2020, 1, 3));
-    expect(reading?.billingPeriodEndsAt, DateTime.utc(2020, 1, 20));
+    expect(reading?.window, GrokUsageWindow.weekly);
+    expect(reading?.resetsAt, DateTime.utc(2026, 10, 12, 9, 19, 26, 641, 555));
     expect(reading?.usedPercent, 25);
   });
 
-  test('Grok의 청구 기간 종료일만 있으면 사용량 초기화 날짜로 대체하지 않는다', () {
+  test('Grok 월간 금액 응답의 billingPeriodEnd는 달력 월 사용량 초기화다', () {
+    // Period shape observed from /billing on 2026-10-11, not the 24th renewal.
     final reading = grokUsageReadingFromJson({
-      'monthlyLimit': {'val': 100},
-      'used': {'val': 20},
-      'billingPeriodEnd': '2020-01-20T00:00:00Z',
+      'config': {
+        'monthlyLimit': {'val': 100},
+        'used': {'val': 20},
+        'billingPeriodStart': '2026-10-01T00:00:00+00:00',
+        'billingPeriodEnd': '2026-11-01T00:00:00+00:00',
+      },
     });
     expect(reading?.window, GrokUsageWindow.monthly);
-    expect(reading?.resetsAt, isNull);
-    expect(reading?.billingPeriodEndsAt, DateTime.utc(2020, 1, 20));
+    expect(reading?.resetsAt, DateTime.utc(2026, 11, 1));
+    expect(reading?.usedPercent, 20);
   });
 
-  test('Grok 청구 날짜가 없거나 잘못돼도 주간 초기화와 사용률은 유지한다', () {
+  test('Grok은 currentPeriod를 우선하고 잘못된 기간 날짜를 달력 보정하지 않는다', () {
     for (final value in [null, '', 'not-a-date', 123, <String, Object?>{}]) {
       final reading = grokUsageReadingFromJson({
         'config': {
@@ -84,8 +94,16 @@ void main() {
           'billingPeriodEnd': ?value,
         },
       });
-      expect(reading?.billingPeriodEndsAt, isNull);
       expect(reading?.resetsAt, DateTime.utc(2020, 1, 3));
+      expect(reading?.usedPercent, 25);
+    }
+    for (final value in ['2026-02-30T00:00:00Z', '2026-10-12T00:00:00']) {
+      final reading = grokUsageReadingFromJson({
+        'creditUsagePercent': 25,
+        'currentPeriod': {'end': value},
+        'billingPeriodEnd': '2026-10-12T00:00:00Z',
+      });
+      expect(reading?.resetsAt, isNull);
       expect(reading?.usedPercent, 25);
     }
   });

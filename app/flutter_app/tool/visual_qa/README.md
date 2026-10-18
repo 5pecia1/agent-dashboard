@@ -12,13 +12,30 @@ mise exec -- flutter run -d macos -t tool/visual_qa/project_deletion_main.dart
 
 This scenario uses the real project list, deletion dialog, and Rust translations. Settings and deletion requests stay in memory. Check cancellation, progress, success, partial failure, and preservation of the other project with the same basename. Toggle English and large text, resize the window, and use **Reset fixture** between runs. Rebuild the normal entry point before installing a production app.
 
+## Antigravity CLI usage
+
+Build a separate macOS QA bundle ID and run `tool/visual_qa/agy_usage_main.dart` in Profile mode. It uses the production settings switch, usage cards, refresh controller, and tray menu. Dashboard settings stay in memory and server HTTP requests are blocked. Fixtures use the observed agy JSON shape with synthetic values; **Installed agy (live)** queries the existing agy login with the production process adapter.
+
+```sh
+agy_qa_settings="$(mktemp)"
+cat > "$agy_qa_settings" <<'XCCONFIG'
+PRODUCT_BUNDLE_IDENTIFIER = io.github.5pecia1.mydashboard.qaagy
+PRODUCT_DISPLAY_NAME = Dashboard agy QA
+XCCONFIG
+XCODE_XCCONFIG_FILE="$agy_qa_settings" mise exec -- flutter run --profile -d macos -t tool/visual_qa/agy_usage_main.dart
+```
+
+Check English/Korean, dark mode, 320px cards, large text, stale readings, missing readings, and the settings switch. Fixture values are Gemini 42% / 19% and Claude/GPT 2% / 1% (5-hour / weekly). Stale readings retain the numbers and show warning dots. **Open native tray menu** shows the real menu, including usage labels, and starts a refresh without waiting for it. Enable live mode and confirm four reported quotas and reset countdowns; query duration depends on CLI startup and network access. No absolute reset date or subscription billing date should appear. The production app can remain running because the bundle ID is separate.
+
+For an initial scenario without clicking controls, use `--dart-define=QA_ENGLISH=true`, `QA_LARGE_TEXT=true`, `QA_NARROW=true`, or `QA_LIVE=true`. Do not install this QA entry point as the production app.
+
 ## Account period dates
 
 ```sh
 mise exec -- flutter run -d macos -t tool/visual_qa/account_periods_main.dart
 ```
 
-This scenario renders the real Devin and Grok cards with synthetic period dates and no personal settings or network requests. Switch between Korean and English, missing dates, stale readings, and large text. Resize the window to verify wrapping. The plan and billing period boundaries must remain separate from weekly usage resets. Past dates must remain unchanged; they do not establish a future payment or cancellation.
+This scenario renders the real Devin and Grok cards with synthetic period dates and no personal settings or network requests. Switch between Korean and English, missing plan dates, stale readings, and large text. Resize the window to verify wrapping. Devin's plan boundary must remain separate from weekly usage resets, and Grok must not show a subscription billing date. Usage resets must show only the time remaining, without an absolute date or time tooltip. Past plan dates must remain unchanged; they do not establish a future payment or cancellation.
 
 For screenshot-only environments, pass `--dart-define=QA_ENGLISH=true`, `--dart-define=QA_STALE=true`, `--dart-define=QA_MISSING=true`, `--dart-define=QA_LARGE_TEXT=true`, or `--dart-define=QA_CARD_WIDTH=320` to select the initial scenario without clicking controls.
 
@@ -29,6 +46,8 @@ mise exec -- flutter run -d macos -t tool/visual_qa/window_navigation_main.dart
 ```
 
 This scenario uses the real tray and macOS window discovery and focus. Server requests, personal settings, connection rules, and read tracking are isolated in memory. Grant Accessibility permission to the running app. When a build's code signature changes, the permission shown in Settings may differ from the effective permission; query it again to confirm.
+
+Use **메인 카드 확인** (check main cards) to open the real session list. Clicking a card must use the saved work window connection, or open the chooser when no connection exists. Hovering must reveal **View session details** and **Delete session**. The details button must open the dashboard detail page without switching to the work window. Check both compact and narrow cards; the fixture suppresses deletion.
 
 1. Open two VS Code windows and select an unacknowledged tray item. Choose Code in the app filter, select a window, and save a title rule.
 2. Select another agent's item and confirm that it shares the rule for the same host and project. Check both `Native focus: focused` and the actual window brought to the foreground.

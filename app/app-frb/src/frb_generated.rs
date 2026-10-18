@@ -364,6 +364,7 @@ impl SseDecode for crate::api::dashboard::EventSourceDto {
             3 => crate::api::dashboard::EventSourceDto::Generic,
             4 => crate::api::dashboard::EventSourceDto::Grok,
             5 => crate::api::dashboard::EventSourceDto::Antigravity,
+            6 => crate::api::dashboard::EventSourceDto::OpenCode,
             _ => unreachable!("Invalid variant for EventSourceDto: {}", inner),
         };
     }
@@ -570,6 +571,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dashboard::EventSourceDto {
             Self::Generic => 3.into_dart(),
             Self::Grok => 4.into_dart(),
             Self::Antigravity => 5.into_dart(),
+            Self::OpenCode => 6.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -716,6 +718,7 @@ impl SseEncode for crate::api::dashboard::EventSourceDto {
                 crate::api::dashboard::EventSourceDto::Generic => 3,
                 crate::api::dashboard::EventSourceDto::Grok => 4,
                 crate::api::dashboard::EventSourceDto::Antigravity => 5,
+                crate::api::dashboard::EventSourceDto::OpenCode => 6,
                 _ => {
                     unimplemented!("");
                 }

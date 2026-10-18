@@ -69,6 +69,8 @@ pub enum EventSourceDto {
     Grok,
     /// Antigravity CLI(agy).
     Antigravity,
+    /// OpenCode CLI v2.
+    OpenCode,
 }
 
 impl From<EventSourceDto> for EventSource {
@@ -80,6 +82,7 @@ impl From<EventSourceDto> for EventSource {
             EventSourceDto::Generic => Self::Generic,
             EventSourceDto::Grok => Self::Grok,
             EventSourceDto::Antigravity => Self::Antigravity,
+            EventSourceDto::OpenCode => Self::OpenCode,
         }
     }
 }

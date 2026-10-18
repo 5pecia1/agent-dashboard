@@ -297,7 +297,7 @@ void main() {
   });
 
   group('삭제 UI: 카드의 다른 제스처와 겹치지 않는다', () {
-    testWidgets('hover ×를 탭해도 카드 자체의 onTap(상세 이동)은 트리거되지 않는다', (
+    testWidgets('hover ×를 탭해도 카드 본문 동작은 트리거되지 않는다', (
       tester,
     ) async {
       var navigated = 0;
@@ -328,7 +328,7 @@ void main() {
       expect(navigated, 0);
     });
 
-    testWidgets('삭제 아이콘이 없는 자리(카드 본문)를 탭하면 여전히 상세로 이동한다', (
+    testWidgets('삭제 아이콘이 없는 카드 본문을 탭하면 onTap을 호출한다', (
       tester,
     ) async {
       var navigated = 0;

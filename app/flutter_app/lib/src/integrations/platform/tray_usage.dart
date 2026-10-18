@@ -4,6 +4,7 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/integrations/data/grok_usage_models.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/agy_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 
 const String _summarySeparator = ' · ';
@@ -15,10 +16,12 @@ List<String> buildTrayUsageLabels(
   TeamClaudeState teamClaude = const TeamClaudeState(),
   DevinUsageState devin = const DevinUsageState(),
   GrokUsageState grok = const GrokUsageState(),
+  AgyUsageState agy = const AgyUsageState(),
 }) {
   if (teamClaude.connection == null &&
       devin.connection == null &&
-      !grok.enabled) {
+      !grok.enabled &&
+      !agy.enabled) {
     return [];
   }
   return [
@@ -26,6 +29,7 @@ List<String> buildTrayUsageLabels(
     if (teamClaude.connection != null) ..._teamClaudeLabels(ref, teamClaude),
     if (devin.connection != null) ..._devinLabels(ref, devin),
     if (grok.enabled) ..._grokLabels(ref, grok),
+    if (agy.enabled) ..._agyLabels(ref, agy),
   ];
 }
 
@@ -195,6 +199,30 @@ List<String> _grokLabels(WidgetRef ref, GrokUsageState state) {
 
 String _emptyLabel(WidgetRef ref, String source, bool loading) =>
     '$source$_summarySeparator${tRead(ref, loading ? 'tray.usage_loading' : 'tray.usage_no_data')}';
+
+List<String> _agyLabels(WidgetRef ref, AgyUsageState state) {
+  final source = tRead(ref, 'agy.title');
+  final reading = state.reading;
+  return [
+    if (reading == null)
+      _emptyLabel(ref, source, state.loading)
+    else
+      for (final group in reading.groups)
+        [
+          source,
+          group.labelKey == null ? group.name : tRead(ref, group.labelKey!),
+          for (final bucket in group.buckets)
+            '${bucket.labelKey == null ? bucket.name : tRead(ref, bucket.labelKey!)} '
+                '${bucket.usedPercent == null ? tRead(ref, 'tray.usage_no_data') : '${bucket.usedPercent!.round()}%'}',
+        ].join(_summarySeparator),
+    ..._statusLabels(
+      ref,
+      source: source,
+      errorKey: state.errorKey,
+      hasCachedValue: reading != null,
+    ),
+  ];
+}
 
 List<String> _statusLabels(
   WidgetRef ref, {

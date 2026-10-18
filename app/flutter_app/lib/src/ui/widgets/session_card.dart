@@ -46,6 +46,7 @@ String sourceLabelKeyFor(String source) => switch (source) {
   'devin' => 'session.source.devin',
   'grok' => 'session.source.grok',
   'antigravity' => 'session.source.antigravity',
+  'opencode' => 'session.source.opencode',
   _ => 'session.source.generic',
 };
 
@@ -62,20 +63,24 @@ String sessionIdAbbreviation(String sessionId) =>
 bool showLastSignalLabelFor(SessionStateDto state) =>
     state == SessionStateDto.working;
 
-/// 세션 하나를 그리는 카드. hover(데스크톱 마우스)로만 드러나는 우상단
-/// 삭제(×) 버튼을 갖기 때문에(삭제 UI 사양) hover 자체의 켜짐/꺼짐을
-/// 기억할 로컬 상태가 필요해 [ConsumerStatefulWidget]이다 — 그 전에는
-/// [ConsumerWidget]이었다.
+const _hoverIconSize = 16.0;
+const _hoverButtonPadding = 4.0;
+const _hoverButtonExtent = _hoverIconSize + _hoverButtonPadding * 2;
+const _hoverButtonGap = 4.0;
+
+/// 세션 카드. 우상단의 상세 보기와 삭제 버튼은 마우스를 올리면 표시한다.
 class SessionCard extends ConsumerStatefulWidget {
   const SessionCard({
     super.key,
     required this.session,
     this.onTap,
+    this.onShowDetails,
     this.compact = false,
   });
 
   final SessionViewDto session;
   final VoidCallback? onTap;
+  final VoidCallback? onShowDetails;
   final bool compact;
 
   @override
@@ -94,6 +99,9 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     final session = widget.session;
     final onTap = widget.onTap;
     final tokens = context.tokens;
+    final hoverActionsWidth = widget.onShowDetails == null
+        ? _hoverButtonExtent
+        : _hoverButtonExtent * 2 + _hoverButtonGap;
     final state = sessionStateDtoFromCode(session.state);
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -213,7 +221,11 @@ class _SessionCardState extends ConsumerState<SessionCard> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 24),
+                        SizedBox(
+                          width: _hovering
+                              ? hoverActionsWidth
+                              : _hoverButtonExtent,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -293,29 +305,34 @@ class _SessionCardState extends ConsumerState<SessionCard> {
                     // 으로 남긴다. 한 줄에 다 들어갈 때는 `WrapAlignment.
                     // spaceBetween`이 첫 그룹(칩+stale 배지)을 왼쪽, 소스 배지를
                     // 오른쪽에 둬 기존 `Spacer` 레이아웃과 같은 모양을 만든다.
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      runSpacing: 4,
-                      children: [
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 8,
-                          children: [
-                            StateChip(
-                              state: state,
-                              // UserAck-impl: waiting_input 칩만 탭 가능하게
-                              // 만든다 — `StateChip`이 state로 다시 한번 걸러
-                              // 다른 상태에서는 이 콜백을 받아도 비대화형을
-                              // 유지한다(방어적 이중 검사).
-                              onTap: acknowledge,
-                            ),
-                            if (showStaleBadge)
-                              _StaleBadge(tokens: tokens, ref: ref),
-                          ],
-                        ),
-                        _SourceBadge(tokens: tokens, text: sourceText),
-                      ],
+                    Padding(
+                      padding: EdgeInsets.only(
+                        right: _hovering ? hoverActionsWidth : 0,
+                      ),
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 4,
+                        children: [
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            children: [
+                              StateChip(
+                                state: state,
+                                // UserAck-impl: waiting_input 칩만 탭 가능하게
+                                // 만든다 — `StateChip`이 state로 다시 한번 걸러
+                                // 다른 상태에서는 이 콜백을 받아도 비대화형을
+                                // 유지한다(방어적 이중 검사).
+                                onTap: acknowledge,
+                              ),
+                              if (showStaleBadge)
+                                _StaleBadge(tokens: tokens, ref: ref),
+                            ],
+                          ),
+                          _SourceBadge(tokens: tokens, text: sourceText),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 8),
                     // 전체 경로는 여기(Tooltip)와 session_detail_page.dart 두
@@ -400,18 +417,16 @@ class _SessionCardState extends ConsumerState<SessionCard> {
       ),
     );
 
-    // 삭제 UI 사양: hover로만 드러나는 우상단 ×. `Positioned`는 `Stack`의
+    // 마우스를 올리면 표시하는 우상단 동작. `Positioned`는 `Stack`의
     // 크기에 관여하지 않으므로(비-positioned 자식인 `cardBody`가 크기를
     // 정한다) 이 오버레이가 나타나도 `kSessionCardGridExtent`(그리드 고정
     // 높이) 계산에는 아무 영향이 없다.
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.backspace): () => unawaited(
-          _confirmAndDelete(context, title, session.key),
-        ),
-        const SingleActivator(LogicalKeyboardKey.delete): () => unawaited(
-          _confirmAndDelete(context, title, session.key),
-        ),
+        const SingleActivator(LogicalKeyboardKey.backspace): () =>
+            unawaited(_confirmAndDelete(context, title, session.key)),
+        const SingleActivator(LogicalKeyboardKey.delete): () =>
+            unawaited(_confirmAndDelete(context, title, session.key)),
       },
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovering = true),
@@ -423,11 +438,26 @@ class _SessionCardState extends ConsumerState<SessionCard> {
               Positioned(
                 top: widget.compact ? 6 : 10,
                 right: widget.compact ? 6 : 18,
-                child: _DeleteHoverButton(
-                  tokens: tokens,
-                  tooltip: t(ref, 'session.card.delete_tooltip'),
-                  onPressed: () =>
-                      _confirmAndDelete(context, title, session.key),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.onShowDetails != null) ...[
+                      _CardHoverButton(
+                        tokens: tokens,
+                        icon: Icons.info_outline,
+                        tooltip: t(ref, 'window.show_session'),
+                        onPressed: widget.onShowDetails!,
+                      ),
+                      const SizedBox(width: _hoverButtonGap),
+                    ],
+                    _CardHoverButton(
+                      tokens: tokens,
+                      icon: Icons.close,
+                      tooltip: t(ref, 'session.card.delete_tooltip'),
+                      onPressed: () =>
+                          _confirmAndDelete(context, title, session.key),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -438,11 +468,11 @@ class _SessionCardState extends ConsumerState<SessionCard> {
 
   /// hover × -> 확인 다이얼로그 -> [SyncController.deleteSession].
   ///
-  /// **왜 `_DeleteHoverButton` 안이 아니라 여기(`_SessionCardState`)에
+  /// **왜 `_CardHoverButton` 안이 아니라 여기(`_SessionCardState`)에
   /// 있는가.** 다이얼로그가 뜨면 마우스 포인터는 그 모달 배리어 위에
   /// 있게 되고, `MouseTracker`가 다음 프레임에 같은 좌표를 다시 hit-test
   /// 해 이 카드의 [MouseRegion]에 `onExit`를 보낸다 — `_hovering`이
-  /// `false`로 접히며 `_DeleteHoverButton`(과 그 안의 `ref`)이 트리에서
+  /// `false`로 접히며 `_CardHoverButton`(과 그 안의 `ref`)이 트리에서
   /// 빠진다. 그 버튼 자신의 `ConsumerWidget.ref`로 `await` 뒤 다이얼로그
   /// 결과를 처리했다면, 다이얼로그가 열려 있던 사이 이미 unmount된
   /// `ref`를 다시 써 "widget is about to or has been unmounted"로
@@ -489,14 +519,16 @@ class _UnseenDot extends StatelessWidget {
 /// _confirmAndDelete]에 있다(그 문서의 "왜" 참고: 이 위젯 자신은 hover가
 /// 꺼지는 순간 트리에서 빠져나가 unmount되므로, 비동기 콜백이 이 위젯
 /// 자신의 상태를 참조하면 안전하지 않다).
-class _DeleteHoverButton extends StatelessWidget {
-  const _DeleteHoverButton({
+class _CardHoverButton extends StatelessWidget {
+  const _CardHoverButton({
     required this.tokens,
+    required this.icon,
     required this.tooltip,
     required this.onPressed,
   });
 
   final AppTokens tokens;
+  final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
 
@@ -506,10 +538,14 @@ class _DeleteHoverButton extends StatelessWidget {
     shape: const CircleBorder(),
     elevation: 2,
     child: IconButton(
-      icon: const Icon(Icons.close),
-      iconSize: 16,
-      padding: const EdgeInsets.all(4),
-      constraints: const BoxConstraints(),
+      icon: Icon(icon),
+      iconSize: _hoverIconSize,
+      padding: const EdgeInsets.all(_hoverButtonPadding),
+      constraints: const BoxConstraints.tightFor(
+        width: _hoverButtonExtent,
+        height: _hoverButtonExtent,
+      ),
+      style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
       color: tokens.fg2,
       tooltip: tooltip,
       onPressed: onPressed,

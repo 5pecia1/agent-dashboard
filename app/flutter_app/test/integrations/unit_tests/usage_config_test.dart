@@ -68,6 +68,37 @@ void main() {
     expect(values.toJson()['devin'], raw['devin']);
   });
 
+  test('agy 스위치를 저장하고 꺼도 다른 연결과 불투명 설정을 보존한다', () {
+    final original = DashboardConfigValues.fromJson({
+      'server_url': 'https://dashboard.test',
+      'client_token': 'fixture',
+      'cursor': 17,
+      'grok': {'enabled': true, 'bot': true},
+      'antigravity': {
+        'future': {'value': 42},
+      },
+      'unknown': ['keep'],
+    });
+    expect(original.agyEnabled, isFalse);
+    final on = DashboardConfigValues.fromJson(
+      jsonDecode(jsonEncode(original.withAgy(true).toJson()))
+          as Map<String, Object?>,
+    );
+    expect(on.agyEnabled, isTrue);
+    expect(on.grokEnabled, isTrue);
+    expect(on.grokBotEnabled, isTrue);
+    expect(on.clientToken, original.clientToken);
+    expect(on.cursor, original.cursor);
+    final off = on.withAgy(false);
+    expect(off.agyEnabled, isFalse);
+    expect((off.extra['antigravity'] as Map)['future'], {'value': 42});
+    expect(off.extra['unknown'], original.extra['unknown']);
+    expect((on.extra['antigravity'] as Map).keys.toSet(), {
+      'future',
+      'enabled',
+    });
+  });
+
   test('사용량 번역의 영어와 한국어 키 및 자리표시자가 일치한다', () {
     expect(catalog.ko.keys.toSet(), catalog.en.keys.toSet());
     final placeholder = RegExp(r'\{[^}]+\}');

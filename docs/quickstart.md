@@ -75,13 +75,13 @@ For local development, upgrades, or custom origins, use the `README.md` inside t
 
 ## Connect agent hooks
 
-On each machine running Claude Code, Codex, Devin, or Antigravity CLI, ensure `curl`, `jq`, and `python3` are installed. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
+On each machine running Claude Code, Codex, Devin, Antigravity CLI, or OpenCode, ensure `curl`, `jq`, and `python3` are installed. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
 
 ```sh
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-The script asks for `INGEST_TOKEN` through the terminal, so the prompt works when the script is piped to Bash. It installs the hooks served by that server and prints configuration backup paths. In Codex, open `/hooks` and trust the new hooks. For Antigravity CLI, `agy -p "/hooks" --output-format json` lists the `my-dashboard` bundle once the hooks are registered; runs started with `agy -p` and subagent conversations are deliberately not reported (see the [hook guide](../hooks/README.md#antigravity-cli)). Start an agent session and check that it appears in the dashboard.
+The script asks for `INGEST_TOKEN` through the terminal, so the prompt works when the script is piped to Bash. It installs the hooks served by that server and prints configuration backup paths. In Codex, open `/hooks` and trust the new hooks. For Antigravity CLI, `agy -p "/hooks" --output-format json` lists the `my-dashboard` bundle once the hooks are registered; runs started with `agy -p` and subagent conversations are deliberately not reported (see the [hook guide](../hooks/README.md#antigravity-cli)). For OpenCode, `opencode plugin list` shows `my-dashboard` once the plugin file is in place; a running OpenCode service picks it up without a restart (see the [hook guide](../hooks/README.md#opencode)). Start an agent session and check that it appears in the dashboard.
 
 You can also use the common installer:
 
@@ -98,7 +98,7 @@ Hook versions come from your server, so `hooks` does not accept `--version`. The
 |---|---|
 | No component, or `app` | Installs the macOS app; defaults to the latest stable app release. |
 | `server` | Creates a server project from the latest stable server starter. |
-| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.7` or `0.1.7` for the app, and `server-v0.1.0-alpha.6` or `0.1.0-alpha.6` for the server. |
+| `--version VERSION` | Selects exactly that component's version. Accepts `v0.1.7` or `0.1.7` for the app, and `server-v0.1.0-alpha.7` or `0.1.0-alpha.7` for the server. |
 | `--prerelease` | Includes prereleases when resolving the latest version. Explicit prerelease versions do not need this flag. |
 | `--dir DIR` | Sets the app installation parent or the new server project directory. |
 | `--replace` | Allows replacing an existing app, retaining a backup and its settings. Does not overwrite server projects. |

@@ -84,7 +84,7 @@ void main() {
     expect(find.text('tester'), findsOneWidget);
     expect(find.text('52%'), findsOneWidget);
     expect(find.text('reset_days'), findsOneWidget);
-    expect(find.text('reset_clock'), findsOneWidget);
+    expect(find.text('reset_clock'), findsNothing);
     // hideDailyQuota 플랜이라 일간 지표는 없다.
     expect(find.text('daily'), findsNothing);
     expect(find.text('overage'), findsOneWidget);

@@ -47,13 +47,13 @@ For an existing Hono Worker, [install the server package](server/README.md) inst
 
 ## Connect your agents
 
-After deploying your server, install its matching hooks on each agent machine. Replace `https://YOUR_SERVER` with the server origin:
+After deploying your server, install its matching hooks on each agent machine. The installer registers Claude Code, Codex, Devin, Antigravity CLI, and OpenCode. Replace `https://YOUR_SERVER` with the server origin:
 
 ```sh
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-The hook installer needs `curl`, `jq`, and `python3`. Enter the ingest token when asked; in Codex, trust the new hooks through `/hooks`. Start an agent session and check it in the dashboard. [The hook guide](hooks/README.md) covers previewing changes, updates, data handling, and what Antigravity CLI does and does not report. Push notifications are optional.
+The hook installer needs `curl`, `jq`, and `python3`. Enter the ingest token when asked; in Codex, trust the new hooks through `/hooks`. Start an agent session and check it in the dashboard. [The hook guide](hooks/README.md) covers previewing changes, updates, data handling, and what Antigravity CLI and OpenCode do and do not report. Push notifications are optional.
 
 ## Choose a version or update
 
@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # Create a server project from an exact prerelease.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.6 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.7 --dir ./my-agent-server
 ```
 
 Use `--dry-run` to see the selected release and destination without installing. To inspect the installer first, [read install.sh](install.sh), or download it and run it locally. The script is served by GitHub Raw; release archives and checksums come from GitHub Releases. Pages hosts the web app only.
