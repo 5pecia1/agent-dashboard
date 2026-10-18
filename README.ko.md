@@ -47,13 +47,13 @@ npm ci
 
 ## 에이전트 연결
 
-서버를 배포한 뒤, 에이전트를 실행하는 각 머신에 해당 서버 버전의 훅을 설치합니다. `https://YOUR_SERVER`를 서버 origin으로 바꿔 실행하세요.
+서버를 배포한 뒤, 에이전트를 실행하는 각 머신에 해당 서버 버전의 훅을 설치합니다. 설치기는 Claude Code, Codex, Devin, Antigravity CLI, OpenCode를 등록합니다. `https://YOUR_SERVER`를 서버 origin으로 바꿔 실행하세요.
 
 ```sh
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-훅 설치기에는 `curl`, `jq`, `python3`가 필요합니다. 입력을 요청하면 수집용 토큰(`INGEST_TOKEN`)을 입력하고, Codex에서는 `/hooks`에서 새 훅을 신뢰하도록 설정합니다. 에이전트 세션을 시작한 뒤 대시보드에서 확인하세요. 변경 사항 미리 보기, 업데이트, 데이터 처리 방식, Antigravity CLI에서 보고되는 범위와 보고되지 않는 범위는 [훅 안내](hooks/README.md)를 참고하세요. 푸시 알림은 선택 사항입니다.
+훅 설치기에는 `curl`, `jq`, `python3`가 필요합니다. 입력을 요청하면 수집용 토큰(`INGEST_TOKEN`)을 입력하고, Codex에서는 `/hooks`에서 새 훅을 신뢰하도록 설정합니다. 에이전트 세션을 시작한 뒤 대시보드에서 확인하세요. 변경 사항 미리 보기, 업데이트, 데이터 처리 방식, Antigravity CLI와 OpenCode에서 보고되는 범위와 보고되지 않는 범위는 [훅 안내](hooks/README.md)를 참고하세요. 푸시 알림은 선택 사항입니다.
 
 ## 버전 선택과 업데이트
 
@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 # 특정 사전 릴리스로 서버 프로젝트를 생성합니다.
 curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/install.sh \
-  | bash -s -- server --version 0.1.0-alpha.6 --dir ./my-agent-server
+  | bash -s -- server --version 0.1.0-alpha.7 --dir ./my-agent-server
 ```
 
 `--dry-run`을 사용하면 설치하지 않고 선택된 릴리스와 설치 경로를 확인할 수 있습니다. 실행 전에 설치기를 살펴보려면 [install.sh](install.sh)를 읽거나, 내려받아 로컬에서 실행하세요. 스크립트는 GitHub Raw에서, 릴리스 압축 파일과 체크섬은 GitHub Releases에서 제공합니다. Pages는 웹 앱만 호스팅합니다.

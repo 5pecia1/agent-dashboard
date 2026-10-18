@@ -55,10 +55,12 @@ HOOKS_DIST_FILES = [
     "codex-hooks.toml",
     "herdr-context.py",
     "install.sh",
+    "opencode-plugin.mjs",
     "send-generic.sh",
     "test-hooks.sh",
     "setup.sh",
 ]
+OPENCODE_PLUGIN_PATH = REPO_ROOT / "hooks" / "opencode-plugin.mjs"
 
 # hooks/ 안에 있지만 dist로 서빙/동기화되지 않는 것으로 "알려진" 파일들 (check 6이
 # hooks/ 실제 디렉터리 목록을 볼 때 이것들은 빼고 비교한다).
@@ -229,6 +231,7 @@ EVENT_SOURCE_VARIANT_TO_CODE = {
     "Generic": "generic",
     "Grok": "grok",
     "Antigravity": "antigravity",
+    "OpenCode": "opencode",
 }
 
 
@@ -1034,6 +1037,135 @@ def check_antigravity_hook_translation(contract: dict):
 
 
 # ---------------------------------------------------------------------------
+# OpenCode 플러그인 번역: 정본 event_state_map.opencode_plugin_translation이
+# hooks/opencode-plugin.mjs(번역 표·소유 레지스트리 키·플러그인 id), agent-event-hook.sh의
+# opencode 분기, install.sh의 --opencode, setup.sh의 파일 목록과 같은가.
+#
+# OpenCode에는 네이티브 hook이 없어 플러그인이 이벤트 이름을 번역한다. 표가 어긋나면 하트비트가
+# 상태 이벤트로 올라가거나 턴 끝을 놓치고, 레지스트리 키가 어긋나면 location마다 생기는 플러그인
+# 인스턴스가 같은 이벤트를 여러 번 보낸다. 세 사본이 조용히 갈라지지 않도록 대조한다.
+# ---------------------------------------------------------------------------
+
+
+def _opencode_fail(what: str) -> CheckFailure:
+    return CheckFailure(
+        f"OpenCode 사본이 정본 event_state_map.opencode_plugin_translation과 어긋난다 — {what}"
+    )
+
+
+def _js_string_array(source: str, name: str) -> list[str]:
+    match = re.search(rf"export const {re.escape(name)} = \[(.*?)\];", source, re.DOTALL)
+    if not match:
+        raise _opencode_fail(f"{OPENCODE_PLUGIN_PATH}에서 'export const {name} = [...]'를 찾지 못했다.")
+    return re.findall(r'"([^"]+)"', match.group(1))
+
+
+def check_opencode_plugin_translation(contract: dict):
+    translation = contract.get("event_state_map", {}).get("opencode_plugin_translation")
+    registered = "opencode" in contract.get("sources", {}).get("registered", {})
+    if translation is None:
+        if registered:
+            raise CheckFailure(
+                "정본 sources.registered에 opencode가 있는데 "
+                "event_state_map.opencode_plugin_translation이 없다 — 플러그인 번역 규칙의 정본이 빠졌다."
+            )
+        return (
+            "소비 계약에 event_state_map.opencode_plugin_translation이 없다(구버전 pin) — "
+            "OpenCode 플러그인 번역 검사는 계약이 갱신되면 자동으로 활성화된다.",
+            True,
+        )
+    if not registered:
+        raise CheckFailure("정본에 opencode_plugin_translation은 있는데 sources.registered.opencode가 없다.")
+
+    # --- 1. 정본 내부 일관성: 상태표·하트비트 등록 ---
+    expected_events = {"UserPromptSubmit", "UserInputRequest", "UserInputResolved", "Stop", "SessionEnd"}
+    by_source = {entry["event"] for entry in contract["event_state_map"]["by_source"].get("opencode", [])}
+    if by_source != expected_events:
+        raise CheckFailure(
+            "정본 event_state_map.by_source.opencode의 이벤트 집합이 번역 규칙이 만드는 이름과 다르다.\n"
+            f"  정본 = {sorted(by_source)}\n  규칙 = {sorted(expected_events)}"
+        )
+    if "opencode" not in contract["heartbeat_events"]["events"]["PostToolUse"]["sources"]:
+        raise CheckFailure(
+            "정본 heartbeat_events.events.PostToolUse.sources에 opencode가 없다 — 플러그인이 보내는 "
+            "PostToolUse 하트비트가 기록만 되고 stalled 판정을 미루지 못한다."
+        )
+    registration = translation["registration"]
+    if registration.get("plugin_id") != "my-dashboard":
+        raise CheckFailure(f"정본 registration.plugin_id가 my-dashboard가 아니다({registration.get('plugin_id')!r}).")
+
+    # --- 2. 플러그인 모듈: 번역 표·레지스트리 키·id·환경변수 미사용 ---
+    if not OPENCODE_PLUGIN_PATH.exists():
+        raise CheckFailure(f"{OPENCODE_PLUGIN_PATH} 가 없다.")
+    plugin_src = OPENCODE_PLUGIN_PATH.read_text(encoding="utf-8")
+    for name, key in (("HEARTBEAT_TYPES", "heartbeat_types"), ("STOP_TYPES", "stop_types")):
+        actual = _js_string_array(plugin_src, name)
+        if actual != translation[key]:
+            raise _opencode_fail(f"{name}이 정본 {key}와 다르다.\n  정본 = {translation[key]}\n  플러그인 = {actual}")
+    child_forwarded = _js_string_array(plugin_src, "CHILD_FORWARDED_TYPES")
+    if sorted(child_forwarded) != sorted(
+        ["permission.asked", "permission.replied", "form.created", "form.replied", "form.cancelled"]
+    ):
+        raise _opencode_fail(f"자식 세션에서 루트로 올리는 이벤트 목록이 규칙과 다르다: {child_forwarded}")
+    if 'export const PLUGIN_ID = "my-dashboard";' not in plugin_src:
+        raise _opencode_fail("PLUGIN_ID가 \"my-dashboard\"가 아니다.")
+    if 'Symbol.for("my-dashboard.opencode")' not in plugin_src:
+        raise _opencode_fail("프로세스 전역 레지스트리 키 Symbol.for(\"my-dashboard.opencode\")를 쓰지 않는다 — "
+                             "location마다 생기는 인스턴스가 같은 이벤트를 여러 번 보낸다.")
+    if "process.env" in plugin_src:
+        raise _opencode_fail("플러그인이 process.env를 읽는다 — 수집 정책은 hook 스크립트만 적용한다.")
+    for event in sorted(expected_events) + ["PostToolUse"]:
+        if f'"{event}"' not in plugin_src:
+            raise _opencode_fail(f"플러그인이 계약 이벤트 이름 {event}를 만들지 않는다.")
+    for needle, label in (
+        ('"session.execution.started"', "session.execution.started → UserPromptSubmit"),
+        ('"session.inbox.enqueued"', "session.inbox.enqueued의 프롬프트 기억"),
+        ('"session.deleted"', "session.deleted → SessionEnd"),
+        ('"location.shutdown"', "자기 location의 location.shutdown → SessionEnd"),
+        ('"session.created"', "session.created의 parentID·directory 기록"),
+        ('spawn("bash", [hookScript, SOURCE]', "bash <hook> opencode 실행"),
+        ('stdio: ["pipe", "ignore", "ignore"], detached: true', "stdout·stderr 무시 + 자기 프로세스 그룹(standalone 종료 시 SIGTERM 회피)"),
+        ("child.unref()", "hook 프로세스를 기다리지 않음"),
+    ):
+        if needle not in plugin_src:
+            raise _opencode_fail(f"플러그인에서 '{label}' 자리를 찾지 못했다.")
+    if not re.search(r'export default \{\s*id: PLUGIN_ID,\s*setup\(api\)', plugin_src):
+        raise _opencode_fail("default export가 { id, setup(api) } 모양이 아니다 — OpenCode 2.0.31은 이 모양만 부른다.")
+
+    # --- 3. hook 스크립트: opencode 분기(message 읽기·pwd 폴백 금지) ---
+    norm = _normalize_ws(AGENT_EVENT_HOOK_PATH.read_text(encoding="utf-8"))
+    if 'elif $source == "opencode" then ((.message // .prompt // null) | if . == null then null else (tostring | .[0:300]) end)' not in norm:
+        raise _opencode_fail("agent-event-hook.sh에 opencode의 message(.message // .prompt, 300자) 분기가 없다.")
+    if '[ -z "$PROJECT_FALLBACK" ] && [ "$SOURCE" != "opencode" ]; then PROJECT_FALLBACK="$(pwd 2>/dev/null)"' not in norm:
+        raise _opencode_fail("agent-event-hook.sh가 opencode의 project를 hook 프로세스 cwd로 폴백한다 — 공유 서비스의 cwd는 프로젝트가 아니다.")
+
+    # --- 4. 설치기: --opencode, 래퍼 파일 하나, 기본 경로 ---
+    install_src = INSTALL_SH_PATH.read_text(encoding="utf-8")
+    install_fn = re.search(r"install_opencode\(\)\s*\{(.*?)\n\}", install_src, re.DOTALL)
+    if not install_fn:
+        raise _opencode_fail(f"{INSTALL_SH_PATH}에서 install_opencode() 본문을 찾지 못했다.")
+    default_dir = 'OPENCODE_PLUGIN_DIR="${MY_DASHBOARD_OPENCODE_PLUGIN_DIR:-${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/plugins}"'
+    if default_dir not in install_src or 'OPENCODE_PLUGIN_FILE="$OPENCODE_PLUGIN_DIR/my-dashboard.js"' not in install_src:
+        raise _opencode_fail("install.sh의 플러그인 경로가 정본 registration.file과 다르다.")
+    if "--opencode) DO_OPENCODE=1; DRY_RUN=0 ;;" not in install_src:
+        raise _opencode_fail("install.sh에 --opencode 플래그가 없다.")
+    if "export default plugin;" not in install_src or "as_uri()" not in install_src:
+        raise _opencode_fail("install.sh가 file:// URL import 래퍼를 만들지 않는다.")
+    setup_src = SETUP_SH_PATH.read_text(encoding="utf-8")
+    nonexec = re.search(r'NON_EXECUTABLE_FILES="([^"]*)"', setup_src)
+    if not nonexec or "opencode-plugin.mjs" not in nonexec.group(1).split():
+        raise _opencode_fail("setup.sh가 opencode-plugin.mjs를 내려받지 않는다(NON_EXECUTABLE_FILES).")
+    if '"$HOOKS_DIR/install.sh" --claude --codex --devin --antigravity --opencode' not in setup_src:
+        raise _opencode_fail("setup.sh가 install.sh에 --opencode를 넘기지 않는다.")
+
+    return (
+        "opencode_plugin_translation(하트비트·Stop 표, 자식 세션 전달 목록, 전역 레지스트리 키, 플러그인 id, "
+        "환경변수 미사용, hook의 message·project 분기, install.sh --opencode 래퍼, setup.sh 파일 목록)이 "
+        "opencode-plugin.mjs·agent-event-hook.sh·install.sh·setup.sh와 일치한다."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Check 8(선택): 정본 client_actions.UserAck(from_states/to_state)가 코드 사본
 # client-actions.ts::USER_ACK_FROM_STATES/USER_ACK_TO_STATE와 같은가. Check 7이
 # heartbeat.ts를 검증하는 것과 같은 이유·같은 모양이다 — event_state_map이 아닌
@@ -1589,6 +1721,7 @@ def main(argv=None) -> int:
         ("source adapters", lambda: check_source_adapters(contract)),
         ("Devin input correlation", lambda: check_devin_input_translation(contract)),
         ("Antigravity hook translation", lambda: check_antigravity_hook_translation(contract)),
+        ("OpenCode plugin translation", lambda: check_opencode_plugin_translation(contract)),
     ]
     if args.package_root:
         checks.append(("installed package assets", lambda: check_package_assets(args.package_root)))

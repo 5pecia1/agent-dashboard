@@ -5,7 +5,7 @@
 #   curl -fsSL <서버 origin>/setup.sh | MY_DASHBOARD_TOKEN=... bash  # 비대화형
 #   curl -fsSL <서버 origin>/setup.sh | bash -s -- --dry-run         # 미리보기(아무것도 안 씀)
 #
-# 재실행 = 업데이트다: 훅 파일 7종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+# 재실행 = 업데이트다: 훅 파일 8종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 # ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 # 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 #
@@ -38,7 +38,7 @@ Agent Dashboard 원클릭 부트스트랩. repo를 clone하지 않고도 새 기
   --dry-run   실제로 아무것도 쓰지 않고 무엇을 할지만 보여준다.
   -h, --help  이 도움말을 출력한다.
 
-재실행 = 업데이트다: 훅 파일 7종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+재실행 = 업데이트다: 훅 파일 8종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 HELP_EOF
@@ -80,9 +80,10 @@ HOOKS_DIR="$DATA_HOME/my-dashboard/hooks"
 CONFIG_DIR="$HOME/.config/my-dashboard"
 CONFIG_FILE="$CONFIG_DIR/env"
 
-# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 7종만 GET /hooks/files/<name>로 받는다.
+# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 8종만 GET /hooks/files/<name>로 받는다.
+# opencode-plugin.mjs는 OpenCode가 import하는 ES 모듈이라 실행 권한이 필요 없다.
 EXECUTABLE_FILES="agent-event-hook.sh codex-notify.sh install.sh send-generic.sh test-hooks.sh"
-NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py"
+NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py opencode-plugin.mjs"
 ALL_FILES="$EXECUTABLE_FILES $NON_EXECUTABLE_FILES"
 
 log "== my-dashboard hooks 설치/갱신: $ORIGIN =="
@@ -97,7 +98,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   else
     log "     없음 - 새로 생성 (MY_DASHBOARD_URL=$ORIGIN, MY_DASHBOARD_TOKEN=<입력값>, chmod 600)"
   fi
-  log "  3) $HOOKS_DIR/install.sh --claude --codex --devin --antigravity 실행"
+  log "  3) $HOOKS_DIR/install.sh --claude --codex --devin --antigravity --opencode 실행"
   exit 0
 fi
 
@@ -212,13 +213,13 @@ case "$VERIFY_HTTP_CODE" in
   *) log "서버 연결을 확인할 수 없습니다(HTTP $VERIFY_HTTP_CODE). 토큰은 검증되지 않았습니다." ;;
 esac
 
-# ---------- (d) Claude Code / Codex / Devin / Antigravity 등록 ----------
+# ---------- (d) Claude Code / Codex / Devin / Antigravity / OpenCode 등록 ----------
 
 # 에이전트가 설치돼 있는지는 확인하지 않는다 - 아직 없는 에이전트의 설정도 미리 만들어 두는
 # 것이 이 스크립트의 설계다(Sol 확정).
 log ""
-log "== $HOOKS_DIR/install.sh --claude --codex --devin --antigravity =="
-"$HOOKS_DIR/install.sh" --claude --codex --devin --antigravity
+log "== $HOOKS_DIR/install.sh --claude --codex --devin --antigravity --opencode =="
+"$HOOKS_DIR/install.sh" --claude --codex --devin --antigravity --opencode
 
 # ---------- (e) 마무리 안내 ----------
 
@@ -230,6 +231,8 @@ else
 fi
 log "  - Codex를 등록했다면 Codex TUI에서 /hooks 를 실행해 새 hook을 신뢰(trust) 처리해라"
 log "    (managed hook이 아니면 trust 전엔 등록만 되고 실행되지 않는다)."
+log "  - OpenCode는 떠 있는 서비스가 플러그인 파일 변경을 감지해 다시 읽는다. 'opencode plugin list'에"
+log "    my-dashboard가 보이면 된다(안 보이면 'opencode reload')."
 log "  - 견고성(멱등·스풀·하트비트) 점검: $HOOKS_DIR/test-hooks.sh (repo를 clone한 자리에서만"
 log "    동작한다 - server/ 개발환경이 필요해서다. curl 설치 자리에서 실행하면 명확한 안내와 함께 종료한다)"
 log "  - 갱신하거나 다른 기계에 설치할 때도 이 한 줄을 그대로 다시 실행하면 된다:"

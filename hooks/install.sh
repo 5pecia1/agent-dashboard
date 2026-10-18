@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Claude Code / Codex / Devin CLI / Antigravity CLI(agy)에 my-dashboard hook을 등록하는 설치 스크립트.
+# Claude Code / Codex / Devin CLI / Antigravity CLI(agy) / OpenCode에 my-dashboard hook을 등록하는 설치 스크립트.
 #
 # *** 코딩 에이전트의 자동화 워크플로 안에서는 이 스크립트를 절대 실행하지
 # 않는다. *** ~/.claude/settings.json, ~/.codex/config.toml, ~/.config/devin/config.json,
-# ~/.gemini/config/hooks.json은 전역 설정이라 Sol의 명시적
+# ~/.gemini/config/hooks.json, ~/.config/opencode/plugins/는 전역 설정이라 Sol의 명시적
 # 승인 없이는 건드릴 수 없다 - 에이전트는 검토만 하고, 사람이 직접 실행해야 한다.
 #
 # 사람이 직접 실행하는 경로는 두 가지고 결과는 같다(이 파일은 자신이 실제로 있는 위치
@@ -11,7 +11,7 @@
 #   1. repo를 clone해서 `bash hooks/install.sh ...`로 직접 실행.
 #   2. repo clone 없이 `curl -fsSL <서버 origin>/setup.sh | bash` 한 줄로 설치 - setup.sh가
 #      이 파일을 ${XDG_DATA_HOME:-$HOME/.local/share}/my-dashboard/hooks/ 에 내려받아 그
-#      자리에서 --claude --codex --devin --antigravity로 대신 실행해 준다.
+#      자리에서 --claude --codex --devin --antigravity --opencode로 대신 실행해 준다.
 # 대안으로 hooks/README.md의 복사-붙여넣기 스니핏을 손으로 넣어도 된다 - 결과는 동일하다.
 #
 # 하는 일:
@@ -26,7 +26,10 @@
 #      (같은 파일의 다른 도구가 넣은 번들과 그 밖의 키는 손대지 않는다.
 #      파일이 없거나 비어 있으면 새로 만들고(UTF-8 BOM은 벗기고 읽는다), 유효한 JSON 객체가
 #      아니면 쓰지 않고 멈춘다.)
-#   5. 네 파일 다 수정 직전에 타임스탬프 백업을 남긴다.
+#   5. ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/my-dashboard.js 에 OpenCode 전역 플러그인
+#      래퍼 파일 하나를 쓴다(이 디렉터리의 opencode-plugin.mjs를 file:// URL로 import하는 두 줄).
+#      같은 폴더의 다른 플러그인 파일은 절대 건드리지 않고, 내용이 같으면 다시 쓰지 않는다.
+#   6. 다섯 파일 다 수정 직전에 타임스탬프 백업을 남긴다.
 #
 # 사용법:
 #   bash hooks/install.sh --dry-run           # 무엇이 바뀔지만 보여주고 아무 것도 쓰지 않는다(기본값)
@@ -34,10 +37,11 @@
 #   bash hooks/install.sh --codex             # ~/.codex/config.toml만 실제로 쓴다
 #   bash hooks/install.sh --devin             # ~/.config/devin/config.json만 실제로 쓴다
 #   bash hooks/install.sh --antigravity       # ~/.gemini/config/hooks.json만 실제로 쓴다
+#   bash hooks/install.sh --opencode          # ~/.config/opencode/plugins/my-dashboard.js만 실제로 쓴다
 #   bash hooks/install.sh --claude --codex    # Claude Code와 Codex만 실제로 쓴다
-#   bash hooks/install.sh --claude --codex --devin --antigravity   # 넷 다 실제로 쓴다
+#   bash hooks/install.sh --claude --codex --devin --antigravity --opencode   # 다섯 다 실제로 쓴다
 #
-# --dry-run이 아닌 모드는 각각 --claude / --codex / --devin / --antigravity를 명시해야 실제로 쓴다(실수로 전체 적용 방지).
+# --dry-run이 아닌 모드는 각각 --claude / --codex / --devin / --antigravity / --opencode를 명시해야 실제로 쓴다(실수로 전체 적용 방지).
 set -euo pipefail
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required for safe hook command quoting" >&2; exit 1; }
@@ -54,6 +58,12 @@ ANTIGRAVITY_HOOKS="${MY_DASHBOARD_ANTIGRAVITY_HOOKS:-$HOME/.gemini/config/hooks.
 # hooks.json의 최상위 키 하나가 번들 하나다. 정본: contracts/dashboard-protocol.v1.json의
 # event_state_map.antigravity_hook_translation.registration.bundle_key.
 ANTIGRAVITY_BUNDLE_KEY="my-dashboard"
+# OpenCode 전역 플러그인: $OPENCODE_CONFIG_DIR/plugins/*.js 가 자동 로드된다(2.0.31 실측). 정본:
+# 계약 event_state_map.opencode_plugin_translation.registration. 래퍼 파일 하나만 쓰고 같은 폴더의
+# 다른 플러그인은 건드리지 않는다. 테스트는 MY_DASHBOARD_OPENCODE_PLUGIN_DIR을 임시 폴더로 둔다.
+OPENCODE_PLUGIN_MODULE="$SCRIPT_DIR/opencode-plugin.mjs"
+OPENCODE_PLUGIN_DIR="${MY_DASHBOARD_OPENCODE_PLUGIN_DIR:-${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/plugins}"
+OPENCODE_PLUGIN_FILE="$OPENCODE_PLUGIN_DIR/my-dashboard.js"
 
 MARKER_BEGIN="# BEGIN my-dashboard hooks (managed by hooks/install.sh — do not edit between markers by hand)"
 MARKER_END="# END my-dashboard hooks"
@@ -62,6 +72,7 @@ DO_CLAUDE=0
 DO_CODEX=0
 DO_DEVIN=0
 DO_ANTIGRAVITY=0
+DO_OPENCODE=0
 DRY_RUN=1
 
 for arg in "$@"; do
@@ -70,9 +81,10 @@ for arg in "$@"; do
     --codex) DO_CODEX=1; DRY_RUN=0 ;;
     --devin) DO_DEVIN=1; DRY_RUN=0 ;;
     --antigravity) DO_ANTIGRAVITY=1; DRY_RUN=0 ;;
+    --opencode) DO_OPENCODE=1; DRY_RUN=0 ;;
     --dry-run) DRY_RUN=1 ;;
     -h|--help)
-      sed -n '2,38p' "${BASH_SOURCE[0]}"
+      sed -n '2,42p' "${BASH_SOURCE[0]}"
       exit 0
       ;;
     *)
@@ -82,15 +94,16 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$DRY_RUN" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_CODEX" -eq 1 ] || [ "$DO_DEVIN" -eq 1 ] || [ "$DO_ANTIGRAVITY" -eq 1 ]; }; then
+if [ "$DRY_RUN" -eq 1 ] && { [ "$DO_CLAUDE" -eq 1 ] || [ "$DO_CODEX" -eq 1 ] || [ "$DO_DEVIN" -eq 1 ] || [ "$DO_ANTIGRAVITY" -eq 1 ] || [ "$DO_OPENCODE" -eq 1 ]; }; then
   DRY_RUN=0
 fi
-if [ "$DO_CLAUDE" -eq 0 ] && [ "$DO_CODEX" -eq 0 ] && [ "$DO_DEVIN" -eq 0 ] && [ "$DO_ANTIGRAVITY" -eq 0 ]; then
+if [ "$DO_CLAUDE" -eq 0 ] && [ "$DO_CODEX" -eq 0 ] && [ "$DO_DEVIN" -eq 0 ] && [ "$DO_ANTIGRAVITY" -eq 0 ] && [ "$DO_OPENCODE" -eq 0 ]; then
   DRY_RUN=1
   DO_CLAUDE=1
   DO_CODEX=1
   DO_DEVIN=1
   DO_ANTIGRAVITY=1
+  DO_OPENCODE=1
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -479,6 +492,60 @@ install_antigravity() {
   echo "$ANTIGRAVITY_HOOKS 갱신 완료."
 }
 
+# ---------- OpenCode: ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/my-dashboard.js ----------
+
+# OpenCode 2.0.31은 $OPENCODE_CONFIG_DIR/plugins/*.js 를 전역 플러그인으로 자동 로드하고, 파일이
+# 바뀌면 hot-reload 한다(실측). 설치는 그 폴더에 래퍼 파일 하나를 쓰는 것뿐이다 - 래퍼는 이 설치기
+# 옆의 opencode-plugin.mjs 를 file:// URL 로 import 해 그대로 다시 내보낸다(Herdr 의
+# ~/.config/opencode/herdr-opencode/tui.js 와 같은 방식). 그래서 원본 모듈이 agent-event-hook.sh 와
+# 같은 폴더에 있어 hook 경로가 저절로 맞고, 업데이트도 원본 모듈만 갈아 끼우면 끝난다.
+# 같은 폴더의 다른 플러그인 파일은 읽지도 쓰지도 않는다.
+opencode_wrapper() {
+  # 경로는 python 이 file:// URL 로 percent-encode 한다 - 공백·따옴표·#·%·유니코드가 든 경로도 JS 문자열
+  # 리터럴 안에서 깨지지 않는다. 절대경로는 설치기가 실제로 있는 자리(SCRIPT_DIR)에서 계산한다.
+  OPENCODE_PLUGIN_MODULE="$OPENCODE_PLUGIN_MODULE" python3 - <<'OPENCODE_PY'
+import json, os, pathlib, sys
+sys.stdout.reconfigure(encoding='utf-8')
+module = pathlib.Path(os.path.abspath(os.environ['OPENCODE_PLUGIN_MODULE']))
+print('// installed by my-dashboard hooks/install.sh - do not edit; re-run the installer to update.')
+print('// Forwards OpenCode lifecycle events to my-dashboard (see hooks/README.md).')
+print('import plugin from ' + json.dumps(module.as_uri()) + ';')
+print('export default plugin;')
+OPENCODE_PY
+}
+
+install_opencode() {
+  echo "== OpenCode: $OPENCODE_PLUGIN_FILE =="
+  if [ ! -f "$OPENCODE_PLUGIN_MODULE" ]; then
+    echo "$OPENCODE_PLUGIN_MODULE 이 없다 - 설치기와 같은 폴더에 opencode-plugin.mjs 가 있어야 한다." >&2
+    return 1
+  fi
+
+  local wrapper
+  wrapper="$(opencode_wrapper)"
+  if [ -z "$wrapper" ]; then
+    echo "OpenCode 플러그인 래퍼를 만들지 못했다." >&2
+    return 1
+  fi
+
+  if [ -f "$OPENCODE_PLUGIN_FILE" ] && [ "$(cat "$OPENCODE_PLUGIN_FILE")" = "$wrapper" ]; then
+    echo "변경 없음 (이미 등록돼 있음)."
+    return 0
+  fi
+
+  # antigravity 와 같이 미리보기에서는 파일도 폴더도 만들지 않는다.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "--dry-run: 아래 내용으로 쓸 예정 (실제로 쓰지 않음)"
+    printf '%s\n' "$wrapper"
+    return 0
+  fi
+
+  mkdir -p "$OPENCODE_PLUGIN_DIR"
+  backup_file "$OPENCODE_PLUGIN_FILE"
+  printf '%s\n' "$wrapper" > "$OPENCODE_PLUGIN_FILE"
+  echo "$OPENCODE_PLUGIN_FILE 갱신 완료. 떠 있는 OpenCode 서비스는 파일 변경을 감지해 플러그인을 다시 읽는다(확인: opencode plugin list)."
+}
+
 # ---------- notify fallback 안내 (구버전 Codex 전용, 파일을 직접 건드리지 않는다) ----------
 
 print_notify_hint() {
@@ -491,8 +558,9 @@ if [ "$DO_CLAUDE" -eq 1 ]; then install_claude; fi
 if [ "$DO_CODEX" -eq 1 ]; then install_codex; print_notify_hint; fi
 if [ "$DO_DEVIN" -eq 1 ]; then install_devin; fi
 if [ "$DO_ANTIGRAVITY" -eq 1 ]; then install_antigravity; fi
+if [ "$DO_OPENCODE" -eq 1 ]; then install_opencode; fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo
-  echo "(--dry-run 모드였다. 실제로 적용하려면 --claude / --codex / --devin / --antigravity를 붙여서 다시 실행.)"
+  echo "(--dry-run 모드였다. 실제로 적용하려면 --claude / --codex / --devin / --antigravity / --opencode를 붙여서 다시 실행.)"
 fi

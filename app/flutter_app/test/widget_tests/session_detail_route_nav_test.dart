@@ -1,4 +1,4 @@
-/// 세션 상세의 **실제 진입 경로** 회귀 테스트 — 목록의 [SessionCard] 탭 ->
+/// 세션 상세의 **실제 진입 경로** 회귀 테스트 — 카드의 상세 보기 버튼 ->
 /// `pushNamed` -> [SessionDeepLinkPage] -> [SessionDetailPage].
 ///
 /// `session_detail_page_delete_seen_test.dart`는 상세 페이지를 라우트에 직접
@@ -10,6 +10,7 @@
 /// DELETE 응답에 지연을 둔 채 실제 라우트로 검증한다.
 library;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,15 +112,20 @@ Future<void> _pumpFrames(WidgetTester tester, int frames) async {
   }
 }
 
-/// 목록에서 세션 카드를 탭해 실제 라우트로 상세에 들어간다.
+/// 카드에 마우스를 올리고 상세 보기 버튼으로 실제 라우트에 진입한다.
 Future<void> _enterSessionDetail(WidgetTester tester) async {
-  await tester.tap(find.byType(SessionCard));
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(location: Offset.zero);
+  await mouse.moveTo(tester.getCenter(find.byType(SessionCard)));
+  await _pumpFrames(tester, 2);
+  await tester.tap(find.byTooltip('window.show_session'));
+  await mouse.removePointer();
   await _pumpFrames(tester, 10);
   expect(find.byType(SessionDeepLinkPage), findsOneWidget);
 }
 
 void main() {
-  testWidgets('세션 카드로 들어간 상세에서 AppBar 뒤로가기를 누르면 목록으로 돌아간다', (
+  testWidgets('카드 상세 버튼으로 들어간 화면에서 뒤로가기를 누르면 목록으로 돌아간다', (
     tester,
   ) async {
     await tester.pumpWidget(_wrap());

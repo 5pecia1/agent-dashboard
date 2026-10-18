@@ -166,6 +166,7 @@ mixin SyncControllerActions on Notifier<SyncControllerState> {
       final api = ref.read(dashboardApiProvider);
       await api.deleteSession(key);
       if (_connectionRevision != revision) return false;
+      ref.invalidate(promptHistoryProvider);
       // 삭제 중에 도착한 새 활동은 남기고, 삭제 전에 있던 알림만 정리한다.
       state = state.copyWith(
         sync: state.sync.copyWith(

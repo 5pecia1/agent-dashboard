@@ -2,6 +2,10 @@
 
 The common Flutter/Rust app displays session state, history, and notifications. Optional push uses your own Firebase configuration. It does not ship server credentials.
 
+On macOS, click a session card to switch to its connected work window. If no window is connected or the saved window is unavailable, choose an open window on this Mac. On the web, clicking a card opens its details. Sessions with the same host and full project path share a window connection; it switches to the window rather than a particular terminal tab.
+
+With mouse input on macOS or the web, hover over a card to reveal **View session details** and **Delete session**. Deletion removes the dashboard record and saved history. It does not stop the running agent, which may reappear after new activity.
+
 ## Install a release
 
 Use the [web app](https://agent-dashboard.5pecia1.dev), or install the latest stable macOS release on an Apple silicon Mac:
@@ -22,6 +26,20 @@ Projects with multiple sessions have a **Delete all sessions** icon beside their
 Groups use the exact full project path across hosts and agent types. Unknown projects use individual deletion. Ended sessions hidden from the default list are excluded. Another device's cached list may keep deleted sessions until its next full snapshot.
 
 If the server connection changes while confirming or deleting, the app stops the remaining requests and asks you to review the current list before trying again.
+
+## Antigravity CLI usage
+
+In the macOS app's settings, expand **Antigravity** and enable **Show Antigravity CLI usage**. Install `agy` 1.2.9 or newer and sign in to it first. The dashboard uses that CLI login to show the reported model groups' 5-hour and weekly usage on the home screen and in the tray. The home screen also shows time remaining until reset.
+
+Usage refreshes every 60 seconds while the dashboard is visible. Refresh manually or open the tray menu to query while the window is hidden. A failed query keeps the last successful reading with a warning; turning usage off clears that cache. After changing the agy account, refresh to fetch its quotas, or turn usage off and back on to clear the previous account's reading. The web app shows the macOS-only notice and does not run a local CLI.
+
+The app checks `~/.local/bin/agy`, common macOS installation locations, and its process `PATH`. For a custom installation, launch the app with `AGY_CLI_PATH` set to the absolute executable path. Quota queries disable agy's auto-update and use temporary logs that are removed after each query.
+
+Quit the app before launching with a custom path. Adjust the app location for your installation:
+
+```sh
+open --env AGY_CLI_PATH=/absolute/path/to/agy "$HOME/Applications/Agent Dashboard.app"
+```
 
 ## Build from source
 

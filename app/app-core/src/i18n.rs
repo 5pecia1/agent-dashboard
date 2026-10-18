@@ -24,6 +24,9 @@
 
 use phf::{Map, phf_map};
 
+#[path = "i18n_prompts.rs"]
+mod prompts;
+
 /// 지원 로케일. 문자열 대신 열거형으로 고정해 오타·미지원 로케일이
 /// 컴파일 타임에 걸러지게 한다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,8 +70,14 @@ pub fn t_args(locale: Locale, key: &str, args: &[(&str, &str)]) -> String {
 /// 카탈로그 조회 어댑터 — 로케일별 [`phf::Map`]으로 분기한다.
 fn catalog(locale: Locale, key: &str) -> Option<&'static str> {
     match locale {
-        Locale::En => EN.get(key).copied(),
-        Locale::Ko => KO.get(key).copied(),
+        Locale::En => EN
+            .get(key)
+            .copied()
+            .or_else(|| prompts::catalog(locale, key)),
+        Locale::Ko => KO
+            .get(key)
+            .copied()
+            .or_else(|| prompts::catalog(locale, key)),
     }
 }
 
@@ -209,6 +218,7 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "session.source.generic"    => "Generic",
     "session.source.grok"       => "Grok",
     "session.source.antigravity" => "Antigravity",
+    "session.source.opencode"   => "OpenCode",
 
     // ── time (T15: relative timestamps) ───────────────────────────────
     "time.just_now"    => "Just now",
@@ -515,6 +525,7 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "session.source.generic"    => "일반",
     "session.source.grok"       => "Grok",
     "session.source.antigravity" => "Antigravity",
+    "session.source.opencode"   => "OpenCode",
 
     // ── time (T15) ───────────────────────────────────────────────────────
     "time.just_now"    => "방금 전",

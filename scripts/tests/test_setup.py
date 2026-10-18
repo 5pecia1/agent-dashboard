@@ -162,19 +162,19 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(requests, [])
         self.assertIsNone(config)
 
-    def test_설치기에_네_에이전트_대상을_모두_넘긴다(self):
+    def test_설치기에_다섯_에이전트_대상을_모두_넘긴다(self):
         result, _, _, _ = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.install_args, ['--claude', '--codex', '--devin', '--antigravity'])
+        self.assertEqual(self.install_args, ['--claude', '--codex', '--devin', '--antigravity', '--opencode'])
 
-    def test_기존_설정이_있어도_설치기에_네_에이전트_대상을_넘긴다(self):
+    def test_기존_설정이_있어도_설치기에_다섯_에이전트_대상을_넘긴다(self):
         result, _, _, _ = self.run_installer(existing=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.install_args, ['--claude', '--codex', '--devin', '--antigravity'])
+        self.assertEqual(self.install_args, ['--claude', '--codex', '--devin', '--antigravity', '--opencode'])
 
     def test_미리보기는_설치기에_넘길_대상을_보여주고_실행하지_않는다(self):
         result, _, _, _ = self.run_installer(dry_run=True)
-        self.assertIn('install.sh --claude --codex --devin --antigravity', result.stderr)
+        self.assertIn('install.sh --claude --codex --devin --antigravity --opencode', result.stderr)
         self.assertIsNone(self.install_args)
 
     def test_실행_파일은_제자리에_놓이는_순간부터_실행_권한이_있다(self):
@@ -206,3 +206,13 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(int(moved[name], 8) & 0o100, f'{name}을 실행 권한 없이 옮겼다(모드 {moved[name]})')
         for name in PLAIN_HOOKS:
             self.assertFalse(int(moved[name], 8) & 0o111, f'{name}에는 실행 권한을 주지 않는다(모드 {moved[name]})')
+
+    def test_OpenCode_플러그인_모듈을_실행_권한_없이_내려받는다(self):
+        # 플러그인은 OpenCode 가 import 하는 ES 모듈이라 실행 파일이 아니다. 설치 목록에 있어야 setup.sh 경로의
+        # install.sh --opencode 가 옆에서 찾을 수 있다.
+        self.assertIn('opencode-plugin.mjs', PLAIN_HOOKS)
+        self.assertNotIn('opencode-plugin.mjs', EXECUTABLE_HOOKS)
+        result, requests, _, _ = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('/hooks/files/opencode-plugin.mjs', [path for path, _ in requests])
+        self.assertFalse(self.final_modes['opencode-plugin.mjs'] & 0o111)

@@ -61,9 +61,24 @@ Map<String, dynamic> _pageJson(
 
 void main() {
   group('요청 모양', () {
+    test('전역 프롬프트 조회는 세션 없이 기존 커서와 사용자 입력 필터를 보낸다', () async {
+      final recorder = _json(200, _pageJson(const []));
+
+      await _api(recorder).history(promptsOnly: true, beforeId: 42);
+
+      final query = recorder.requests.single.url.queryParameters;
+      expect(query.containsKey('session_key'), isFalse);
+      expect(query['kind'], 'prompts');
+      expect(query['before_id'], '42');
+      expect(query.keys, unorderedEquals(['kind', 'limit', 'before_id']));
+    });
+
     test('경로·기본 prefix·Bearer 헤더·200 limit이 계약대로다', () async {
       final recorder = _json(200, _pageJson(const []));
-      final api = _api(recorder, baseUrl: Uri.parse('https://dash.example.dev/api'));
+      final api = _api(
+        recorder,
+        baseUrl: Uri.parse('https://dash.example.dev/api'),
+      );
 
       await api.history(sessionKey: 'claude-code:s1');
 
@@ -88,14 +103,21 @@ void main() {
       final request = recorder.requests.single;
       expect(request.url.queryParameters['session_key'], key);
       expect(request.url.path, '/dashboard/events');
-      expect(request.url.query, contains('session_key=claude-code%3Aproj%2Fa%3Ab'));
+      expect(
+        request.url.query,
+        contains('session_key=claude-code%3Aproj%2Fa%3Ab'),
+      );
     });
 
     test('promptsOnly와 beforeId가 kind·before_id 쿼리로 나간다', () async {
       final recorder = _json(200, _pageJson(const []));
       final api = _api(recorder);
 
-      await api.history(sessionKey: 'codex:s2', promptsOnly: true, beforeId: 42);
+      await api.history(
+        sessionKey: 'codex:s2',
+        promptsOnly: true,
+        beforeId: 42,
+      );
 
       final request = recorder.requests.single;
       expect(request.url.queryParameters['kind'], 'prompts');

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Claude Code / Codex / Devin / Antigravity 공용 이벤트 전송기.
+# Claude Code / Codex / Devin / Antigravity / OpenCode 공용 이벤트 전송기.
 # 사용법: agent-event-hook.sh <source> [event]
-#   source: claude-code | codex | devin | antigravity, 기본값 claude-code
+#   source: claude-code | codex | devin | antigravity | opencode, 기본값 claude-code
 #   event:  antigravity 전용. agy는 stdin에 이벤트 이름을 싣지 않아서 hooks.json 명령이
 #           두 번째 인자로 넘긴다(PreInvocation | PreToolUse | PostToolUse | Stop).
+# OpenCode는 네이티브 hook이 없다. 전역 플러그인(opencode-plugin.mjs)이 OpenCode 이벤트를 계약
+# 어휘로 번역한 평탄한 stdin JSON(session_id, cwd, hook_event_name, prompt?, message?, opencode{})
+# 을 만들어 이 스크립트를 `opencode` 인자로 부른다. 그래서 claude-code와 같은 읽기 경로를 탄다.
+# 번역 규칙의 정본은 계약의 event_state_map.opencode_plugin_translation이다.
 # Grok은 Claude 설정의 이 명령을 그대로 실행한다. hook 프로세스에 GROK_HOOK_EVENT가
 # 있으면 인자 claude-code를 source grok으로 바꿔 보낸다. Codex·Devin 인자는 바꾸지 않는다.
 # 세 에이전트 모두 hook 이벤트를 stdin JSON으로 전달하고(Claude Code: hook_event_name,
@@ -489,8 +493,10 @@ if [ -n "$INPUT" ] && command -v jq >/dev/null 2>&1; then
   # 프로세스 환경에 DEVIN_PROJECT_DIR(프로젝트 루트)를 설정해 준다. 그마저 없으면
   # hook 프로세스 자신의 cwd로, 그래도 없으면 "unknown"으로 둔다 -
   # send-generic.sh의 MY_DASHBOARD_PROJECT:-$(pwd) 폴백과 같은 근거다.
+  # OpenCode 플러그인은 cwd를 항상 싣는다(모르면 "unknown"). hook 프로세스의 cwd는 공유 서비스에서는
+  # 서비스의 cwd(홈 디렉터리)라 프로젝트가 아니므로, antigravity처럼 pwd 폴백을 쓰지 않는다.
   PROJECT_FALLBACK="${DEVIN_PROJECT_DIR:-}"
-  if [ -z "$PROJECT_FALLBACK" ]; then
+  if [ -z "$PROJECT_FALLBACK" ] && [ "$SOURCE" != "opencode" ]; then
     PROJECT_FALLBACK="$(pwd 2>/dev/null)"
   fi
   [ -z "$PROJECT_FALLBACK" ] && PROJECT_FALLBACK="unknown"
@@ -532,6 +538,12 @@ if [ -n "$INPUT" ] && command -v jq >/dev/null 2>&1; then
   #       hooks.json이 있는 폴더를 cwd로 hook을 실행하므로 pwd 폴백을 쓰지 않고 "unknown"으로
   #       둔다. message는 UserInputRequest의 첫 질문 문장만 싣는다.
   #       정본: 계약 event_state_map.antigravity_hook_translation.
+  #   (O) opencode: 이름 번역은 플러그인(opencode-plugin.mjs)이 끝냈다. stdin의 hook_event_name은
+  #       이미 계약 이벤트 이름(UserPromptSubmit·UserInputRequest·UserInputResolved·PostToolUse·
+  #       Stop·SessionEnd)이라 그대로 쓴다. session_id·cwd도 claude-code와 같은 자리다. message는
+  #       UserPromptSubmit의 prompt(최근 사용자 프롬프트)와 UserInputRequest의 message(권한 요약·
+  #       질문 문장)를 읽는다 - 둘 다 플러그인이 300자로 잘라 보내지만 여기서 한 번 더 자른다.
+  #       정본: 계약 event_state_map.opencode_plugin_translation.
   CORE_PAYLOAD="$(printf '%s' "$INPUT" | jq -c \
     --arg source "$SOURCE" \
     --arg host "$HOST" \
@@ -599,6 +611,8 @@ if [ -n "$INPUT" ] && command -v jq >/dev/null 2>&1; then
           if $source == "antigravity" then
             ((if $final_event == "UserInputRequest" then (try .toolCall.args.questions[0].question catch null) else null end)
               | if . == null then null else (tostring | .[0:300]) end)
+          elif $source == "opencode" then
+            ((.message // .prompt // null) | if . == null then null else (tostring | .[0:300]) end)
           elif $final_event == "UserInputRequest" then
             (first_question_text | if . == null then null else (tostring | .[0:300]) end)
           else

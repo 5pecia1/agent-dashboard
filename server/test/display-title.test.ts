@@ -80,6 +80,7 @@ const WAITING_EVENT: Record<string, string> = {
   codex: "UserInputRequest",
   devin: "UserInputRequest",
   antigravity: "UserInputRequest",
+  opencode: "UserInputRequest",
 };
 
 describe("normalizeDisplayTitle", () => {

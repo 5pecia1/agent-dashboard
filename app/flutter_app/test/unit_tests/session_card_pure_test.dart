@@ -21,6 +21,7 @@ void main() {
       expect(sourceLabelKeyFor('devin'), 'session.source.devin');
       expect(sourceLabelKeyFor('grok'), 'session.source.grok');
       expect(sourceLabelKeyFor('antigravity'), 'session.source.antigravity');
+      expect(sourceLabelKeyFor('opencode'), 'session.source.opencode');
     });
 
     test('밑줄 변형(정본 밖 값)은 generic으로 접힌다 — 하이픈 매칭이 되돌아가면 이 테스트가 깨진다', () {

@@ -21,6 +21,11 @@ import 'package:my_dashboard/src/integrations/ui/usage_panels.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/devin_quota_panel.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/grok_quota_panel.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/teamclaude_panel.dart';
+import 'package:my_dashboard/src/integrations/data/agy_usage_models.dart';
+import 'package:my_dashboard/src/integrations/state/agy_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/agy_quota_panel.dart';
+
+import '../fixtures/agy_usage_fixture.dart';
 
 import '../unit_tests/devin_usage_test.dart' as devin;
 import '../unit_tests/teamclaude_test.dart' as teamclaude;
@@ -64,10 +69,21 @@ class _FixedSync extends SyncController {
       const SyncControllerState(sync: SyncState(cursor: 1));
 }
 
+class _FixedAgy extends AgyUsageController {
+  @override
+  AgyUsageState build() => AgyUsageState(
+    enabled: true,
+    reading: agyUsageReadingFromJson(agyUsageFixtureData()),
+  );
+  @override
+  void setActive(bool active) {}
+}
+
 Widget _app({
   required bool teamClaude,
   required bool devinConfigured,
   required bool grok,
+  bool agy = false,
   required double textScale,
 }) {
   return ProviderScope(
@@ -117,6 +133,7 @@ Widget _app({
               : const GrokUsageState(),
         ),
       ),
+      if (agy) agyUsageControllerProvider.overrideWith(_FixedAgy.new),
     ],
     child: MaterialApp(
       theme: AppTheme.light(),
@@ -138,6 +155,7 @@ Future<void> _pump(
   bool teamClaude = true,
   bool devin = true,
   bool grok = false,
+  bool agy = false,
 }) async {
   final view = tester.view
     ..devicePixelRatio = 1
@@ -152,6 +170,7 @@ Future<void> _pump(
       teamClaude: teamClaude,
       devinConfigured: devin,
       grok: grok,
+      agy: agy,
       textScale: textScale,
     ),
   );
@@ -160,9 +179,25 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('폭 800 배율 1.0에서 두 패널이 같은 높이에 있고 Devin이 너무 좁지 않다', (
-    tester,
-  ) async {
+  testWidgets('네 사용량 패널이 좁은 화면과 확대 글자에서도 넘치지 않는다', (tester) async {
+    for (final width in [320.0, 980.0, 1440.0]) {
+      for (final scale in [1.0, 2.0]) {
+        await _pump(
+          tester,
+          width: width,
+          textScale: scale,
+          grok: true,
+          agy: true,
+        );
+        expect(find.byType(TeamClaudePanel), findsOneWidget);
+        expect(find.byType(DevinQuotaPanel), findsOneWidget);
+        expect(find.byType(GrokQuotaPanel), findsOneWidget);
+        expect(find.byType(AgyQuotaPanel), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+  testWidgets('폭 800 배율 1.0에서 두 패널이 같은 높이에 있고 Devin이 너무 좁지 않다', (tester) async {
     await _pump(tester, width: 800, textScale: 1.0);
     final tc = find.byType(TeamClaudePanel);
     final dv = find.byType(DevinQuotaPanel);

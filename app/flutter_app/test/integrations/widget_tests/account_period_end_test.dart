@@ -115,7 +115,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Grok 조회가 실패해도 청구 날짜와 오래된 정보 툴팁을 함께 표시한다', (tester) async {
+  testWidgets('Grok 조회가 실패해도 초기화 상태를 보존하고 청구일로 표시하지 않는다', (tester) async {
     await pump(
       tester,
       grok: GrokUsageState(
@@ -123,16 +123,15 @@ void main() {
         reading: GrokUsageReading(
           usedPercent: 25,
           window: GrokUsageWindow.weekly,
-          billingPeriodEndsAt: end,
+          resetsAt: end,
         ),
         errorKey: 'grok.network_error',
       ),
       child: const GrokQuotaPanel(),
     );
-    expect(
-      find.text('Billing period ends $date $clock ${local.timeZoneName}'),
-      findsOneWidget,
-    );
+    expect(find.text(en['grok.reset_due']!), findsOneWidget);
+    expect(find.textContaining(date), findsNothing);
+    expect(find.byType(AccountPeriodEnd), findsNothing);
     final tooltips = tester.widgetList<Tooltip>(find.byType(Tooltip));
     expect(
       tooltips.any(
@@ -142,7 +141,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
-  testWidgets('CLI를 끄면 이전 CLI 청구 날짜를 Bot 카드에 표시하지 않는다', (tester) async {
+  testWidgets('CLI를 끄면 이전 CLI 초기화 상태를 Bot 카드에 표시하지 않는다', (tester) async {
     await pump(
       tester,
       grok: GrokUsageState(
@@ -151,7 +150,7 @@ void main() {
         reading: GrokUsageReading(
           usedPercent: 25,
           window: GrokUsageWindow.weekly,
-          billingPeriodEndsAt: end,
+          resetsAt: end,
         ),
         botReading: const GrokUsageReading(
           usedPercent: 10,
@@ -160,7 +159,9 @@ void main() {
       ),
       child: const GrokQuotaPanel(),
     );
-    expect(find.textContaining('Billing period ends'), findsNothing);
+    expect(find.textContaining(date), findsNothing);
+    expect(find.byType(AccountPeriodEnd), findsNothing);
+    expect(find.text(en['grok.reset_due']!), findsNothing);
     expect(find.text('Grok Bot'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -10,7 +10,7 @@ Requirements: `curl`, `jq`, and `python3`. [Deploy your own server](../docs/quic
 curl -fsSL https://YOUR_SERVER/setup.sh | bash
 ```
 
-Supply your dedicated ingest token when the terminal prompts you. The prompt reads from the terminal, not the script's piped input. The setup script installs Claude Code, Codex, Devin, and Antigravity CLI integrations and prints the configuration backup paths. It prepares each agent's configuration even if that agent is not installed yet. Codex requires trusting the new hooks through its `/hooks` command.
+Supply your dedicated ingest token when the terminal prompts you. The prompt reads from the terminal, not the script's piped input. The setup script installs Claude Code, Codex, Devin, Antigravity CLI, and OpenCode integrations and prints the configuration backup paths. It prepares each agent's configuration even if that agent is not installed yet. Codex requires trusting the new hooks through its `/hooks` command.
 
 The common installer offers the same server-matched setup:
 
@@ -30,13 +30,13 @@ bash setup.sh
 
 ## Install from source
 
-From a source checkout, create the hook environment before registering integrations. Choose any of `--claude`, `--codex`, `--devin`, or `--antigravity`:
+From a source checkout, create the hook environment before registering integrations. Choose any of `--claude`, `--codex`, `--devin`, `--antigravity`, or `--opencode`:
 
 ```sh
 mkdir -p ~/.config/my-dashboard
 test -f ~/.config/my-dashboard/env || cp hooks/env.example ~/.config/my-dashboard/env
 # Edit MY_DASHBOARD_URL and MY_DASHBOARD_TOKEN (the ingest token) in that file.
-bash hooks/install.sh --claude --codex --devin --antigravity
+bash hooks/install.sh --claude --codex --devin --antigravity --opencode
 ```
 
 Keep that file local. [env.example](env.example) documents content collection, optional project/host aliases, and the opt-in to report Antigravity CLI print-mode runs.
@@ -53,7 +53,7 @@ When a hook runs inside a Herdr pane, it can attach the session's task title as 
 - **Opt-in**: a title is personal content like `message`/`raw`. Hooks query Herdr only when `MY_DASHBOARD_INCLUDE_CONTENT=1`, and the server stores and pushes titles only when `DASHBOARD_STORE_MESSAGE=1`. Both stay off by default. Opting out re-filters the on-disk spool — including old queued lines — but does not retroactively erase rows already stored; those persist until normal retention.
 - **Fail-open**: the optional `herdr-context.py` helper (Python standard library only) makes one `pane.current` Unix-socket request with a 0.25s budget. Missing helper, missing `python3`, a dead socket, a malformed reply, or a timeout all mean "no title" — the original event still ships and the hook exits 0. Throttled heartbeats and events the Antigravity hook discards never query.
 - **Title source**: the first non-empty of pane `title` → `label` → `terminal_title_stripped`, normalized (folded whitespace, control/format characters removed, 120 codepoints max). Terminal text is never scraped.
-- **Coverage**: claude-code, codex, devin, grok, and antigravity, including the legacy Codex `notify` fallback. `send-generic.sh` (generic) never enriches.
+- **Coverage**: claude-code, codex, devin, grok, and antigravity, including the legacy Codex `notify` fallback. `send-generic.sh` (generic) and `opencode` never enrich: the OpenCode plugin runs inside OpenCode's own server process, which does not carry the Herdr pane environment.
 - **Timing**: the title is captured just before send, so a spooled line keeps its capture-time title and is not re-queried on replay.
 - **Sync note**: a title-only change does not create a state transition. Clients that follow only sync deltas may not see a renamed session until the next real transition or a reset snapshot — the protocol documents this as the name-only sync limitation.
 
@@ -91,10 +91,61 @@ Limits:
 - Subagent events are not reported, so while a subagent keeps running after its parent's turn has ended, the parent session shows **Turn finished**. It shows **Working** again when `agy` calls the parent again.
 - Questions asked by a subagent are not tracked.
 
+## OpenCode
+
+OpenCode CLI v2 (tested with 2.0.31) has no lifecycle hooks. Instead, it loads global plugins from `$OPENCODE_CONFIG_DIR/plugins/*.js` (by default `~/.config/opencode/plugins/`), and a plugin can subscribe to the server's event stream. The dashboard ships such a plugin, `opencode-plugin.mjs`. It translates OpenCode events into the dashboard's event names and starts `agent-event-hook.sh opencode` with the result, so the same hook script applies the collection policy, the heartbeat throttle, the offline spool, and idempotent event IDs. The plugin itself reads no environment variables and makes no state decisions. The exact translation is defined by `event_state_map.opencode_plugin_translation` in `contracts/dashboard-protocol.v1.json`.
+
+`bash hooks/install.sh --opencode` (which the setup script runs for you) writes **one file**, `my-dashboard.js`, into the plugin folder. It is a two-line wrapper that imports the installed `opencode-plugin.mjs` by `file://` URL and re-exports it, so the plugin always finds the hook script next to it and an update only replaces the module:
+
+```js
+// installed by my-dashboard hooks/install.sh - do not edit; re-run the installer to update.
+import plugin from "file:///absolute/path/to/installed/hooks/opencode-plugin.mjs";
+export default plugin;
+```
+
+- Other files in the plugin folder are never read or written. Running the command again changes nothing when the content is identical; a different existing file is backed up next to itself as `my-dashboard.js.bak.TIMESTAMP` before it is replaced.
+- To preview, run `bash hooks/install.sh --dry-run` without target flags: the OpenCode step prints the wrapper without creating any file or folder.
+- The installer honors `OPENCODE_CONFIG_DIR`. Set `MY_DASHBOARD_OPENCODE_PLUGIN_DIR` to write into a different folder.
+- A running OpenCode service (`opencode serve --service`) watches the plugin folder and reloads the plugin when the file changes; no restart is needed. If the change does not show up, run `opencode reload`.
+
+To check the registration, run the following command. The output should list `my-dashboard`.
+
+```sh
+opencode plugin list
+```
+
+What the dashboard shows:
+
+| OpenCode event | Dashboard state | Notes |
+|---|---|---|
+| `session.execution.started` | **Working** | One per turn. The message is the start of the most recent user prompt of that session (`session.inbox.enqueued`), subject to the content opt-in. |
+| `permission.asked` | **Waiting for input** | A tool waits for your approval. The message is `<action>: <resources>`. |
+| `form.created` | **Waiting for input** | Any form, including the `question` tool. The message is the first question. |
+| `permission.replied`, `form.replied`, `form.cancelled` | **Working** | Resolves the matching wait. |
+| `session.execution.succeeded`, `.failed`, `.interrupted` | **Turn finished** | Which one it was, and the error type or interrupt reason, stay in the stored raw event. |
+| `session.deleted`; `location.shutdown` of the plugin's own directory | **Ended** | Every `opencode run` ends with a shutdown, so standalone runs end their sessions. |
+| `session.step.started`, `session.tool.called`, `.success`, `.failed` | Heartbeat | Sent at most once per minute per session. |
+| Everything else (`session.renamed`, `session.usage.updated`, `*.updated`, `shell.*`, …) | Not reported | |
+
+How the plugin decides what to send:
+
+- OpenCode creates one plugin instance per directory it serves, and every instance receives every event of the server, including events that carry no directory. The plugin therefore keeps a process-wide registry of session → directory and reports a session only from the instance that owns its directory, so nothing is sent twice. Events for sessions the plugin has never seen are dropped.
+- Subagents are child sessions. Their approval and question waits are reported on the parent (root) session, because that is where you answer them. Their other events are not reported, and the parent's state follows only the parent's own turn events.
+- The hook process is started detached and is never awaited. A standalone run (`opencode run --standalone`) terminates its server's process group right after shutdown, so an attached hook would die before the **Turn finished** and **Ended** events leave the machine.
+- The project path is the session's directory as OpenCode reports it (a resolved real path). The hook does not fall back to its own working directory, because the shared service runs from your home directory.
+
+Limits:
+
+- In a standalone run, the plugin loads after the session is created, so there is no session-start event; the session appears at its first **Working**.
+- Interrupting a standalone run with Ctrl+C sends only the shutdown, so that session goes to **Ended** without a **Turn finished** step. Through the shared service, the interrupt is reported as **Turn finished** first.
+- Non-interactive `opencode run` rejects permission requests automatically within milliseconds, so **Waiting for input** lasts only that long. Such runs are still reported; the plugin cannot tell them apart.
+- Task titles from Herdr are not attached (see **Coverage** above).
+- When the plugin is reloaded, a session started in between may miss its **Ended** event at shutdown, and a child session whose parent the plugin never saw may appear as a session of its own.
+
 ## Update or remove
 
 To update, download the setup script from the upgraded server again and run it. Existing `~/.config/my-dashboard/env` values are retained. Hook files are replaced under `${XDG_DATA_HOME:-$HOME/.local/share}/my-dashboard/hooks`.
 
-To remove the integrations, back up the current agent configuration and remove only entries that invoke these dashboard hook scripts from `~/.claude/settings.json` and `~/.config/devin/config.json`. In `~/.codex/config.toml`, remove the section between `# BEGIN my-dashboard hooks` and `# END my-dashboard hooks`. In `~/.gemini/config/hooks.json`, delete the top-level `my-dashboard` key and leave other bundles unchanged. Restoring the installer's `.bak.TIMESTAMP` file is suitable only if you have made no later configuration changes.
+To remove the integrations, back up the current agent configuration and remove only entries that invoke these dashboard hook scripts from `~/.claude/settings.json` and `~/.config/devin/config.json`. In `~/.codex/config.toml`, remove the section between `# BEGIN my-dashboard hooks` and `# END my-dashboard hooks`. In `~/.gemini/config/hooks.json`, delete the top-level `my-dashboard` key and leave other bundles unchanged. For OpenCode, delete only `my-dashboard.js` from the plugin folder (`${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/`); a running OpenCode service watches that folder, so run `opencode reload` if `opencode plugin list` still shows `my-dashboard` afterwards. Restoring the installer's `.bak.TIMESTAMP` file is suitable only if you have made no later configuration changes.
 
 After the integrations are removed, delete the installed hook directory and `~/.config/my-dashboard/env` if no other dashboard installation uses them. Hook state and queued events live under `~/.local/state/my-dashboard`; this directory can also contain app data, so inspect it before deleting anything. Removing local hooks does not remove data already stored by your server. Use the dashboard's session deletion and your server retention settings for that data.

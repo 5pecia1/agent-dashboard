@@ -60,6 +60,9 @@ enum EventSourceDto {
 
   /// Antigravity CLI(agy).
   antigravity,
+
+  /// OpenCode CLI v2.
+  openCode,
 }
 
 /// 화면 목록 정렬에 필요한 최소 필드의 브리지 표현.

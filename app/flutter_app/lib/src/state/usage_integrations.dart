@@ -9,10 +9,12 @@ import 'package:my_dashboard/src/integrations/state/usage_config.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/agy_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/ui/usage_panels.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/teamclaude_setup.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/devin_setup.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/grok_setup.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/agy_setup.dart';
 
 /// User-configurable integrations included in every Agent Dashboard build.
 /// Controllers only poll after the user supplies a connection.
@@ -22,6 +24,7 @@ List<Override> usageDashboardOverrides(DashboardConfigValues config) => [
   devinInitialConnectionProvider.overrideWithValue(config.devin),
   grokInitialEnabledProvider.overrideWithValue(config.grokEnabled),
   grokInitialBotEnabledProvider.overrideWithValue(config.grokBotEnabled),
+  agyInitialEnabledProvider.overrideWithValue(config.agyEnabled),
   extensionTranslationProvider.overrideWithValue(usageTranslation),
 ];
 
@@ -30,7 +33,7 @@ List<Override> usageDashboardOverrides(DashboardConfigValues config) => [
 final usageDashboardUiOverrides = <Override>[
   dashboardHomeSectionsProvider.overrideWith((ref) => const [UsagePanels()]),
   dashboardSetupSectionsProvider.overrideWith(
-    (ref) => const [TeamClaudeSetup(), DevinSetup(), GrokSetup()],
+    (ref) => const [TeamClaudeSetup(), DevinSetup(), GrokSetup(), AgySetup()],
   ),
   dashboardExtensionRefreshingProvider.overrideWith(
     (ref) =>
@@ -40,7 +43,10 @@ final usageDashboardUiOverrides = <Override>[
         ref.watch(
           devinUsageControllerProvider.select((state) => state.loading),
         ) ||
-        ref.watch(grokUsageControllerProvider.select((state) => state.loading)),
+        ref.watch(
+          grokUsageControllerProvider.select((state) => state.loading),
+        ) ||
+        ref.watch(agyUsageControllerProvider.select((state) => state.loading)),
   ),
   dashboardExtensionRefreshProvider.overrideWith(
     (ref) => () async {
@@ -50,6 +56,9 @@ final usageDashboardUiOverrides = <Override>[
         ref
             .read(grokUsageControllerProvider.notifier)
             .refresh(userInitiated: true),
+        ref
+            .read(agyUsageControllerProvider.notifier)
+            .refresh(userInitiated: true),
       ]);
     },
   ),
@@ -57,11 +66,13 @@ final usageDashboardUiOverrides = <Override>[
     final teamClaude = ref.watch(teamClaudeControllerProvider);
     final devin = ref.watch(devinUsageControllerProvider);
     final grok = ref.watch(grokUsageControllerProvider);
+    final agy = ref.watch(agyUsageControllerProvider);
     return (widgetRef) => buildTrayUsageLabels(
       widgetRef,
       teamClaude: teamClaude,
       devin: devin,
       grok: grok,
+      agy: agy,
     );
   }),
 ];

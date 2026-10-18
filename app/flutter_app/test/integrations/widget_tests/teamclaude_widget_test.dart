@@ -220,7 +220,7 @@ void main() {
       isTrue,
     );
     expect(find.text('reset_days'), findsOneWidget);
-    expect(find.text('reset_clock'), findsOneWidget);
+    expect(find.text('reset_clock'), findsNothing);
     expect(find.text('pro'), findsOneWidget);
     expect(find.text('prolite'), findsOneWidget);
     expect(find.text('34%'), findsOneWidget);

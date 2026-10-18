@@ -472,5 +472,109 @@ class AntigravityHookTranslationTests(unittest.TestCase):
             checker.check_antigravity_hook_translation(contract)
 
 
+class OpenCodePluginTranslationTests(unittest.TestCase):
+    """opencode-plugin.mjs·agent-event-hook.sh·install.sh·setup.sh가 정본 opencode_plugin_translation을 따르는가."""
+
+    def assert_file_change_fails(self, attr, original, changed, message=None):
+        checker = load()
+        with tempfile.TemporaryDirectory() as temporary:
+            source = getattr(checker, attr)
+            path = Path(temporary) / source.name
+            text = source.read_text()
+            self.assertIn(original, text)
+            path.write_text(text.replace(original, changed))
+            with patch.object(checker, attr, path):
+                with self.assertRaisesRegex(checker.CheckFailure, message or "."):
+                    checker.check_opencode_plugin_translation(checker.load_canonical())
+
+    def test_passes_with_canonical_contract(self):
+        checker = load()
+        self.assertIsInstance(checker.check_opencode_plugin_translation(checker.load_canonical()), str)
+
+    def test_rust_mapping_covers_opencode(self):
+        self.assertEqual(load().EVENT_SOURCE_VARIANT_TO_CODE["OpenCode"], "opencode")
+
+    def test_dist_file_list_covers_plugin_module(self):
+        self.assertIn("opencode-plugin.mjs", load().HOOKS_DIST_FILES)
+
+    def test_skips_when_pinned_contract_lacks_opencode(self):
+        checker = load()
+        contract = checker.load_canonical()
+        del contract["event_state_map"]["opencode_plugin_translation"]
+        del contract["sources"]["registered"]["opencode"]
+        result = checker.check_opencode_plugin_translation(contract)
+        self.assertIsInstance(result, tuple)
+        self.assertTrue(result[1])
+
+    def test_registered_source_without_translation_fails(self):
+        checker = load()
+        contract = checker.load_canonical()
+        del contract["event_state_map"]["opencode_plugin_translation"]
+        with self.assertRaises(checker.CheckFailure):
+            checker.check_opencode_plugin_translation(contract)
+
+    def test_contract_heartbeat_types_drift_fails(self):
+        checker = load()
+        contract = checker.load_canonical()
+        contract["event_state_map"]["opencode_plugin_translation"]["heartbeat_types"].append("session.text.delta")
+        with self.assertRaisesRegex(checker.CheckFailure, "HEARTBEAT_TYPES"):
+            checker.check_opencode_plugin_translation(contract)
+
+    def test_contract_heartbeat_source_registration_required(self):
+        checker = load()
+        contract = checker.load_canonical()
+        contract["heartbeat_events"]["events"]["PostToolUse"]["sources"].remove("opencode")
+        with self.assertRaisesRegex(checker.CheckFailure, "heartbeat_events"):
+            checker.check_opencode_plugin_translation(contract)
+
+    def test_contract_state_table_drift_fails(self):
+        checker = load()
+        contract = checker.load_canonical()
+        contract["event_state_map"]["by_source"]["opencode"].append({"event": "SessionStart", "state": "idle"})
+        with self.assertRaisesRegex(checker.CheckFailure, "by_source.opencode"):
+            checker.check_opencode_plugin_translation(contract)
+
+    def test_plugin_stop_types_change_fails(self):
+        self.assert_file_change_fails(
+            "OPENCODE_PLUGIN_PATH", '  "session.execution.interrupted",\n];', "];", "STOP_TYPES")
+
+    def test_plugin_registry_key_change_fails(self):
+        self.assert_file_change_fails(
+            "OPENCODE_PLUGIN_PATH", 'Symbol.for("my-dashboard.opencode")', 'Symbol("my-dashboard.opencode")',
+            "레지스트리")
+
+    def test_plugin_must_not_read_env(self):
+        self.assert_file_change_fails(
+            "OPENCODE_PLUGIN_PATH", "const ownDir = api?.location?.directory;",
+            "const ownDir = process.env.MY_DASHBOARD_OWN_DIR ?? api?.location?.directory;", "process.env")
+
+    def test_plugin_must_not_wait_for_hook(self):
+        self.assert_file_change_fails("OPENCODE_PLUGIN_PATH", "    child.unref();\n", "", "기다리지")
+
+    def test_hook_message_branch_removal_fails(self):
+        self.assert_file_change_fails(
+            "AGENT_EVENT_HOOK_PATH",
+            '          elif $source == "opencode" then\n'
+            '            ((.message // .prompt // null) | if . == null then null else (tostring | .[0:300]) end)\n',
+            "", "message")
+
+    def test_hook_project_pwd_fallback_fails(self):
+        self.assert_file_change_fails(
+            "AGENT_EVENT_HOOK_PATH",
+            'if [ -z "$PROJECT_FALLBACK" ] && [ "$SOURCE" != "opencode" ]; then',
+            'if [ -z "$PROJECT_FALLBACK" ]; then', "cwd")
+
+    def test_installer_default_dir_change_fails(self):
+        self.assert_file_change_fails(
+            "INSTALL_SH_PATH",
+            '${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/plugins',
+            '${OPENCODE_CONFIG_DIR:-$HOME/.opencode}/plugins', "경로")
+
+    def test_setup_must_download_plugin_module(self):
+        self.assert_file_change_fails(
+            "SETUP_SH_PATH", 'NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py opencode-plugin.mjs"',
+            'NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py"', "setup.sh")
+
+
 if __name__ == "__main__":
     unittest.main()

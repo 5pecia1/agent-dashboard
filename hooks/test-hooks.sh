@@ -1908,7 +1908,175 @@ HEAD_SHIM
   fi
 }
 
+# ---------- OpenCode ----------
+# OpenCode에는 네이티브 hook이 없다. 전역 플러그인(opencode-plugin.mjs)이 이벤트를 계약 어휘로 번역한 평탄한
+# stdin JSON을 만들어 hook을 `opencode` 인자로 부른다. 정본은 계약의 event_state_map.opencode_plugin_translation.
+# 체크 38·39는 플러그인이 만드는 모양의 stdin을 hook에 직접 넣고, 체크 40은 실제 플러그인의 translate()로
+# 실측 모양의 OpenCode 이벤트를 번역해 그 출력을 hook에 넣는다(node가 필요하다).
+
+OC_PROJECT="/tmp/oc-proj"
+# oc_input <session_id> <hook_event_name> <나머지 필드(JSON 객체 안쪽 조각, 비울 수 있다)>
+oc_input() {
+  local json extra="${3:-}"
+  if [ -n "$extra" ]; then extra=",$extra"; fi
+  json="$(printf '{"session_id":"%s","cwd":"%s","hook_event_name":"%s"%s}' "$1" "$OC_PROJECT" "$2" "$extra")"
+  printf '%s' "$json" | jq -e . >/dev/null 2>&1 || log "테스트 버그: oc_input이 만든 stdin이 JSON이 아니다: $json"
+  printf '%s' "$json"
+}
+
+# ---------- Check 38: opencode 수명 주기 - 플러그인 stdin → 계약 이벤트·필드·서버 상태 ----------
+
+check38_opencode_lifecycle() {
+  local ok=0
+  local details=""
+  local state_dir="$WORK_DIR/state-oc-life"
+  local s="oc-life"
+  local st_prompt st_wait st_resolved st_stop st_end
+
+  run_hook_src opencode "$(oc_input "$s" UserPromptSubmit '"prompt":"Reply pong.","opencode":{"type":"session.execution.started","event_id":"evt_oc1"}')" "$SERVER_URL" "$state_dir" >/dev/null
+  st_prompt="$(d1_scalar "SELECT state FROM dashboard_sessions WHERE key='opencode:$s'" state)"
+  run_hook_src opencode "$(oc_input "$s" UserInputRequest '"message":"shell: echo hi","opencode":{"type":"permission.asked","request_id":"per_1"}')" "$SERVER_URL" "$state_dir" >/dev/null
+  st_wait="$(d1_scalar "SELECT state FROM dashboard_sessions WHERE key='opencode:$s'" state)"
+  run_hook_src opencode "$(oc_input "$s" UserInputResolved '"opencode":{"type":"permission.replied","request_id":"per_1","reply":"once"}')" "$SERVER_URL" "$state_dir" >/dev/null
+  st_resolved="$(d1_scalar "SELECT state FROM dashboard_sessions WHERE key='opencode:$s'" state)"
+  run_hook_src opencode "$(oc_input "$s" Stop '"opencode":{"type":"session.execution.failed","error_type":"provider.auth"}')" "$SERVER_URL" "$state_dir" >/dev/null
+  st_stop="$(d1_scalar "SELECT state FROM dashboard_sessions WHERE key='opencode:$s'" state)"
+  run_hook_src opencode "$(oc_input "$s" SessionEnd '"opencode":{"type":"session.deleted"}')" "$SERVER_URL" "$state_dir" >/dev/null
+  st_end="$(d1_scalar "SELECT state FROM dashboard_sessions WHERE key='opencode:$s'" state)"
+
+  local rows expected
+  rows="$(d1_rows "SELECT event, json_extract(raw, '\$.project') AS project, message FROM dashboard_events WHERE session_key='opencode:$s' ORDER BY id")"
+  expected="UserPromptSubmit|$OC_PROJECT|Reply pong.
+UserInputRequest|$OC_PROJECT|shell: echo hi
+UserInputResolved|$OC_PROJECT|null
+Stop|$OC_PROJECT|null
+SessionEnd|$OC_PROJECT|null"
+  if [ "$rows" != "$expected" ]; then
+    ok=1; details="${details} 도착 행이 다르다 — 실제:[$(printf '%s' "$rows" | tr '\n' ';')] 기대:[$(printf '%s' "$expected" | tr '\n' ';')];"
+  fi
+  local raw_type
+  # 서버의 raw 컬럼은 hook 이 보낸 payload 전체다. 플러그인의 stdin 원문은 그 안의 raw 문자열(payload.raw)에 있다.
+  raw_type="$(d1_scalar "SELECT json_extract(json_extract(raw, '\$.raw'), '\$.opencode.error_type') AS t FROM dashboard_events WHERE session_key='opencode:$s' AND event='Stop'" t)"
+  if [ "$raw_type" != "provider.auth" ]; then
+    ok=1; details="${details} Stop의 raw에 opencode.error_type이 없다('$raw_type');"
+  fi
+  if [ "$st_prompt|$st_wait|$st_resolved|$st_stop|$st_end" != "working|waiting_input|working|done|ended" ]; then
+    ok=1; details="${details} 서버 상태 흐름='$st_prompt|$st_wait|$st_resolved|$st_stop|$st_end'(기대 working|waiting_input|working|done|ended - 서버 sources/opencode 어댑터가 있어야 한다);"
+  fi
+
+  if [ "$ok" -eq 0 ]; then
+    record "38. opencode: UserPromptSubmit→UserInputRequest→UserInputResolved→Stop→SessionEnd, project=cwd, message=prompt·권한 요약, raw에 원본 메타" 0 "5개 이벤트 도착, 상태 working→waiting_input→working→done→ended"
+  else
+    record "38. opencode: UserPromptSubmit→UserInputRequest→UserInputResolved→Stop→SessionEnd, project=cwd, message=prompt·권한 요약, raw에 원본 메타" 1 "$details"
+  fi
+}
+
+# ---------- Check 39: opencode PostToolUse 하트비트 스로틀 + cwd 없으면 unknown ----------
+
+check39_opencode_heartbeat_throttle() {
+  local ok=0
+  local details=""
+  local state_dir="$WORK_DIR/state-oc-hb"
+  local i
+  for i in 1 2 3 4 5; do
+    run_hook_src opencode "$(oc_input oc-hb PostToolUse "\"opencode\":{\"type\":\"session.tool.called\",\"event_id\":\"evt_hb$i\"}")" "$SERVER_URL" "$state_dir" >/dev/null
+  done
+  local events
+  events="$(d1_events opencode:oc-hb)"
+  if [ "$events" != "PostToolUse" ]; then
+    ok=1; details="${details} 도착='$events'(기대 PostToolUse 1건);"
+  fi
+  # cwd가 없으면 hook 프로세스의 cwd가 아니라 unknown이다 - 공유 서비스의 cwd는 홈 디렉터리라 프로젝트가 아니다.
+  (cd "$WORK_DIR" && run_hook_src opencode '{"session_id":"oc-nocwd","hook_event_name":"UserPromptSubmit","opencode":{"type":"session.execution.started"}}' "$SERVER_URL" "$state_dir" >/dev/null)
+  local project
+  project="$(d1_scalar "SELECT json_extract(raw, '\$.project') AS p FROM dashboard_events WHERE session_key='opencode:oc-nocwd'" p)"
+  if [ "$project" != "unknown" ]; then
+    ok=1; details="${details} cwd 없는 이벤트의 project='$project'(기대 unknown, hook cwd 미사용);"
+  fi
+  if [ "$ok" -eq 0 ]; then
+    record "39. opencode: 연속 PostToolUse 5회 → 하트비트 1회, cwd 없으면 project=unknown" 0 "하트비트 1건, project=unknown"
+  else
+    record "39. opencode: 연속 PostToolUse 5회 → 하트비트 1회, cwd 없으면 project=unknown" 1 "$details"
+  fi
+}
+
+# ---------- Check 40: opencode 플러그인 번역(실제 translate) → hook: 서브에이전트·소유·shutdown ----------
+# 실측 모양의 OpenCode 이벤트열을 실제 플러그인 translate()로 번역하고, 나온 stdin을 그대로 hook에 넣는다.
+# 두 인스턴스(/tmp/oc-proj, /tmp/oc-other)가 레지스트리 하나를 공유해 같은 이벤트를 모두 받는 공유 서비스
+# 조건을 재현한다. 자식 세션의 권한 대기·해소만 루트 세션으로 올라오고, 자식의 execution·하트비트·deleted는
+# 보내지 않으며, 다른 location의 shutdown은 무시하고 자기 shutdown은 남은 루트 세션을 SessionEnd로 끝낸다.
+
+check40_opencode_plugin_translation() {
+  local ok=0
+  local details=""
+  local state_dir="$WORK_DIR/state-oc-plugin"
+  local check_name="40. opencode: 플러그인 translate() 출력(자식 세션은 대기·해소만 루트로, 다른 location 무시, 자기 shutdown→SessionEnd)을 hook이 그대로 전달"
+  if ! command -v node >/dev/null 2>&1; then
+    record "$check_name" 1 "node가 없어 플러그인을 돌릴 수 없다"
+    return
+  fi
+  local payloads
+  payloads="$(node --input-type=module -e '
+const { translate, createRegistry } = await import(process.argv[1]);
+const own = "/tmp/oc-proj", other = "/tmp/oc-other";
+const ev = (type, data, loc, id) => ({ id, type, data, ...(loc ? { location: { directory: loc } } : {}) });
+const events = [
+  ev("session.inbox.enqueued", { sessionID: "oc-root", item: { payload: { text: "Delegate to a subagent." } } }, own, "evt_1"),
+  ev("session.execution.started", { sessionID: "oc-root" }, null, "evt_2"),
+  ev("session.created", { sessionID: "oc-child", parentID: "oc-root", location: { directory: own } }, own, "evt_3"),
+  ev("session.execution.started", { sessionID: "oc-child" }, null, "evt_4"),
+  ev("session.tool.called", { sessionID: "oc-child" }, own, "evt_5"),
+  ev("permission.asked", { id: "per_9", sessionID: "oc-child", action: "shell", resources: ["echo hi"] }, own, "evt_6"),
+  ev("permission.replied", { sessionID: "oc-child", requestID: "per_9", reply: "once" }, own, "evt_7"),
+  ev("session.execution.succeeded", { sessionID: "oc-child" }, null, "evt_8"),
+  ev("session.inbox.enqueued", { sessionID: "oc-foreign", item: { payload: { text: "other" } } }, other, "evt_9"),
+  ev("session.execution.started", { sessionID: "oc-foreign" }, null, "evt_10"),
+  ev("session.execution.succeeded", { sessionID: "oc-root" }, null, "evt_11"),
+  ev("location.shutdown", {}, other, "evt_12"),
+  ev("location.shutdown", {}, own, "evt_13"),
+  ev("session.deleted", { sessionID: "oc-root" }, null, "evt_14"),
+];
+const registry = createRegistry();
+for (const e of events) for (const dir of [own, other]) for (const p of translate(e, registry, dir)) console.log(JSON.stringify(p));
+' "$HOOK_PLUGIN_URL" 2>"$WORK_DIR/oc-plugin.err")"
+  if [ -z "$payloads" ]; then
+    record "$check_name" 1 "플러그인이 아무 출력도 내지 않았다: $(cat "$WORK_DIR/oc-plugin.err")"
+    return
+  fi
+  local line
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    run_hook_src opencode "$line" "$SERVER_URL" "$state_dir" >/dev/null
+  done <<<"$payloads"
+
+  local rows expected
+  rows="$(d1_rows "SELECT session_key, event, json_extract(raw, '\$.project') AS project, message FROM dashboard_events WHERE session_key LIKE 'opencode:oc-%' AND session_key NOT IN ('opencode:oc-life', 'opencode:oc-hb', 'opencode:oc-nocwd') ORDER BY id")"
+  expected="opencode:oc-root|UserPromptSubmit|/tmp/oc-proj|Delegate to a subagent.
+opencode:oc-root|UserInputRequest|/tmp/oc-proj|shell: echo hi
+opencode:oc-root|UserInputResolved|/tmp/oc-proj|null
+opencode:oc-foreign|UserPromptSubmit|/tmp/oc-other|other
+opencode:oc-root|Stop|/tmp/oc-proj|null
+opencode:oc-foreign|SessionEnd|/tmp/oc-other|null
+opencode:oc-root|SessionEnd|/tmp/oc-proj|null"
+  if [ "$rows" != "$expected" ]; then
+    ok=1; details="${details} 도착 행이 다르다 — 실제:[$(printf '%s' "$rows" | tr '\n' ';')] 기대:[$(printf '%s' "$expected" | tr '\n' ';')];"
+  fi
+  local child_meta
+  child_meta="$(d1_scalar "SELECT json_extract(json_extract(raw, '\$.raw'), '\$.opencode.child_session_id') AS c FROM dashboard_events WHERE session_key='opencode:oc-root' AND event='UserInputRequest'" c)"
+  if [ "$child_meta" != "oc-child" ]; then
+    ok=1; details="${details} 루트로 올린 대기 이벤트의 raw에 child_session_id가 없다('$child_meta');"
+  fi
+
+  if [ "$ok" -eq 0 ]; then
+    record "$check_name" 0 "루트 5건·다른 location 2건 도착, 자식 세션 행 0건, 중복 전송 없음"
+  else
+    record "$check_name" 1 "$details"
+  fi
+}
+
 # ---------- 실행 ----------
+
+HOOK_PLUGIN_URL="file://$SCRIPT_DIR/opencode-plugin.mjs"
 
 if ! start_server; then
   log "서버를 띄우지 못해 테스트를 진행할 수 없다."
@@ -1951,6 +2119,9 @@ check34_antigravity_sends_while_other_hook_flushes
 check35_antigravity_stop_not_held_by_backlog
 check36_spool_append_during_flush_survives
 check37_flush_skips_exactly_what_it_took
+check38_opencode_lifecycle
+check39_opencode_heartbeat_throttle
+check40_opencode_plugin_translation
 
 log ""
 log "===== 결과 요약 ====="

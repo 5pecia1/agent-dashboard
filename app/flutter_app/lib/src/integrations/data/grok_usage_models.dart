@@ -56,7 +56,6 @@ class GrokUsageReading {
     this.accountLabel,
     this.plan,
     this.resetsAt,
-    this.billingPeriodEndsAt,
   });
 
   /// 0–100.
@@ -65,9 +64,6 @@ class GrokUsageReading {
   final String? accountLabel;
   final String? plan;
   final DateTime? resetsAt;
-
-  /// Explicit billing period end; independent of the usage window's reset.
-  final DateTime? billingPeriodEndsAt;
 }
 
 bool grokTokenIsFresh(DateTime? expiresAt, DateTime now) =>
@@ -156,7 +152,6 @@ GrokUsageReading? grokUsageReadingFromJson(
   if (config == null) return null;
   final plan = _optionalString(config['subscriptionTier']);
   final resetsAt = _resetAt(config);
-  final billingPeriodEndsAt = parseAccountPeriodEnd(config['billingPeriodEnd']);
   final label = _blankToNull(accountLabel);
   GrokUsageReading weeklyReading(double usedPercent) => GrokUsageReading(
     usedPercent: usedPercent.clamp(0, 100).toDouble(),
@@ -164,7 +159,6 @@ GrokUsageReading? grokUsageReadingFromJson(
     accountLabel: label,
     plan: plan,
     resetsAt: resetsAt,
-    billingPeriodEndsAt: billingPeriodEndsAt,
   );
   if (config.containsKey('creditUsagePercent')) {
     final weekly = _finite(config['creditUsagePercent']);
@@ -183,7 +177,6 @@ GrokUsageReading? grokUsageReadingFromJson(
     accountLabel: label,
     plan: plan,
     resetsAt: resetsAt,
-    billingPeriodEndsAt: billingPeriodEndsAt,
   );
 }
 
@@ -239,12 +232,10 @@ double? _money(Object? node) {
 
 DateTime? _resetAt(Map<String, dynamic> config) {
   final period = config['currentPeriod'];
-  final end = period is Map ? period['end'] : null;
-  if (end is String) {
-    final parsed = DateTime.tryParse(end);
-    if (parsed != null) return parsed;
-  }
-  return null;
+  if (period is Map) return parseAccountPeriodEnd(period['end']);
+  // Both /billing variants report usage periods: weekly credits or calendar
+  // month spend. billingPeriodEnd does not report subscription renewal.
+  return parseAccountPeriodEnd(config['billingPeriodEnd']);
 }
 
 String? _blankToNull(String? value) {

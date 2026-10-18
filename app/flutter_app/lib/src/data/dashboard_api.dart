@@ -430,7 +430,7 @@ class DashboardApi {
   }
 
   Future<DashboardHistoryPage> history({
-    required String sessionKey,
+    String? sessionKey,
     bool promptsOnly = false,
     int? beforeId,
   }) async {
@@ -438,7 +438,7 @@ class DashboardApi {
       'GET',
       kEventsPath,
       query: <String, String>{
-        'session_key': sessionKey,
+        'session_key': ?sessionKey,
         'limit': '$kHistoryPageSize',
         'kind': promptsOnly ? 'prompts' : 'all',
         if (beforeId != null) 'before_id': '$beforeId',

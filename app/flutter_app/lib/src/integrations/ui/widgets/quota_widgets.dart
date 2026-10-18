@@ -1,7 +1,7 @@
-/// 사용률 패널(TeamClaude·Devin)이 공유하는 게이지와 리셋 시각 위젯.
+/// 사용률 패널(TeamClaude·Devin·Grok)이 공유하는 게이지와 초기화 남은 시간 위젯.
 ///
 /// i18n 키는 [keyPrefix]로 네임스페이스를 받는다 — `<prefix>.reset_days` 같은
-/// 키가 카탈로그에 있어야 한다(지금은 `teamclaude`와 `devin` 둘 다 존재).
+/// 키가 카탈로그에 있어야 한다.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,7 +15,7 @@ const double kQuotaWarningRatio = 0.9;
 /// 사용률 카드의 좌우 바깥 여백 — 나란히 놓인 카드 사이 간격은 이 값의 두 배이다.
 const double kUsagePanelHorizontalMargin = 8;
 
-/// 리셋 시각의 날짜를 로케일과 무관하게 `yyyy-MM-dd`로 고정한다.
+/// 플랜 종료일의 날짜를 로케일과 무관하게 `yyyy-MM-dd`로 고정한다.
 String formatDashboardDate(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-'
     '${value.month.toString().padLeft(2, '0')}-'
@@ -76,35 +76,13 @@ class QuotaResetTime extends ConsumerWidget {
             '${(remaining.inMilliseconds / Duration.millisecondsPerMinute).ceil()}',
       });
     }
-    final localizations = MaterialLocalizations.of(context);
-    final clock = localizations.formatTimeOfDay(
-      TimeOfDay.fromDateTime(at),
-      alwaysUse24HourFormat: true,
-    );
-    final date = formatDashboardDate(at);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Tooltip(
-        message: t(ref, '$keyPrefix.reset', {
-          'time': '$date $clock ${at.timeZoneName}',
-        }),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: style,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              t(ref, '$keyPrefix.reset_clock', {'date': date, 'time': clock}),
-              style: style,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+      child: Text(
+        label,
+        style: style,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

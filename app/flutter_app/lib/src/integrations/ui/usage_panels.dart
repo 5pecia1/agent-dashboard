@@ -4,9 +4,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_dashboard/src/integrations/state/devin_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/grok_usage_provider.dart';
+import 'package:my_dashboard/src/integrations/state/agy_usage_provider.dart';
 import 'package:my_dashboard/src/integrations/state/teamclaude_provider.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/devin_quota_panel.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/grok_quota_panel.dart';
+import 'package:my_dashboard/src/integrations/ui/widgets/agy_quota_panel.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/quota_widgets.dart';
 import 'package:my_dashboard/src/integrations/ui/widgets/teamclaude_panel.dart';
 
@@ -96,6 +98,9 @@ class UsagePanels extends ConsumerWidget {
     final hasGrok = ref.watch(
       grokUsageControllerProvider.select((state) => state.enabled),
     );
+    final hasAgy = ref.watch(
+      agyUsageControllerProvider.select((state) => state.enabled),
+    );
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final compact = compactUsageOuterMinWidth(scale);
     final slots = <_UsageSlot>[
@@ -116,6 +121,12 @@ class UsagePanels extends ConsumerWidget {
           minWidth: compact,
           flex: kCompactUsageFlex,
           child: const GrokQuotaPanel(),
+        ),
+      if (hasAgy)
+        _UsageSlot(
+          minWidth: compact,
+          flex: kCompactUsageFlex,
+          child: const AgyQuotaPanel(),
         ),
     ];
     if (slots.isEmpty) return const SizedBox.shrink();
