@@ -18,6 +18,28 @@ Future<void> showDeleteProjectSessionsDialog(
   required List<SessionViewDto> sessions,
 }) async {
   if (project.isEmpty || sessions.isEmpty) return;
+  await _showDeleteSessionsDialog(
+    context,
+    ref,
+    project: project,
+    sessions: sessions,
+  );
+}
+
+/// 선택한 세션만 삭제한다. 취소하면 false를 돌려 선택 상태를 유지한다.
+Future<bool> showDeleteSelectedSessionsDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  required List<SessionViewDto> sessions,
+}) => _showDeleteSessionsDialog(context, ref, sessions: sessions);
+
+Future<bool> _showDeleteSessionsDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  String? project,
+  required List<SessionViewDto> sessions,
+}) async {
+  if (sessions.isEmpty) return false;
   final messenger = ScaffoldMessenger.of(context);
   final revision = ref
       .read(dashboardApiConfigControllerProvider.notifier)
@@ -26,7 +48,7 @@ Future<void> showDeleteProjectSessionsDialog(
   final message = await showDialog<String>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _DeleteProjectSessionsDialog(
+    builder: (_) => _DeleteSessionsDialog(
       project: project,
       sessions: targets,
       connectionRevision: revision,
@@ -36,26 +58,26 @@ Future<void> showDeleteProjectSessionsDialog(
   if (message != null && messenger.mounted) {
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
+  return message != null;
 }
 
-class _DeleteProjectSessionsDialog extends ConsumerStatefulWidget {
-  const _DeleteProjectSessionsDialog({
+class _DeleteSessionsDialog extends ConsumerStatefulWidget {
+  const _DeleteSessionsDialog({
     required this.project,
     required this.sessions,
     required this.connectionRevision,
   });
 
-  final String project;
+  final String? project;
   final List<SessionViewDto> sessions;
   final int connectionRevision;
 
   @override
-  ConsumerState<_DeleteProjectSessionsDialog> createState() =>
-      _DeleteProjectSessionsDialogState();
+  ConsumerState<_DeleteSessionsDialog> createState() =>
+      _DeleteSessionsDialogState();
 }
 
-class _DeleteProjectSessionsDialogState
-    extends ConsumerState<_DeleteProjectSessionsDialog> {
+class _DeleteSessionsDialogState extends ConsumerState<_DeleteSessionsDialog> {
   bool _deleting = false;
 
   @override
@@ -66,24 +88,43 @@ class _DeleteProjectSessionsDialogState
             ? session.host!
             : t(ref, 'session.card.host_unknown'),
     }.toList()..sort();
+    final projectCounts = <String, int>{};
+    for (final session in widget.sessions) {
+      projectCounts.update(
+        session.project,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final projectPaths = projectCounts.keys.toList()..sort();
+    final project = widget.project;
     return PopScope(
       canPop: !_deleting,
       child: AlertDialog(
         scrollable: true,
-        title: Text(t(ref, 'session.group.delete_title')),
+        title: Text(
+          t(
+            ref,
+            project == null
+                ? 'session.selection.delete_title'
+                : 'session.group.delete_title',
+          ),
+        ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _dialogMaxWidth),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                projectBasename(widget.project),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(widget.project),
-              const SizedBox(height: 8),
+              if (project != null) ...[
+                Text(
+                  projectBasename(project),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(project),
+                const SizedBox(height: 8),
+              ],
               Text(
                 t(ref, 'session.group.delete_hosts', {
                   'hosts': hosts.join(', '),
@@ -91,10 +132,39 @@ class _DeleteProjectSessionsDialogState
               ),
               const SizedBox(height: 16),
               Text(
-                t(ref, 'session.group.delete_body', {
-                  'count': '${widget.sessions.length}',
-                }),
+                t(
+                  ref,
+                  project == null
+                      ? 'session.selection.delete_body'
+                      : 'session.group.delete_body',
+                  {'count': '${widget.sessions.length}'},
+                ),
               ),
+              if (project == null) ...[
+                const SizedBox(height: 16),
+                Text(t(ref, 'session.selection.projects')),
+                for (final path in projectPaths)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            path.isEmpty
+                                ? t(ref, 'session.group.unknown_project')
+                                : path,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          t(ref, 'session.group.count', {
+                            'count': '${projectCounts[path]}',
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -119,7 +189,14 @@ class _DeleteProjectSessionsDialogState
                       Text(t(ref, 'session.group.deleting')),
                     ],
                   )
-                : Text(t(ref, 'session.group.delete_action')),
+                : Text(
+                    t(
+                      ref,
+                      widget.project == null
+                          ? 'session.selection.delete_action'
+                          : 'session.group.delete_action',
+                    ),
+                  ),
           ),
         ],
       ),

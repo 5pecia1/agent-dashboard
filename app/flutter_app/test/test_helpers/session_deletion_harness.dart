@@ -58,6 +58,10 @@ class DeletionTestController extends SyncController {
       ),
     );
   }
+
+  void clearAlerts() {
+    state = state.copyWith(sync: state.sync.copyWith(pendingAlerts: const []));
+  }
 }
 
 class SessionDeletionHarness {
