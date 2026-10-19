@@ -67,6 +67,7 @@ const _hoverIconSize = 16.0;
 const _hoverButtonPadding = 4.0;
 const _hoverButtonExtent = _hoverIconSize + _hoverButtonPadding * 2;
 const _hoverButtonGap = 4.0;
+const _selectionIndicatorExtent = 48.0;
 
 /// 세션 카드. 우상단의 상세 보기와 삭제 버튼은 마우스를 올리면 표시한다.
 class SessionCard extends ConsumerStatefulWidget {
@@ -76,12 +77,18 @@ class SessionCard extends ConsumerStatefulWidget {
     this.onTap,
     this.onShowDetails,
     this.compact = false,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectedChanged,
   });
 
   final SessionViewDto session;
   final VoidCallback? onTap;
   final VoidCallback? onShowDetails;
   final bool compact;
+  final bool selectionMode;
+  final bool selected;
+  final ValueChanged<bool>? onSelectedChanged;
 
   @override
   ConsumerState<SessionCard> createState() => _SessionCardState();
@@ -97,7 +104,9 @@ class _SessionCardState extends ConsumerState<SessionCard> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    final onTap = widget.onTap;
+    final onTap = widget.selectionMode
+        ? () => widget.onSelectedChanged?.call(!widget.selected)
+        : widget.onTap;
     final tokens = context.tokens;
     final hoverActionsWidth = widget.onShowDetails == null
         ? _hoverButtonExtent
@@ -181,13 +190,20 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     final lastSignalText = showLastSignalLabel
         ? t(ref, 'session.card.last_signal', {'time': lastSignalTimeText})
         : null;
-    final acknowledge = state == SessionStateDto.waitingInput
+    final acknowledge =
+        !widget.selectionMode && state == SessionStateDto.waitingInput
         ? () =>
               ref.read(syncControllerProvider.notifier).ackSession(session.key)
         : null;
 
     final cardBody = Card(
       color: tokens.surface,
+      shape: widget.selectionMode && widget.selected
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: tokens.accent, width: 2),
+            )
+          : null,
       margin: widget.compact
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -222,7 +238,9 @@ class _SessionCardState extends ConsumerState<SessionCard> {
                           ),
                         ),
                         SizedBox(
-                          width: _hovering
+                          width: widget.selectionMode
+                              ? _selectionIndicatorExtent
+                              : _hovering
                               ? hoverActionsWidth
                               : _hoverButtonExtent,
                         ),
@@ -307,7 +325,11 @@ class _SessionCardState extends ConsumerState<SessionCard> {
                     // 오른쪽에 둬 기존 `Spacer` 레이아웃과 같은 모양을 만든다.
                     Padding(
                       padding: EdgeInsets.only(
-                        right: _hovering ? hoverActionsWidth : 0,
+                        right: widget.selectionMode
+                            ? _selectionIndicatorExtent
+                            : _hovering
+                            ? hoverActionsWidth
+                            : 0,
                       ),
                       child: Wrap(
                         alignment: WrapAlignment.spaceBetween,
@@ -422,19 +444,37 @@ class _SessionCardState extends ConsumerState<SessionCard> {
     // 정한다) 이 오버레이가 나타나도 `kSessionCardGridExtent`(그리드 고정
     // 높이) 계산에는 아무 영향이 없다.
     return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.backspace): () =>
-            unawaited(_confirmAndDelete(context, title, session.key)),
-        const SingleActivator(LogicalKeyboardKey.delete): () =>
-            unawaited(_confirmAndDelete(context, title, session.key)),
-      },
+      bindings: widget.selectionMode
+          ? <ShortcutActivator, VoidCallback>{}
+          : <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.backspace): () =>
+                  unawaited(_confirmAndDelete(context, title, session.key)),
+              const SingleActivator(LogicalKeyboardKey.delete): () =>
+                  unawaited(_confirmAndDelete(context, title, session.key)),
+            },
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovering = true),
         onExit: (_) => setState(() => _hovering = false),
         child: Stack(
           children: [
             cardBody,
-            if (_hovering)
+            if (widget.selectionMode)
+              Positioned(
+                top: widget.compact ? 4 : 8,
+                right: widget.compact ? 4 : 16,
+                child: Checkbox(
+                  key: ValueKey('select-session-${session.key}'),
+                  value: widget.selected,
+                  onChanged: (value) =>
+                      widget.onSelectedChanged?.call(value ?? false),
+                  semanticLabel: t(ref, 'session.selection.select_session', {
+                    'session': session.sessionId.isEmpty
+                        ? title
+                        : '$title ${sessionIdAbbreviation(session.sessionId)}',
+                  }),
+                ),
+              ),
+            if (!widget.selectionMode && _hovering)
               Positioned(
                 top: widget.compact ? 6 : 10,
                 right: widget.compact ? 6 : 18,

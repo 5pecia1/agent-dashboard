@@ -25,6 +25,7 @@ import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/routing/app_router.dart'
     show sessionDetailRouteName;
+import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/sync_controller.dart';
 import 'package:my_dashboard/src/state/window_navigation_provider.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
@@ -279,13 +280,32 @@ List<SessionRenderUnit> foldSessionGroupsForRender(List<SessionGroup> groups) {
   ];
 }
 
-class SessionsPage extends ConsumerWidget {
+class SessionsPage extends ConsumerStatefulWidget {
   const SessionsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SessionsPage> createState() => _SessionsPageState();
+}
+
+class _SessionsPageState extends ConsumerState<SessionsPage> {
+  bool _selectionMode = false;
+  int? _selectionRevision;
+  Set<String> _selectedKeys = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
     final tokens = context.tokens;
     final controllerState = ref.watch(syncControllerProvider);
+    ref.watch(dashboardApiConfigControllerProvider);
+    final revision = ref
+        .read(dashboardApiConfigControllerProvider.notifier)
+        .revision;
+    final selectionMode = _selectionMode && _selectionRevision == revision;
+    final visibleSessions = controllerState.sync.activeSessions;
+    final visibleKeys = {for (final session in visibleSessions) session.key};
+    final selectedKeys = selectionMode
+        ? _selectedKeys.intersection(visibleKeys)
+        : <String>{};
     final phase = sessionsScreenPhaseFor(controllerState);
     // 검증 지적(medium): 배너 표시를 phase(empty/staleData 분기) 안에
     // 가두지 않고 독립 조건으로 뽑는다 — activeSessions가 비어 있으면
@@ -324,8 +344,15 @@ class SessionsPage extends ConsumerWidget {
           _ErrorView(tokens: tokens, controllerState: controllerState),
         ],
         SessionsScreenPhase.empty => [_EmptyView(tokens: tokens)],
-        SessionsScreenPhase.staleData || SessionsScreenPhase.ready =>
-          _sessionListChildren(context, controllerState),
+        SessionsScreenPhase.staleData ||
+        SessionsScreenPhase.ready => _sessionListChildren(
+          context,
+          controllerState,
+          visibleSessions,
+          selectionMode,
+          selectedKeys,
+          revision,
+        ),
       },
       const SizedBox(height: 16),
     ];
@@ -379,13 +406,129 @@ class SessionsPage extends ConsumerWidget {
   List<Widget> _sessionListChildren(
     BuildContext context,
     SyncControllerState controllerState,
+    List<SessionViewDto> visibleSessions,
+    bool selectionMode,
+    Set<String> selectedKeys,
+    int revision,
   ) => <Widget>[
     if (controllerState.sync.pendingAlerts.isNotEmpty)
       CatchupPanel(pendingAlerts: controllerState.sync.pendingAlerts),
+    if (visibleSessions.length > 1 || selectionMode)
+      _selectionToolbar(visibleSessions, selectionMode, selectedKeys, revision),
     _SessionGroupsView(
-      groups: groupSessionsByProject(controllerState.sync.activeSessions),
+      groups: groupSessionsByProject(visibleSessions),
+      selectionMode: selectionMode,
+      selectedKeys: selectedKeys,
+      onToggleSession: _toggleSession,
+      onToggleGroup: _toggleGroup,
     ),
   ];
+
+  Widget _selectionToolbar(
+    List<SessionViewDto> visibleSessions,
+    bool selectionMode,
+    Set<String> selectedKeys,
+    int revision,
+  ) {
+    final visibleKeys = {for (final session in visibleSessions) session.key};
+    final allSelected = selectedKeys.length == visibleKeys.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: selectionMode
+            ? [
+                Text(
+                  t(ref, 'session.selection.count', {
+                    'count': '${selectedKeys.length}',
+                  }),
+                ),
+                TextButton(
+                  key: const ValueKey('session-selection-all'),
+                  onPressed: () => setState(() {
+                    _selectedKeys = allSelected ? <String>{} : visibleKeys;
+                  }),
+                  child: Text(
+                    t(
+                      ref,
+                      allSelected
+                          ? 'session.selection.clear_all'
+                          : 'session.selection.select_all',
+                    ),
+                  ),
+                ),
+                FilledButton.icon(
+                  key: const ValueKey('session-selection-delete'),
+                  onPressed: selectedKeys.isEmpty
+                      ? null
+                      : () => unawaited(
+                          _deleteSelected(visibleSessions, selectedKeys),
+                        ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(t(ref, 'session.selection.delete_action')),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectionMode = false;
+                    _selectedKeys = <String>{};
+                  }),
+                  child: Text(t(ref, 'action.cancel')),
+                ),
+              ]
+            : [
+                TextButton.icon(
+                  key: const ValueKey('session-selection-enter'),
+                  onPressed: () => setState(() {
+                    _selectionMode = true;
+                    _selectionRevision = revision;
+                    _selectedKeys = <String>{};
+                  }),
+                  icon: const Icon(Icons.checklist),
+                  label: Text(t(ref, 'session.selection.enter')),
+                ),
+              ],
+      ),
+    );
+  }
+
+  void _toggleSession(String key) => setState(() {
+    final next = Set<String>.of(_selectedKeys);
+    if (!next.add(key)) next.remove(key);
+    _selectedKeys = next;
+  });
+
+  void _toggleGroup(List<SessionViewDto> sessions) => setState(() {
+    final keys = {for (final session in sessions) session.key};
+    final next = Set<String>.of(_selectedKeys);
+    if (next.containsAll(keys)) {
+      next.removeAll(keys);
+    } else {
+      next.addAll(keys);
+    }
+    _selectedKeys = next;
+  });
+
+  Future<void> _deleteSelected(
+    List<SessionViewDto> visibleSessions,
+    Set<String> selectedKeys,
+  ) async {
+    final targets = [
+      for (final session in visibleSessions)
+        if (selectedKeys.contains(session.key)) session,
+    ];
+    final completed = await showDeleteSelectedSessionsDialog(
+      context,
+      ref,
+      sessions: targets,
+    );
+    if (!mounted || !completed) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedKeys = <String>{};
+    });
+  }
 
   void _openSetup(BuildContext context) => Navigator.of(
     context,
@@ -409,9 +552,19 @@ class SessionsPage extends ConsumerWidget {
 }
 
 class _SessionGroupsView extends StatelessWidget {
-  const _SessionGroupsView({required this.groups});
+  const _SessionGroupsView({
+    required this.groups,
+    required this.selectionMode,
+    required this.selectedKeys,
+    required this.onToggleSession,
+    required this.onToggleGroup,
+  });
 
   final List<SessionGroup> groups;
+  final bool selectionMode;
+  final Set<String> selectedKeys;
+  final ValueChanged<String> onToggleSession;
+  final ValueChanged<List<SessionViewDto>> onToggleGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +586,9 @@ class _SessionGroupsView extends StatelessWidget {
                 _SessionCardGrid(
                   sessions: [for (final group in run.groups) ...group.sessions],
                   columnCount: columnCount,
+                  selectionMode: selectionMode,
+                  selectedKeys: selectedKeys,
+                  onToggleSession: onToggleSession,
                 ),
               Wrap(
                 children: [
@@ -445,6 +601,10 @@ class _SessionGroupsView extends StatelessWidget {
                         columnCount: (columnCount / projectColumns)
                             .floor()
                             .clamp(1, columnCount),
+                        selectionMode: selectionMode,
+                        selectedKeys: selectedKeys,
+                        onToggleSession: onToggleSession,
+                        onToggleGroup: onToggleGroup,
                       ),
                     ),
                 ],
@@ -459,11 +619,18 @@ class _SessionGroupsView extends StatelessWidget {
                 SessionRenderRun(groups: final runGroups) => _SessionCardGrid(
                   sessions: [for (final group in runGroups) ...group.sessions],
                   columnCount: columnCount,
+                  selectionMode: selectionMode,
+                  selectedKeys: selectedKeys,
+                  onToggleSession: onToggleSession,
                 ),
                 SessionRenderSection(:final group) => _SessionGroupSection(
                   tokens: tokens,
                   group: group,
                   columnCount: columnCount,
+                  selectionMode: selectionMode,
+                  selectedKeys: selectedKeys,
+                  onToggleSession: onToggleSession,
+                  onToggleGroup: onToggleGroup,
                 ),
               },
           ],
@@ -478,18 +645,38 @@ class _SessionGroupSection extends StatelessWidget {
     required this.tokens,
     required this.group,
     required this.columnCount,
+    required this.selectionMode,
+    required this.selectedKeys,
+    required this.onToggleSession,
+    required this.onToggleGroup,
   });
 
   final AppTokens tokens;
   final SessionGroup group;
   final int columnCount;
+  final bool selectionMode;
+  final Set<String> selectedKeys;
+  final ValueChanged<String> onToggleSession;
+  final ValueChanged<List<SessionViewDto>> onToggleGroup;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _SessionGroupHeader(tokens: tokens, group: group),
-      _SessionCardGrid(sessions: group.sessions, columnCount: columnCount),
+      _SessionGroupHeader(
+        tokens: tokens,
+        group: group,
+        selectionMode: selectionMode,
+        selectedKeys: selectedKeys,
+        onToggleGroup: onToggleGroup,
+      ),
+      _SessionCardGrid(
+        sessions: group.sessions,
+        columnCount: columnCount,
+        selectionMode: selectionMode,
+        selectedKeys: selectedKeys,
+        onToggleSession: onToggleSession,
+      ),
     ],
   );
 }
@@ -498,10 +685,19 @@ class _SessionGroupSection extends StatelessWidget {
 /// 카드 그리드 자체 — 헤더 유무만 다르고 그리드 구조(열 수 계산·카드
 /// extent·shrinkWrap/`NeverScrollableScrollPhysics`)는 완전히 같다.
 class _SessionCardGrid extends ConsumerWidget {
-  const _SessionCardGrid({required this.sessions, required this.columnCount});
+  const _SessionCardGrid({
+    required this.sessions,
+    required this.columnCount,
+    required this.selectionMode,
+    required this.selectedKeys,
+    required this.onToggleSession,
+  });
 
   final List<SessionViewDto> sessions;
   final int columnCount;
+  final bool selectionMode;
+  final Set<String> selectedKeys;
+  final ValueChanged<String> onToggleSession;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -530,6 +726,9 @@ class _SessionCardGrid extends ConsumerWidget {
           key: ValueKey(session.key),
           session: session,
           compact: compact,
+          selectionMode: selectionMode,
+          selected: selectedKeys.contains(session.key),
+          onSelectedChanged: (_) => onToggleSession(session.key),
           onTap: canOpenWindow
               ? () => unawaited(openSessionWindow(context, ref, session))
               : showDetails,
@@ -541,10 +740,19 @@ class _SessionCardGrid extends ConsumerWidget {
 }
 
 class _SessionGroupHeader extends ConsumerWidget {
-  const _SessionGroupHeader({required this.tokens, required this.group});
+  const _SessionGroupHeader({
+    required this.tokens,
+    required this.group,
+    required this.selectionMode,
+    required this.selectedKeys,
+    required this.onToggleGroup,
+  });
 
   final AppTokens tokens;
   final SessionGroup group;
+  final bool selectionMode;
+  final Set<String> selectedKeys;
+  final ValueChanged<List<SessionViewDto>> onToggleGroup;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -577,7 +785,24 @@ class _SessionGroupHeader extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             Text(countText, style: TextStyle(color: tokens.fg2, fontSize: 12)),
-            if (hasProject) ...[
+            if (selectionMode) ...[
+              const Spacer(),
+              Checkbox(
+                key: ValueKey('select-project-${group.project}'),
+                tristate: true,
+                value: switch (group.sessions
+                    .where((session) => selectedKeys.contains(session.key))
+                    .length) {
+                  0 => false,
+                  final count when count == group.sessions.length => true,
+                  _ => null,
+                },
+                onChanged: (_) => onToggleGroup(group.sessions),
+                semanticLabel: t(ref, 'session.selection.select_project', {
+                  'project': hasProject ? group.project : title,
+                }),
+              ),
+            ] else if (hasProject) ...[
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.delete_sweep_outlined),

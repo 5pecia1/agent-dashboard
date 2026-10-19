@@ -164,6 +164,16 @@ static EN: Map<&'static str, &'static str> = phf_map! {
     "session.list.empty.title"  => "No sessions yet",
     "session.list.empty.body"   => "Sessions will appear here once an agent starts.",
     "session.list.error.title"  => "Couldn't sync",
+    "session.selection.enter" => "Select sessions",
+    "session.selection.count" => "{count} selected",
+    "session.selection.select_all" => "Select all shown",
+    "session.selection.clear_all" => "Clear selection",
+    "session.selection.delete_action" => "Delete selected",
+    "session.selection.delete_title" => "Delete selected sessions?",
+    "session.selection.delete_body" => "Delete these {count} selected session records and their saved history? Active sessions may reappear after new activity.",
+    "session.selection.projects" => "Projects:",
+    "session.selection.select_session" => "Select {session}",
+    "session.selection.select_project" => "Select sessions in {project}",
 
     // ── sync error detail (sessions_page.dart: syncErrorDetailText) ───
     // Shown under `session.list.error.title` and in the stale-data banner.
@@ -492,6 +502,16 @@ static KO: Map<&'static str, &'static str> = phf_map! {
     "session.list.empty.title"  => "아직 세션이 없습니다",
     "session.list.empty.body"   => "에이전트가 시작되면 여기에 세션이 나타납니다.",
     "session.list.error.title"  => "동기화할 수 없습니다",
+    "session.selection.enter" => "세션 선택",
+    "session.selection.count" => "{count}개 선택됨",
+    "session.selection.select_all" => "현재 목록 모두 선택",
+    "session.selection.clear_all" => "선택 해제",
+    "session.selection.delete_action" => "선택 삭제",
+    "session.selection.delete_title" => "선택한 세션을 삭제할까요?",
+    "session.selection.delete_body" => "선택한 세션 {count}개의 기록과 저장 이력을 삭제합니다. 실행 중인 세션은 새로운 활동이 발생하면 다시 나타날 수 있습니다.",
+    "session.selection.projects" => "프로젝트:",
+    "session.selection.select_session" => "{session} 선택",
+    "session.selection.select_project" => "{project}의 세션 선택",
 
     // ── sync error detail ────────────────────────────────────────────────
     "sync.error.transport_failed" => "요청이 실패했습니다: {method} {path} ({cause})",
