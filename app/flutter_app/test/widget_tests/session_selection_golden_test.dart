@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_dashboard/src/data/dashboard_api.dart';
@@ -65,6 +68,28 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      final actualBytes = await tester.runAsync(() async {
+        RenderObject renderObject = find
+            .byType(MaterialApp)
+            .evaluate()
+            .single
+            .renderObject!;
+        while (!renderObject.isRepaintBoundary) {
+          renderObject = renderObject.parent!;
+        }
+        final layer = renderObject.debugLayer! as OffsetLayer;
+        final image = await layer.toImage(renderObject.paintBounds);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+        return bytes!.buffer.asUint8List();
+      });
+      final encoded = base64Encode(actualBytes!);
+      stderr.writeln('GOLDEN_ACTUAL_BEGIN');
+      for (var offset = 0; offset < encoded.length; offset += 76) {
+        final end = offset + 76 < encoded.length ? offset + 76 : encoded.length;
+        stderr.writeln(encoded.substring(offset, end));
+      }
+      stderr.writeln('GOLDEN_ACTUAL_END');
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile(
