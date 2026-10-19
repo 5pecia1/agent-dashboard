@@ -19,13 +19,15 @@ For a specific version, use `bash -s -- --version v0.1.1` at the end of the comm
 
 The current release has an ad-hoc signature and is not Developer ID signed or notarized. See the [quickstart](../docs/quickstart.md#macos-installation-and-updates) for the first-launch approval, installer options, and server setup. Open the app and enter your own server origin and client token.
 
-## Delete project sessions
+## Delete multiple sessions
 
-Projects with multiple sessions have a **Delete all sessions** icon beside their session count. The confirmation shows the full project path, hosts, and number of sessions. It deletes the sessions shown when you opened it, including their saved event history. Sessions added afterward are kept. Failed deletions are restored, and the result reports the successful and failed counts. Active sessions may reappear after new activity.
+Choose **Select sessions** above the session list to select cards across projects. You can select a whole project or use **Select all shown** for every non-ended session in the current list, including cards below the viewport. Choose **Delete selected** to review the selected count and the count for each project. Canceling keeps the selection; confirming deletes only the sessions selected when the confirmation opened and then exits selection mode. While selecting, tapping a card changes its selection instead of opening a work window or session details.
 
-Groups use the exact full project path across hosts and agent types. Unknown projects use individual deletion. Ended sessions hidden from the default list are excluded. Another device's cached list may keep deleted sessions until its next full snapshot.
+Projects with multiple sessions also have a **Delete all sessions** icon beside their session count. Its confirmation shows the full project path, hosts, and number of sessions. Both bulk actions delete the selected session records and their saved event history; locally saved snippets remain. Sessions added after confirmation opens are kept. Failed deletions are restored when the server connection stays the same, and the result reports successful and failed counts. Active sessions may reappear after new activity.
 
-If the server connection changes while confirming or deleting, the app stops the remaining requests and asks you to review the current list before trying again.
+Groups use the exact full project path across hosts and agent types. Unknown projects can be selected individually; they have no project-wide delete button. Ended sessions hidden from the default list are excluded from both bulk actions. Another device's cached list may keep deleted sessions until its next full snapshot.
+
+Changing the server URL or token clears the previous selection. If either changes while confirming or deleting, the app stops the remaining requests and asks you to review the current list before trying again. An in-flight request's outcome may be unknown in that case.
 
 ## Antigravity CLI usage
 
