@@ -1977,9 +1977,11 @@ check39_opencode_heartbeat_throttle() {
   local ok=0
   local details=""
   local state_dir="$WORK_DIR/state-oc-hb"
-  local i
+  local i extra input
   for i in 1 2 3 4 5; do
-    run_hook_src opencode "$(oc_input oc-hb PostToolUse "\"opencode\":{\"type\":\"session.tool.called\",\"event_id\":\"evt_hb$i\"}")" "$SERVER_URL" "$state_dir" >/dev/null
+    extra='"opencode":{"type":"session.tool.called","event_id":"evt_hb'"$i"'"}'
+    input="$(oc_input oc-hb PostToolUse "$extra")"
+    run_hook_src opencode "$input" "$SERVER_URL" "$state_dir" >/dev/null
   done
   local events
   events="$(d1_events opencode:oc-hb)"

@@ -7,7 +7,8 @@
     "DASHBOARD_STORE_MESSAGE": "1",
     "AUTH_TOKEN": "test-auth-token",
     "INGEST_TOKEN": "test-ingest-token",
-    "CLIENT_TOKEN": "test-client-token"
+    "CLIENT_TOKEN": "test-client-token",
+    "MAINTENANCE_TOKEN": "test-maintenance-token"
   },
   "d1_databases": [{
     "binding": "DB",

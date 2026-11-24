@@ -15,12 +15,12 @@ cd agent-dashboard-server
 npm ci
 ```
 
-The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.5`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
+The server currently has alpha releases only, so use `--prerelease`. To select an exact version, use `--version 0.1.0-alpha.8`. The installer verifies the starter's SHA256 and extracts it into a new folder without overwriting an existing project. Follow the generated `README.md` to sign in to Cloudflare, create D1, set `INGEST_TOKEN` and `CLIENT_TOKEN`, and deploy. See the [quickstart](https://github.com/5pecia1/agent-dashboard/blob/main/docs/quickstart.md#set-up-your-cloudflare-server) for details.
 
 For an existing Hono Worker, install an exact version of the verified package archive:
 
 ```sh
-npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.5/5pecia1-agent-dashboard-server-0.1.0-alpha.5.tgz
+npm install --save-exact https://github.com/5pecia1/agent-dashboard/releases/download/server-v0.1.0-alpha.8/5pecia1-agent-dashboard-server-0.1.0-alpha.8.tgz
 ```
 
 Commit the generated lockfile. [Releases](https://github.com/5pecia1/agent-dashboard/releases) include SHA256 checksums and package installation and upgrade verification results. The package is not yet published to the npm registry; install the GitHub Release archive.
@@ -51,11 +51,14 @@ export default {
 
 `DB` is the D1 binding. `INGEST_TOKEN` permits ingestion and `GET /dashboard/auth/ingest-check` only. `CLIENT_TOKEN` permits queries, read tracking, manual acknowledgment, deletion, and settings changes. Generate the two values separately and store them as Worker secrets. The compatibility token `AUTH_TOKEN` permits both roles; do not use it for new installations. `ALLOWED_ORIGINS` is a comma-separated list of web app origins.
 
+Starting with `0.1.0-alpha.8`, manual rebuilds (`POST /dashboard/admin/rebuild`) require an independent operator secret. To enable them, generate a third random value and use `npx wrangler secret put MAINTENANCE_TOKEN` in the consuming Worker. Keep this bearer in the operator's secret store. Hooks use the ingest credential and dashboard apps use the client credential. Existing `AUTH_TOKEN` deployments keep their ordinary ingest and client access. An absent maintenance secret, or a value shared with another role, disables manual rebuilds. The scheduled maintenance handler runs independently.
+
+
 By default, the server does not store messages or raw hook input. Set `DASHBOARD_STORE_MESSAGE=1` to enable detailed retention. Hooks must also enable `MY_DASHBOARD_INCLUDE_CONTENT=1` to send the original content. Default retention keeps the metadata needed to replay state: source, session and event identifiers, project, host, timestamps, generic state, hook revision, and Devin correlation identifiers. Project and host remain available by default because they identify sessions and connect them to windows. If normalized metadata exceeds 16 KiB in UTF-8, the entire request is rejected with 400 rather than truncating replay data. Detailed collection retains the limits of 4,096 bytes for raw input and 300 characters for messages.
 
 FCM is optional. Configure `FCM_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `FIREBASE_APPLE_CONFIG`, `FCM_WEB_VAPID_KEY`, and `DASHBOARD_APP_ORIGIN` for the channels you use. State ingestion and queries continue to work without them. Adjust the stalled threshold and retention periods through `DASHBOARD_STALL_MS` and `DASHBOARD_RETAIN_*_DAYS` in `DashboardEnv`.
 
-Installation does not modify the database automatically. In the consuming Worker's Wrangler configuration, set `migrations_dir` to `node_modules/@5pecia1/agent-dashboard-server/migrations` and explicitly run `npx wrangler d1 migrations apply DB --remote` before deployment. Existing SQL migrations `0001` through `0005` retain their names and contents. Preserve the migration ledger and do not run `/admin/rebuild` during the transition. Rolling back the package version does not roll back the database.
+Installation does not modify the database automatically. In the consuming Worker's Wrangler configuration, set `migrations_dir` to `node_modules/@5pecia1/agent-dashboard-server/migrations` and explicitly run `npx wrangler d1 migrations apply DB --remote` before deployment. Existing SQL migrations `0001` through `0005` retain their names and contents. Preserve the migration ledger and do not run `/dashboard/admin/rebuild` during the transition. Rolling back the package version does not roll back the database.
 
 ## Development and verification
 

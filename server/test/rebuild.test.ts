@@ -1,7 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { authHeaders, eventPayload } from "./fixtures";
+import { authHeaders, eventPayload, maintenanceHeaders } from "./fixtures";
 
 /**
  * T06 완료 판정(d): 무작위 이벤트 200건 -> 프로젝션 스냅샷 A -> rebuild -> 스냅샷 B, A==B.
@@ -202,7 +202,7 @@ describe("POST /dashboard/admin/rebuild", () => {
     expect(snapshotA.sessions.length).toBeGreaterThan(0);
     expect(snapshotA.transitions.length).toBeGreaterThan(0);
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
     const rebuildBody = (await rebuildRes.json()) as {
       ok: boolean;
@@ -276,7 +276,7 @@ describe("POST /dashboard/admin/rebuild", () => {
 
     const snapshotA = { sessions: await snapshotSessions(), transitions: await snapshotTransitions() };
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const snapshotB = { sessions: await snapshotSessions(), transitions: await snapshotTransitions() };
@@ -359,7 +359,7 @@ describe("POST /dashboard/admin/rebuild", () => {
         .run();
     }
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const after = await testEnv.DB.prepare(
@@ -417,7 +417,7 @@ describe("POST /dashboard/admin/rebuild", () => {
     const snapshotA = { sessions: await snapshotSessions(), transitions: await snapshotTransitions() };
     expect(snapshotA.sessions.find((s) => s.key === key)?.state).toBe("working");
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const snapshotB = { sessions: await snapshotSessions(), transitions: await snapshotTransitions() };
@@ -488,7 +488,7 @@ describe("POST /dashboard/admin/rebuild", () => {
     // 참일 수 있어 MIN과 무조건 대입을 구별하지 못한다.
     expect(seenBefore?.seen_transition_id as number).toBeLessThan(oldLastTransitionId as number);
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     // rebuild는 전이 id를 1부터 재채번하므로 새 last_transition_id를 하드코딩하지 않고 재생
@@ -525,7 +525,7 @@ describe("POST /dashboard/admin/rebuild", () => {
       .first<{ n: number }>();
     expect(before?.n).toBe(0);
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const after = await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM dashboard_seen WHERE session_key = ?")
@@ -553,7 +553,7 @@ describe("POST /dashboard/admin/rebuild", () => {
       .first<{ n: number }>();
     expect(seenRowBefore?.n).toBe(1);
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const seenRowAfter = await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM dashboard_seen WHERE session_key = ?")
@@ -590,7 +590,7 @@ describe("POST /dashboard/admin/rebuild", () => {
       at: Date.UTC(2026, 0, 27, 0, 0, 0),
     });
 
-    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: authHeaders() });
+    const rebuildRes = await call("/dashboard/admin/rebuild", { method: "POST", headers: maintenanceHeaders() });
     expect(rebuildRes.status).toBe(200);
 
     const after = await testEnv.DB.prepare("SELECT value FROM dashboard_meta WHERE key = 'hook_revs'").first<{

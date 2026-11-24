@@ -26,3 +26,5 @@ This directory installs one exact server package from GitHub Releases. Its `pack
 Keep your copied repository and D1 database. To upgrade, back up the database, review the [server release notes](https://github.com/5pecia1/agent-dashboard/releases), update the package dependency and lockfile to an exact newer release, and deploy from your repository. Do not replace your database ID with the template placeholder. Reinstall hooks from the upgraded server afterward.
 
 For terminal-based installation or embedding in an existing Worker, see the [server guide](https://github.com/5pecia1/agent-dashboard/blob/main/server/README.md). Cloudflare usage is subject to your account's plan and limits. See [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).
+
+Operators who need manual projection rebuilds can set a separate `MAINTENANCE_TOKEN` with `npx wrangler secret put MAINTENANCE_TOKEN`. This secret authorizes `POST /dashboard/admin/rebuild` only. Ordinary setup and scheduled maintenance use the bindings above.

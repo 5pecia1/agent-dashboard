@@ -22,6 +22,7 @@ interface WorkerEnv {
   AUTH_TOKEN?: string;
   INGEST_TOKEN?: string;
   CLIENT_TOKEN?: string;
+  MAINTENANCE_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
 }
 
@@ -39,6 +40,7 @@ const scopedEnv: WorkerEnv = {
   ...baseEnv,
   INGEST_TOKEN,
   CLIENT_TOKEN,
+  MAINTENANCE_TOKEN: "test-maintenance-token",
   ALLOWED_ORIGINS: ALLOWED_ORIGIN,
 };
 
@@ -98,6 +100,36 @@ describe("토큰 분리: INGEST_TOKEN / CLIENT_TOKEN / 레거시 AUTH_TOKEN", ()
 
     const getRes = await call("/dashboard/sessions", { headers: authHeaders() });
     expect(getRes.status).toBe(200);
+  });
+
+  it("관리 토큰만 재구축을 실행하고 일반 작업에 사용할 수 없다", async () => {
+    const rebuild = "/dashboard/admin/rebuild";
+    const maintenance = { authorization: "Bearer test-maintenance-token" };
+    const post = (headers: HeadersInit) => call(rebuild, { method: "POST", headers });
+    expect((await post({})).status).toBe(401);
+    expect((await post({ authorization: "Bearer unknown" })).status).toBe(401);
+    for (const token of [INGEST_TOKEN, CLIENT_TOKEN, "test-auth-token"]) {
+      expect((await post({ authorization: `Bearer ${token}` })).status).toBe(403);
+    }
+    expect((await post(maintenance)).status).toBe(200);
+    for (const [path, method] of [
+      ["/dashboard/sync", "GET"], ["/dashboard/auth/ingest-check", "GET"], ["/dashboard/events", "POST"],
+    ]) {
+      expect((await call(path, { method, headers: maintenance })).status).toBe(403);
+    }
+    expect((await call("/dashboard/admin/unknown", { headers: { authorization: `Bearer ${CLIENT_TOKEN}` } })).status).toBe(403);
+    expect((await call("/dashboard/admin/unknown", { headers: maintenance })).status).toBe(404);
+  });
+
+  it("관리 토큰이 없거나 다른 역할과 중복되면 재구축을 허용하지 않는다", async () => {
+    for (const token of [undefined, "", CLIENT_TOKEN, INGEST_TOKEN, "test-auth-token"]) {
+      const bindings = { ...scopedEnv, MAINTENANCE_TOKEN: token };
+      const result = await call("/dashboard/admin/rebuild", {
+        method: "POST", headers: { authorization: `Bearer ${token || CLIENT_TOKEN}` },
+      }, bindings);
+      expect(result.status).toBe(403);
+      expect(result.headers.get("Cache-Control")).toBe("no-store");
+    }
   });
 
   it("회귀 보존: 토큰이 없거나 모르는 값이면 401 {error:'unauthorized'} (기존 test/dashboard.test.ts와 같은 계약)", async () => {

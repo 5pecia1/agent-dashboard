@@ -11,11 +11,11 @@ import { dashboardAdmin } from "./dashboard/rebuild";
 export function createDashboardApp(): Hono<{ Bindings: DashboardEnv }> {
   const app = new Hono<{ Bindings: DashboardEnv }>();
   app.use("*", corsMiddleware);
+  app.route("/admin", dashboardAdmin);
   app.use("*", dashboardAuth);
   app.get("/auth/ingest-check", (c) => c.body(null, 204));
   app.route("/", dashboard);
   app.route("/", syncRoutes);
   app.route("/", dashboardOps);
-  app.route("/", dashboardAdmin);
   return app;
 }

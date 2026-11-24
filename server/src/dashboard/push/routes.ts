@@ -10,8 +10,8 @@ import {
  * 기기 등록·해제와 클라이언트 push 설정 조회.
  *
  * dashboard/routes.ts의 옛 /devices 블록을 대신한다(그 파일은 이 서브앱을 같은 prefix에
- * 얹기만 한다). 인증은 index.ts의 CLIENT_TOKEN 계층을 그대로 탄다 - POST /dashboard/events만
- * INGEST_TOKEN 전용이고 나머지는 전부 클라이언트 토큰이라, 이 파일은 인증을 다시 하지 않는다.
+ * 얹기만 한다). 인증은 index.ts의 CLIENT_TOKEN 계층을 그대로 탄다 - 이 파일의 경로는
+ * 클라이언트 작업이며, 상위 앱이 인증을 처리한다.
  *
  * 정본: contracts/dashboard-protocol.v1.json의 push 절.
  */
