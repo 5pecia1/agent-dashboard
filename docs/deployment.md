@@ -39,22 +39,50 @@ Browser settings are stored per origin. Enter your server URL and token again wh
 ## Bump the version and deploy
 
 1. Update the workspace version in `app/Cargo.toml`, along with `version` and the numeric `msix_version` in `app/flutter_app/pubspec.yaml`. Commit changed lockfiles as well, and merge into `main` after review.
-2. Tag the commit with the app version **only in the public `agent-dashboard` checkout**. If the change was made in the development source repository, export it to the public repository through Copybara first. Do not push app tags to the private development repository. For app version `0.1.1`, run:
+2. Prepare the signed app and staging draft on your signing Mac, using the procedure below. Use the exact reviewed source commit that will receive the version tag.
+3. Push the public version tag after the staging upload completes. `release-product.yml` tests the app, builds the web and macOS products, and checks the signed ZIP independently on a fresh macOS runner. The publish job ships those verified ZIP bytes. Stable versions deploy to production Pages and prereleases deploy to a preview. Check the deployed web manifest after publication.
 
-   ```sh
-   git switch main
-   git pull --ff-only
-   git tag v0.1.1
-   git push origin v0.1.1
-   ```
+### Configure the signing Mac
 
-3. Confirm that the build, GitHub Release publication, and Pages deployment all succeed in Actions. Creating the GitHub Release alone does not complete the web deployment.
+Use an existing Apple Developer Program team. In Keychain Access, check that the **Developer ID Application** certificate has its matching private key. Xcode **Settings → Accounts → Manage Certificates** can manage this identity. The same team certificate can sign several bundle IDs. The public app uses `io.github.5pecia1.mydashboard`.
 
-[`release-product.yml`](../.github/workflows/release-product.yml) builds and checks the web app on Ubuntu and the macOS app on macOS 15. It also runs the web app in Chromium. After uploading the verified web archive and macOS ZIP to GitHub Releases, it downloads the published web archive, verifies its SHA256 and source metadata, and deploys those same bytes to Pages.
+With full Xcode installed, set `DEVELOPER_DIR` to its developer directory if the default points to Command Line Tools. Run `security find-identity -v -p codesigning` locally. Set `SIGNING_IDENTITY` to the Developer ID Application fingerprint, `APPLE_TEAM_ID` to its team, and `NOTARY_PROFILE` to the name of a Keychain profile. Create a new profile interactively with `xcrun notarytool store-credentials "$NOTARY_PROFILE"`, or use your team's existing profile. These commands sign on your Mac. The certificate private key and notary credentials stay in your Keychain. [Apple Developer ID](https://developer.apple.com/developer-id/) · [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
 
-Stable versions such as `v0.1.1` update the production web app. Prereleases such as `v0.2.0-alpha.1` deploy to a preview URL and leave production unchanged. The server package uses a separate `server-vVERSION` release process.
+Configure a GitHub environment named **macos-signing** with the non-secret environment variable `APPLE_TEAM_ID` set to the same Team ID. Restrict release tags and configure release reviewers where available. The hosted verification job checks the signed ZIP against this team. The signing Mac needs no GitHub Actions runner.
 
-The release's `SHA256SUMS` and `release.json` record archive hashes and the source commit. The web app's `/release-manifest.json` also identifies the deployed tag and commit; the production deployment job must verify these values to succeed. Current macOS releases are not Developer ID signed or notarized, so Gatekeeper may block launch. The actual signing status is recorded in the release metadata.
+### Prepare the macOS release
+
+Use a fresh public checkout of the reviewed commit, with the repository's pinned toolchain. From its root, replace the example tag with the new version.
+
+```sh
+set -eu
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+release_tag=v0.1.11
+source_commit=$(git rev-parse HEAD)
+test -z "$(git status --porcelain)"
+python3 app/scripts/version_check.py --tag "$release_tag"
+python3 app/scripts/macos_distribution.py preflight \
+  --bundle-id io.github.5pecia1.mydashboard --team-id "$APPLE_TEAM_ID" \
+  --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE"
+(cd app && mise install && mise run deps && mise run build)
+release_dir=$(mktemp -d)
+python3 app/scripts/macos_distribution.py sign \
+  --source app/flutter_app/build/macos/Build/Products/Release/my_dashboard.app \
+  --output "$release_dir/Agent Dashboard.app" --source-commit "$source_commit" --bundle-id io.github.5pecia1.mydashboard \
+  --team-id "$APPLE_TEAM_ID" --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE" \
+  --entitlements app/flutter_app/macos/Runner/Release.entitlements
+python3 app/scripts/release_product.py package --platform macos \
+  --source "$release_dir/Agent Dashboard.app" --team-id "$APPLE_TEAM_ID" \
+  --arch "$(uname -m)" --tag "$release_tag" --commit "$source_commit" --output "$release_dir/assets"
+gh release create "macos-stage-$release_tag" --draft --target "$source_commit" \
+  --title "Signed macOS build for $release_tag" --notes "Source commit $source_commit" "$release_dir"/assets/*
+git tag "$release_tag" "$source_commit"
+git push origin "refs/tags/$release_tag"
+```
+
+Apple receives a ZIP of the app. After acceptance, the signing tool attaches the ticket to the app, verifies the Developer ID, team, bundle ID, secure timestamp, hardened runtime and Gatekeeper result, then the packaging tool creates and verifies the final ZIP. The signed Info.plist records the source commit. The release receipt records the same commit, the ZIP SHA256 and the signing team. To inspect an unsuccessful submission, use `xcrun notarytool log SUBMISSION_ID --keychain-profile "$NOTARY_PROFILE"`.
+
+Keep the staging release in draft. After successful publication it can be deleted from the Releases page. Retries verify the already-published ZIP and release receipt when the product release exists. Historical versions through v0.1.10 retain their original signing status.
 
 ## Redeploy an existing release
 

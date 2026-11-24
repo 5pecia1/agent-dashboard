@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 설치기는 릴리스 체크섬을 검증하고 `~/Applications/Agent Dashboard.app`에 앱을 설치합니다. 앱을 연 뒤 서버 origin과 클라이언트 토큰을 입력합니다. 소스에서 빌드할 필요는 없습니다. [Releases](https://github.com/5pecia1/agent-dashboard/releases)에서 macOS ZIP 파일을 직접 내려받을 수도 있습니다.
 
-현재 앱은 Developer ID 서명과 공증을 받지 않았으므로, 처음 실행할 때 macOS에서 승인이 필요할 수 있습니다. [macOS 설치 및 업데이트 안내](docs/quickstart.md#macos-installation-and-updates)를 참고하세요. 브라우저에서는 [웹 앱을 열면 됩니다](https://agent-dashboard.5pecia1.dev).
+v0.1.10까지는 첫 실행 시 macOS 승인이 필요할 수 있습니다. 이후 릴리스는 Developer ID 서명과 Apple 공증을 거친 빌드를 사용합니다. [macOS 설치 및 업데이트 안내](docs/quickstart.md#macos-installation-and-updates)를 참고하세요. 브라우저에서는 [웹 앱을 열면 됩니다](https://agent-dashboard.5pecia1.dev).
 
 ## 서버 설정
 

@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 The installer verifies the release checksum and installs `~/Applications/Agent Dashboard.app`. Open it and enter your server origin and client token. No source build is needed. You can also download the macOS ZIP from [Releases](https://github.com/5pecia1/agent-dashboard/releases).
 
-The current app is not Developer ID signed or notarized; macOS may require approval on first launch. See [macOS installation and updates](docs/quickstart.md#macos-installation-and-updates). For a browser, simply [open the web app](https://agent-dashboard.5pecia1.dev).
+Versions through v0.1.10 use legacy signing and may require first-launch approval. New releases require an Apple-notarized Developer ID build. See [macOS installation and updates](docs/quickstart.md#macos-installation-and-updates). For a browser, simply [open the web app](https://agent-dashboard.5pecia1.dev).
 
 ## Set up your server
 

@@ -1,0 +1,22 @@
+name: Hook compatibility
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  hooks-debian12:
+    runs-on: ubuntu-24.04
+    container: debian:12
+    steps:
+      - name: Install hook runtime
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends ca-certificates curl git jq python3
+          test "$(jq --version)" = jq-1.6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_hook_*.py'
+      - run: python3 -m unittest discover -s scripts/tests -p test_setup.py

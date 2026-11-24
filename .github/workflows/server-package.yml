@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   server:
-    runs-on: ${{ fromJSON(github.event.repository.private && '["self-hosted","linux","x64"]' || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,9 +23,5 @@ jobs:
       - run: npm --prefix server run verify:starter
       - run: npm --prefix server run verify:deploy
       - run: python3 scripts/contract_check.py
-      - name: Check Pages deployment guards
-        run: python3 -m unittest discover -s scripts/tests -p test_pages_deployment.py
-      - name: Check release installer
-        run: |
-          python3 -m unittest discover -s scripts/tests -p test_install_release.py
-          python3 -m unittest discover -s scripts/tests -p test_publish_server_retry.py
+      - name: Verify protocol, hooks, installers and deployment tooling
+        run: python3 -m unittest discover -s scripts/tests

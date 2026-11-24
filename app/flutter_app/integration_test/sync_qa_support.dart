@@ -3,7 +3,7 @@
 /// 엔진 화면 캡처, 루프백 가짜 대시보드 서버, 화면 언어 검사.
 ///
 /// **임시 HOME에서만 실행한다.** [QaRun.fromEnvironment]는 `$HOME`에
-/// [kQaHomeMarker] 파일이 있고 앱 상태 디렉터리가 아직 없을 때만 실행
+/// `.my-dashboard-qa-home` 파일이 있고 앱 상태 디렉터리가 아직 없을 때만 실행
 /// 대상을 만든다(`config_read_failure_qa_test.dart`와 같은 표식·같은 조건).
 /// QA 환경 변수가 없거나 안전 조건에 맞지 않으면 실행을 실패시킨다.
 /// `flutter drive --profile -d macos`가 띄운
@@ -35,8 +35,7 @@ import 'package:my_dashboard/src/state/capability_ids.dart'
 import 'package:my_dashboard/src/state/config_provider.dart'
     show DashboardConfigValues;
 
-/// 임시 HOME 표식(`config_read_failure_qa_test.dart`와 같은 이름).
-const String kQaHomeMarker = '.my-dashboard-qa-home';
+import 'isolated_home.dart';
 
 /// 실행할 시나리오 이름을 담는 환경 변수.
 const String kQaScenarioVariable = 'MY_DASHBOARD_QA_SCENARIO';
@@ -71,7 +70,6 @@ const List<String> kDumpFragments = <String>[
 ];
 
 const String _kHomeVariable = 'HOME';
-const String _kStateDirectory = '.local/state/my-dashboard';
 const String _kConfigFileName = 'config.json';
 const String _kObservationsFileName = 'observations.json';
 const String _kRequestsFileName = 'requests.json';
@@ -109,14 +107,7 @@ class QaRun {
     if (!kQaLanguages.contains(language)) {
       throw StateError('$kQaLanguageVariable must be one of $kQaLanguages');
     }
-    if (!File('$home/$kQaHomeMarker').existsSync()) {
-      throw StateError('QA requires $kQaHomeMarker in its isolated HOME');
-    }
-    final state = '$home/$_kStateDirectory';
-    if (FileSystemEntity.typeSync(state, followLinks: false) !=
-        FileSystemEntityType.notFound) {
-      throw StateError('QA requires a fresh state directory: $state');
-    }
+    requireFreshDashboardHome(home);
     final root = environment[kQaOutputVariable];
     final output = root == null
         ? null
@@ -137,7 +128,7 @@ class QaRun {
 
   int get elapsedMs => _clock.elapsedMilliseconds;
 
-  Directory get stateDir => Directory('$home/$_kStateDirectory');
+  Directory get stateDir => Directory('$home/$qaStateRelativePath');
   File get config => File('${stateDir.path}/$_kConfigFileName');
 
   /// 저장된 설정 파일을 JSON으로 읽는다. 없으면 null.

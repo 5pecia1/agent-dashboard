@@ -4,6 +4,10 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Contributions from the host application, appended after the common panels.
+final additionalHomeSectionsProvider = Provider<List<Widget>>((ref) => const []);
+final additionalSetupSectionsProvider = Provider<List<Widget>>((ref) => const []);
+
 final dashboardHomeSectionsProvider = Provider<List<Widget>>((ref) => const []);
 final dashboardSetupSectionsProvider = Provider<List<Widget>>(
   (ref) => const [],

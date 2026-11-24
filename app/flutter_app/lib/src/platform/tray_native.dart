@@ -33,6 +33,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/data/dashboard_api.dart'
     show DashboardApiException, dashboardApiProvider;
 import 'package:my_dashboard/src/data/dashboard_dto.dart'
@@ -288,7 +289,7 @@ Future<void> _trayBadgeApplyBridge({
     // macOS가 색을 버리고 메뉴 바 테마 단색으로 다시 칠해, 아이콘 색으로
     // 주의 심각도(waiting=호박/stalled=적갈)를 나타내는 이 절의 계약이
     // 통째로 깨진다.
-    await trayManager.setIcon(iconAssetPath, isTemplate: false);
+    await trayManager.setIcon(dashboardHost.assetKey(iconAssetPath), isTemplate: false);
     await trayManager.setToolTip(tooltip);
     await trayManager.setTitle(title);
   } on Exception catch (error) {
@@ -687,7 +688,7 @@ class _DashboardTrayController with TrayListener {
     trayManager.addListener(this);
     // `isTemplate: false` — [_trayBadgeApplyBridge]와 같은 이유(컬러
     // 아이콘을 macOS가 단색으로 재색칠하지 않게 한다).
-    await trayManager.setIcon(_kTrayIconAssetPath, isTemplate: false);
+    await trayManager.setIcon(dashboardHost.assetKey(_kTrayIconAssetPath), isTemplate: false);
     await trayManager.setContextMenu(Menu(items: buildTrayMenuItems(_ref)));
   }
 

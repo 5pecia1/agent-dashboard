@@ -17,7 +17,7 @@ open "$HOME/Applications/Agent Dashboard.app"
 
 For a specific version, use `bash -s -- --version v0.1.1` at the end of the command. To update an existing app, quit it and use `bash -s -- --replace`; the installer backs up the old bundle and keeps your saved settings. No source build is required. [Releases](https://github.com/5pecia1/agent-dashboard/releases) also provides the macOS ZIP for manual installation.
 
-The current release has an ad-hoc signature and is not Developer ID signed or notarized. See the [quickstart](../docs/quickstart.md#macos-installation-and-updates) for the first-launch approval, installer options, and server setup. Open the app and enter your own server origin and client token.
+The v0.1.10 release uses ad-hoc signing. Later releases require Developer ID signing and Apple notarization. See the [quickstart](../docs/quickstart.md#macos-installation-and-updates) for the first-launch approval, installer options, and server setup. Open the app and enter your own server origin and client token.
 
 ## Delete multiple sessions
 
@@ -67,3 +67,31 @@ mise run build:web
 ```
 
 Host a web build at the origin root and preserve its `_headers` file. [The deployment guide](../docs/deployment.md) shows Cloudflare Pages setup and the app release workflow, which publishes web/macOS archives and deploys the published web archive when an app version is tagged.
+
+For a first-launch smoke test, use a fresh temporary home with a `.my-dashboard-qa-home` marker, an isolated QA bundle ID and a Profile build. Follow the [native QA environment setup](flutter_app/tool/visual_qa/README.md#check-sync-errors-and-server-changes-in-an-isolated-profile-app) with target `integration_test/boot_test.dart` and driver `test_driver/sync_qa_driver.dart`. The test starts the production entry point and checks the empty connection form.
+
+## Use the dashboard in another macOS app
+
+Add the Flutter package to the application's `pubspec.yaml`. Pin the full commit of the public version you have tested and commit the application's `pubspec.lock`.
+
+```yaml
+dependencies:
+  my_dashboard:
+    git:
+      url: https://github.com/5pecia1/agent-dashboard.git
+      ref: <full-commit-sha>
+      path: app/flutter_app
+```
+
+```dart
+import 'package:my_dashboard/agent_dashboard.dart';
+
+Future<void> main() => runDashboard(
+  stateDirectoryName: 'example-dashboard',
+  packageAssets: true,
+);
+```
+
+Give the app its own bundle identifier and state directory name. The name selects its desktop files under `~/.local/state/` and its browser storage keys. Use `packageAssets: true` when the dashboard is a dependency so its tray icons resolve from the Flutter package. To append panels, pass provider overrides for `additionalHomeSectionsProvider` or `additionalSetupSectionsProvider` through `extensions`.
+
+The macOS Runner supplies its generated plugin registrant. Follow the small [application delegate](flutter_app/macos/Runner/AppDelegate.swift) and [Flutter window](flutter_app/macos/Runner/MainFlutterWindow.swift) adapters in your Runner. The linked `my_dashboard_frb` CocoaPod provides the resident-window behavior, Accessibility window navigation and Rust bridge. Retain the package's repository layout so CargoKit can locate the Rust workspace.

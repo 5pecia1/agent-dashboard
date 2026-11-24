@@ -43,16 +43,8 @@ jobs:
           gitleaks git . --config .gitleaks.toml --redact --no-banner --log-opts="$range"
       - name: Check repository structure
         run: python3 scripts/public_boundary.py structure --rev HEAD
-      # Export branches are pushed to this repository by the export app; a fork cannot provide one.
-      - name: Check export commit
-        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'export/') && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 scripts/public_boundary.py export-commit --base "$BASE_SHA" --head "$HEAD_SHA"
-      # Any other pull request must not look like an export (subject or GitOrigin-RevId label).
-      - name: Reject export markers outside export pull requests
-        if: github.event_name == 'pull_request' && !(startsWith(github.head_ref, 'export/') && github.event.pull_request.head.repo.full_name == github.repository)
+      - name: Reject retired export commits
+        if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}

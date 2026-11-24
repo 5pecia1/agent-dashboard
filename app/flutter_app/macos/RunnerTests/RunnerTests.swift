@@ -3,6 +3,7 @@ import FlutterMacOS
 import XCTest
 
 @testable import my_dashboard
+@testable import my_dashboard_frb
 
 class RunnerTests: XCTestCase {
 

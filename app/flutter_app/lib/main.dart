@@ -8,6 +8,7 @@ import 'package:my_dashboard/src/rust/frb_generated.dart';
 import 'package:my_dashboard/src/rust/api.dart';
 import 'package:my_dashboard/src/state/capability_provider.dart'
     show isWasmRuntimeProvider;
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/notification_click_inbox.dart';
 import 'package:my_dashboard/src/state/http_provider.dart';
@@ -26,9 +27,15 @@ const Key kDashboardRootKey = ValueKey<String>('dashboard-root');
 Future<void> main() => runDashboard();
 
 Future<void> runDashboard({
+  String stateDirectoryName = dashboardDefaultDirectoryName,
+  bool packageAssets = false,
   DashboardConfigValues Function(DashboardConfigValues)? configure,
   DashboardBootOverrides? extensions,
 }) async {
+  dashboardHost = DashboardHost(
+    stateDirectoryName: stateDirectoryName,
+    packageAssets: packageAssets,
+  );
   WidgetsFlutterBinding.ensureInitialized();
   // `mise run frb:codegen`이 만드는 RustLib 초기화. app-core를 로드해야
   // capability_provider.dart / i18n/t.dart의 FRB 호출이 실제로 응답한다.

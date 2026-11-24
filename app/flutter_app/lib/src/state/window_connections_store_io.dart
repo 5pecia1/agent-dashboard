@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/data/window_connection.dart';
 import 'package:my_dashboard/src/state/dangling_link_io.dart';
 
 const _schemaVersion = 1;
 const _danglingLinkMessage = 'The link target does not exist';
-const _stateRelativePath = '.local/state/my-dashboard';
 const _rulesFilename = 'window-connections.json';
 const _privateDirectoryMode = '700';
 const _privateFileMode = '600';
@@ -17,7 +17,7 @@ WindowConnectionsFileStore _defaultStore() {
     throw const FileSystemException('User home directory is unavailable');
   }
   return WindowConnectionsFileStore(
-    File('$home/$_stateRelativePath/$_rulesFilename'),
+    File('${dashboardHost.stateDirectory(home)}/$_rulesFilename'),
   );
 }
 
