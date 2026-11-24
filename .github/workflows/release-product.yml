@@ -116,6 +116,7 @@ jobs:
         with:
           name: product-web
           retention-days: 1
+          overwrite: true
           path: ${{ runner.temp }}/product-web/*
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
@@ -134,6 +135,7 @@ jobs:
     environment: macos-signing
     permissions:
       contents: read
+      actions: read
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
@@ -145,17 +147,16 @@ jobs:
         with:
           ref: ${{ needs.source.outputs.commit }}
           persist-credentials: false
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
-        with:
-          working_directory: app
       - name: Reuse an already published release on retry
         if: ${{ !inputs.sign_only }}
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
-            gh release download "$RELEASE_TAG" --pattern '*-macos-*.zip' --pattern 'release.json' --dir "$RUNNER_TEMP/product-macos"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == false) | .tag_name' > "$RUNNER_TEMP/published-tags.txt"
+          if grep -Fxq -- "$RELEASE_TAG" "$RUNNER_TEMP/published-tags.txt"; then
+            gh release download "$RELEASE_TAG" --pattern '*-macos-*.zip' --pattern 'release.json' --pattern 'Apple-notarization.json' --dir "$RUNNER_TEMP/product-macos"
             python3 - <<'PYTHON'
           import json, os
           from pathlib import Path
@@ -168,26 +169,71 @@ jobs:
           PYTHON
             echo 'reuse=true' >> "$GITHUB_OUTPUT"
           fi
-      - name: Check the public app and build its archive
+      - name: Check signing configuration
         if: steps.published.outputs.reuse != 'true'
+        env:
+          CI_SIGNING_P12: ${{ secrets.CI_SIGNING_P12 }}
+          CI_SIGNING_P12_PASSWORD: ${{ secrets.CI_SIGNING_P12_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo '::error::Set APPLE_TEAM_ID in macos-signing.'; exit 1; }
+          for name in CI_SIGNING_P12 CI_SIGNING_P12_PASSWORD ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Set $name in macos-signing."
+              exit 1
+            fi
+          done
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          working_directory: app
+          install: false
+      - name: Run macOS release checks
+        if: ${{ !inputs.sign_only }}
         working-directory: app
         run: |
+          mise install
           mise run tools:rust
           mise run tools:licenses
           mise run deps
           mise run check
           mise run verify
-          mise exec -- python3 scripts/macos_distribution.py archive --project flutter_app \
+      - name: Build the universal macOS archive from the reviewed source
+        if: steps.published.outputs.reuse != 'true'
+        working-directory: app
+        run: |
+          mise install flutter rust
+          MISE_EXEC_AUTO_INSTALL=false mise exec -- python3 scripts/macos_distribution.py archive --project flutter_app \
             --source-commit "$SOURCE_COMMIT" --bundle-id "$BUNDLE_ID" --archive "$RUNNER_TEMP/product.xcarchive"
-      - name: Request Developer ID signing and Apple notarization
+      - name: Resume an interrupted request from this run
+        if: steps.published.outputs.reuse != 'true' && github.run_attempt > 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > "$RUNNER_TEMP/artifacts.txt"
+          recovery=$(awk -v prefix="macos-notary-recovery-$GITHUB_RUN_ID-" \
+            'index($0,prefix)==1 { n=substr($0,length(prefix)+1); if(n~/^[0-9]+$/ && n+0>max) { max=n+0; name=$0 } } END { print name }' \
+            "$RUNNER_TEMP/artifacts.txt")
+          if [ -n "$recovery" ]; then
+            state="$RUNNER_TEMP/product.xcarchive/DashboardNotarization"
+            gh run download "$GITHUB_RUN_ID" --name "$recovery" --dir "$state"
+            test -f "$state/build.json" && test -f "$state/upload-started"
+          fi
+      - name: Sign with Developer ID and notarize with Apple
+        id: signing
         if: steps.published.outputs.reuse != 'true'
         env:
+          CI_SIGNING_P12: ${{ secrets.CI_SIGNING_P12 }}
+          CI_SIGNING_P12_PASSWORD: ${{ secrets.CI_SIGNING_P12_PASSWORD }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
-          python3 app/scripts/macos_distribution.py cloud --submit --api-key-env --wait-seconds 1800 \
+          python3 app/scripts/macos_distribution.py sign-ci --wait-seconds 1800 \
             --archive "$RUNNER_TEMP/product.xcarchive" --output "$RUNNER_TEMP/Agent Dashboard.app" \
+            --notary-receipt "$RUNNER_TEMP/product-macos/Apple-notarization.json" \
             --source-commit "$SOURCE_COMMIT" --bundle-id "$BUNDLE_ID" --team-id "$TEAM_ID"
       - name: Package the signed universal app
         if: steps.published.outputs.reuse != 'true'
@@ -203,6 +249,8 @@ jobs:
         with:
           name: product-macos
           retention-days: 1
+          compression-level: 0
+          overwrite: true
           path: ${{ runner.temp }}/product-macos/
           if-no-files-found: error
       - name: Save the Apple acceptance record
@@ -211,7 +259,28 @@ jobs:
         with:
           name: apple-notarization
           retention-days: 1
-          path: ${{ runner.temp }}/product.xcarchive/Submissions/*/notarization-log.json
+          overwrite: true
+          path: ${{ runner.temp }}/product-macos/Apple-notarization.json
+          if-no-files-found: error
+      - name: Locate resumable notarization state
+        id: recovery
+        if: failure() && (steps.signing.outcome == 'failure' || steps.signing.outcome == 'success')
+        run: |
+          if [ -f "$RUNNER_TEMP/product.xcarchive/DashboardNotarization/upload-started" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Preserve the original submitted ZIP and its request
+        if: failure() && steps.recovery.outputs.available == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-notary-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/product.xcarchive/DashboardNotarization/*.zip
+            ${{ runner.temp }}/product.xcarchive/DashboardNotarization/build.json
+            ${{ runner.temp }}/product.xcarchive/DashboardNotarization/upload-started
+            ${{ runner.temp }}/product.xcarchive/DashboardNotarization/submission.json
+          retention-days: 1
+          compression-level: 0
           if-no-files-found: error
   publish:
     if: ${{ !inputs.sign_only }}
@@ -231,7 +300,13 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.source.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
-        run: python3 app/scripts/release_product.py combine --input artifacts --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output release
+        run: |
+          python3 app/scripts/release_product.py combine --input artifacts --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --output release
+          # Immutable releases predating the CI receipt may omit it on a retry.
+          if [ -f artifacts/product-macos/Apple-notarization.json ]; then
+            cp artifacts/product-macos/Apple-notarization.json release/
+            (cd release && sha256sum Apple-notarization.json >> SHA256SUMS)
+          fi
       - name: Publish immutable release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -255,11 +330,15 @@ jobs:
           current, = [a for a in release['artifacts'] if a['platform'] == 'macos']
           if expected != current:
               raise SystemExit('Existing macOS release differs from the Developer ID verified artifact')
+          verified_log = Path('release/Apple-notarization.json')
+          if verified_log.is_file() and (Path('existing') / verified_log.name).read_bytes() != verified_log.read_bytes():
+              raise SystemExit('Existing Apple notarization receipt differs from the verified release')
           with (Path('existing') / expected['file']).open('rb') as archive:
               if file_digest(archive, 'sha256').hexdigest() != expected['sha256']:
                   raise SystemExit('Existing macOS ZIP differs from the verified signed bytes')
           PY
           else
+            test -s release/Apple-notarization.json
             args=()
             if [ "$PRERELEASE" = true ]; then
               args+=(--prerelease --latest=false)
@@ -269,7 +348,7 @@ jobs:
             cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
           Web and macOS builds of Agent Dashboard. See `release.json` for the source commit and artifact hashes, and `SHA256SUMS` to verify downloads.
 
-          The macOS app is Developer ID signed and includes an Apple notarization ticket. The release receipt records its signing team and bundle identifier.
+          The macOS app is Developer ID signed and includes an Apple notarization ticket. The release receipt records its signing team and bundle identifier. `Apple-notarization.json` contains Apple’s acceptance record for the uploaded build.
 
           Cloudflare Pages deployment is the next job in this workflow. Stable versions update production; prereleases publish a preview.
           EOF

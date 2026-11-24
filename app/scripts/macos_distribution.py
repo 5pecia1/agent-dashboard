@@ -96,6 +96,30 @@ def preflight(args):
     print('Signing identity and notary credentials are available.')
 
 
+def sign_copy(source, bundle, bundle_id, team_id, identity, keychain, entitlements, source_commit):
+    run('ditto', source, bundle)
+    nested = nested_code(bundle)
+    if source_commit:
+        if not re.fullmatch(r'[0-9a-f]{40}', source_commit):
+            raise ValueError('expected a full source Git commit SHA')
+        plist = bundle / 'Contents/Info.plist'
+        info = plistlib.loads(plist.read_bytes())
+        if info.get(SOURCE_COMMIT_KEY, source_commit) != source_commit:
+            raise ValueError('built application records a different source commit')
+        info[SOURCE_COMMIT_KEY] = source_commit
+        plist.write_bytes(plistlib.dumps(info, sort_keys=False))
+    options = ['codesign', '--force', '--sign', identity, '--timestamp', '--options', 'runtime', *keychain]
+    for item in nested:
+        # Individual Mach-O code and Flutter/plugin frameworks need no extra privileges.
+        # Signed app extensions and services can require their own entitlement sets.
+        if item.is_dir() and item.suffix in {'.app', '.appex', '.xpc'}:
+            raise ValueError(f'configure explicit entitlements for embedded target {item.name}')
+        run(*options, item)
+    root_entitlements = ['--entitlements', entitlements] if entitlements else []
+    run(*options, *root_entitlements, bundle)
+    verify_signature(bundle, bundle_id, team_id)
+
+
 def sign(args):
     requirement(args.bundle_id, args.team_id)
     if not re.fullmatch(r'[A-Fa-f0-9]{40}', args.identity):
@@ -114,27 +138,8 @@ def sign(args):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.notarize-', dir=args.output.parent) as tmp:
         bundle = Path(tmp) / args.output.name
-        run('ditto', args.source, bundle)
-        nested = nested_code(bundle)
-        if args.source_commit:
-            if not re.fullmatch(r'[0-9a-f]{40}', args.source_commit):
-                raise ValueError('expected a full source Git commit SHA')
-            plist = bundle / 'Contents/Info.plist'
-            info = plistlib.loads(plist.read_bytes())
-            if info.get(SOURCE_COMMIT_KEY, args.source_commit) != args.source_commit:
-                raise ValueError('built application records a different source commit')
-            info[SOURCE_COMMIT_KEY] = args.source_commit
-            plist.write_bytes(plistlib.dumps(info, sort_keys=False))
-        options = ['codesign', '--force', '--sign', args.identity, '--timestamp', '--options', 'runtime', *keychain]
-        for item in nested:
-            # Individual Mach-O code and Flutter/plugin frameworks need no extra privileges.
-            # Signed app extensions and services can require their own entitlement sets.
-            if item.is_dir() and item.suffix in {'.app', '.appex', '.xpc'}:
-                raise ValueError(f'configure explicit entitlements for embedded target {item.name}')
-            run(*options, item)
-        root_entitlements = ['--entitlements', args.entitlements] if args.entitlements else []
-        run(*options, *root_entitlements, bundle)
-        verify_signature(bundle, args.bundle_id, args.team_id)
+        sign_copy(args.source, bundle, args.bundle_id, args.team_id, args.identity,
+                  keychain, args.entitlements, args.source_commit)
         upload = Path(tmp) / 'submission.zip'
         run('ditto', '-c', '-k', '--keepParent', bundle, upload)
         response = subprocess.check_output([
@@ -182,9 +187,21 @@ def main():
             sub.add_argument('--wait-seconds', type=int, default=0,
                              help='poll an API-key submission for at most this many seconds before export')
             sub.add_argument('--submit', action='store_true', help='upload this archive if it has never been submitted')
+    ci = commands.add_parser('sign-ci', help='sign with a temporary PKCS#12 keychain and notarize via a team API key')
+    ci.add_argument('--archive', type=Path, required=True)
+    ci.add_argument('--output', type=Path, required=True)
+    ci.add_argument('--notary-receipt', type=Path, required=True)
+    ci.add_argument('--bundle-id', required=True)
+    ci.add_argument('--team-id', required=True)
+    ci.add_argument('--source-commit', required=True)
+    ci.add_argument('--wait-seconds', type=int, default=1800)
+    ci.add_argument('--submission-id', help='recover the Apple request after an interrupted submit')
     args = parser.parse_args()
     try:
-        if args.action in ('archive', 'cloud'):
+        if args.action == 'sign-ci':
+            from macos_ci_signing import sign_ci
+            sign_ci(args)
+        elif args.action in ('archive', 'cloud'):
             from macos_cloud import archive_host, cloud_release
             if args.action == 'archive':
                 archive_host(args)

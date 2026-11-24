@@ -39,26 +39,30 @@ Browser settings are stored per origin. Enter your server URL and token again wh
 ## Bump the version and deploy
 
 1. Update the workspace version in `app/Cargo.toml`, along with `version` and the numeric `msix_version` in `app/flutter_app/pubspec.yaml`. Commit changed lockfiles as well, and merge into `main` after review.
-2. Push a version tag such as `v0.1.11` on that commit. The release workflow builds the public web app and the universal macOS archive. The macOS job asks Apple to sign and notarize the archive, extracts and verifies the final ZIP, and saves the Apple receipt.
+2. Push a version tag such as `v0.1.11` on that commit. The release workflow builds the public web app and the universal macOS archive. The macOS job signs with Developer ID, submits the signed app to Apple for notarization, and verifies the extracted universal ZIP. New releases include Apple’s acceptance record in `Apple-notarization.json`.
 3. The publish job uses the verified bytes from Actions. Stable releases deploy to the production Pages site. Prereleases deploy to a preview. Check the deployed web manifest after publication.
 
 ### Configure signing in GitHub Actions
 
-Create the `macos-signing` deployment environment. Allow the `v*` release tags and the trusted branches on which maintainers can rehearse signing. Store the Apple Developer Team ID in the environment variable `APPLE_TEAM_ID`. Supply a dedicated App Store Connect team API key with access to cloud-managed Developer ID signing and notarization using these environment secrets.
+Create the `macos-signing` environment. Allow the release tags and trusted signing rehearsal branches. Set `APPLE_TEAM_ID` to the expected ten-character Apple Developer Team ID. Add the following environment secrets.
 
 | Environment secret | Value |
 |---|---|
-| `ASC_KEY_ID` | Key ID from App Store Connect |
-| `ASC_ISSUER_ID` | Team API issuer UUID |
-| `ASC_PRIVATE_KEY` | Original multiline PEM contents of the downloaded `.p8` file |
+| `CI_SIGNING_P12` | Base64 of a password-protected PKCS#12 export containing the Developer ID Application identity and its private key |
+| `CI_SIGNING_P12_PASSWORD` | Password for that PKCS#12 export |
+| `ASC_KEY_ID` | Identifier of the App Store Connect team API key used to submit and check notarization |
+| `ASC_ISSUER_ID` | Issuer UUID for the same API key |
+| `ASC_PRIVATE_KEY` | Original multiline PEM contents of its downloaded `.p8` file |
 
-Only the signing step reads the private key. It passes Apple tools the path to a temporary file with owner-only access. The app, ZIP and uploaded receipt contain no key. The checks verify the expected team, bundle ID, signed source revision, secure timestamp, hardened runtime and stapled ticket. [Apple team API keys](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/) · [Developer ID](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
+The signing step imports the Developer ID identity into a temporary keychain. The dedicated Developer-role API key authenticates the notarization request. Apple’s log must report acceptance of the exact ZIP submitted. The job staples the ticket, packages the app, and reopens the final ZIP to check its signature, team, bundle ID, signed source commit, Gatekeeper assessment and architecture. `release.json` identifies the distributed ZIP; `Apple-notarization.json` identifies the pre-staple upload. [Apple team API keys](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/) · [Apple Developer ID](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
 
-Before creating a public tag, a repository owner can run a signing rehearsal for an exact pushed commit on an allowed branch. It produces the signed macOS ZIP and receipt as Actions artifacts. Web deployment and GitHub Release publication are skipped.
+An owner can rehearse signing on a trusted branch at a specific pushed commit. The rehearsal builds the real archive and checks the signed universal ZIP and Apple receipt. The full app tests run in PR checks and tag releases. Only a release tag can publish the GitHub release and deploy Pages.
 
 ```sh
 gh workflow run release-product.yml --ref main -f sign_only=true -f expected_sha="$(git rev-parse HEAD)"
 ```
+
+On a failure after upload starts, select **Re-run failed jobs** on the same Actions run within one day. The macOS job restores the signed upload and available submission metadata for that run and resumes the original request. A new workflow dispatch creates a separate run. A retry of an already-published release downloads and verifies the published macOS bytes. Historical assets remain immutable.
 
 ### Sign on a development Mac
 
