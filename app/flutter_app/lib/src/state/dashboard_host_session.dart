@@ -112,6 +112,12 @@ HttpSendFn sessionTransport(
   required bool Function() active,
   required Duration timeout,
 }) {
+  // The host can notify listeners about sign-out before Flutter has rebuilt
+  // and disposed the previous provider scope. Never send its queued requests
+  // with a new account's credentials in that interval.
+  final scope = session.syncScope?.call();
+  bool current() => active() && scope == session.syncScope?.call();
+
   Future<String?> token({String? rejected}) async {
     try {
       return await session.accessToken(rejectedToken: rejected);
@@ -122,7 +128,7 @@ HttpSendFn sessionTransport(
   }
 
   return (request) async {
-    if (!active() ||
+    if (!current() ||
         !request.url.hasAuthority ||
         request.url.scheme != session.origin.scheme ||
         request.url.origin != session.origin.origin ||
@@ -132,7 +138,7 @@ HttpSendFn sessionTransport(
     }
     final clock = Stopwatch()..start();
     Future<ApiResponse> authorized(String? bearer) async {
-      if (!active() || bearer == null || bearer.isEmpty) {
+      if (!current() || bearer == null || bearer.isEmpty) {
         throw const DashboardUnauthorized('A dashboard session is required.');
       }
       if (clock.elapsed >= timeout) {
@@ -159,13 +165,13 @@ HttpSendFn sessionTransport(
 
     final first = await token();
     var response = await authorized(first);
-    if (response.statusCode == 401 && active() && clock.elapsed < timeout) {
+    if (response.statusCode == 401 && current() && clock.elapsed < timeout) {
       final refreshed = await token(rejected: first);
       if (request.method == 'GET' && refreshed != first) {
         response = await authorized(refreshed);
       }
     }
-    if (!active()) {
+    if (!current()) {
       throw const DashboardUnauthorized('Unavailable dashboard session.');
     }
     // A response or exception from a host-managed authentication service can

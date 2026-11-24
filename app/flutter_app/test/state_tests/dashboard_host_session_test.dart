@@ -166,6 +166,28 @@ void main() {
     }
   });
 
+  test('Flutter가 화면을 교체하기 전 계정이 바뀌어도 대기하던 쓰기를 전송하지 않는다', () async {
+    var account = 'old';
+    final pending = Completer<String?>();
+    final host = DashboardHostSession(
+      origin: origin,
+      accessToken: ({rejectedToken}) => pending.future,
+      syncScope: () => account,
+      wrapApp: (child) => child,
+      connectionSettings: (_, language) => const SizedBox(),
+    );
+    final authorized = sessionTransport(
+      host,
+      (_) async => fail('other account request'),
+      active: () => true,
+      timeout: timeout,
+    );
+    final old = authorized(ApiRequest(method: 'DELETE', url: endpoint));
+    account = 'new';
+    pending.complete('new-fixture');
+    await expectLater(old, throwsA(isA<DashboardUnauthorized>()));
+  });
+
   test('자격 조회 실패의 상세 내용이 화면 오류로 노출되지 않는다', () async {
     final authorized = sessionTransport(
       session(({rejectedToken}) async => throw StateError('sensitive fixture')),
