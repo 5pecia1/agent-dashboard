@@ -44,15 +44,13 @@ Browser settings are stored per origin. Enter your server URL and token again wh
 
 ### Configure the signing Mac
 
-Use an existing Apple Developer Program team. In Keychain Access, check that the **Developer ID Application** certificate has its matching private key. Xcode **Settings → Accounts → Manage Certificates** can manage this identity. The same team certificate can sign several bundle IDs. The public app uses `io.github.5pecia1.mydashboard`.
+Use an existing Apple Developer Program team. Sign in to the team in Xcode **Settings → Accounts** and select the full Xcode installation with `DEVELOPER_DIR`. Set `APPLE_TEAM_ID` to that team's ten-character ID. Xcode can submit the app using a cloud-managed Developer ID certificate when the signed-in account has the required access. The app uses bundle ID `io.github.5pecia1.mydashboard`. [Apple Developer ID certificates](https://developer.apple.com/help/account/certificates/create-developer-id-certificates) · [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 
-With full Xcode installed, set `DEVELOPER_DIR` to its developer directory if the default points to Command Line Tools. Run `security find-identity -v -p codesigning` locally. Set `SIGNING_IDENTITY` to the Developer ID Application fingerprint, `APPLE_TEAM_ID` to its team, and `NOTARY_PROFILE` to the name of a Keychain profile. Create a new profile interactively with `xcrun notarytool store-credentials "$NOTARY_PROFILE"`, or use your team's existing profile. These commands sign on your Mac. The certificate private key and notary credentials stay in your Keychain. [Apple Developer ID](https://developer.apple.com/developer-id/) · [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+Configure a GitHub environment named **macos-signing** with the non-secret variable `APPLE_TEAM_ID` set to the same Team ID. Restrict release tags and configure release reviewers where available. The GitHub-hosted verification job checks the signed ZIP against this team. Credentials remain on the Mac.
 
-Configure a GitHub environment named **macos-signing** with the non-secret environment variable `APPLE_TEAM_ID` set to the same Team ID. Restrict release tags and configure release reviewers where available. The hosted verification job checks the signed ZIP against this team. The signing Mac needs no GitHub Actions runner.
+### Prepare the macOS release using Xcode
 
-### Prepare the macOS release
-
-Use a fresh public checkout of the reviewed commit, with the repository's pinned toolchain. From its root, replace the example tag with the new version.
+Use a fresh public checkout of the reviewed commit. Replace the example tag with the new version. Preserve the archive directory until Gatekeeper and release verification have passed.
 
 ```sh
 set -eu
@@ -61,16 +59,21 @@ release_tag=v0.1.11
 source_commit=$(git rev-parse HEAD)
 test -z "$(git status --porcelain)"
 python3 app/scripts/version_check.py --tag "$release_tag"
-python3 app/scripts/macos_distribution.py preflight \
-  --bundle-id io.github.5pecia1.mydashboard --team-id "$APPLE_TEAM_ID" \
-  --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE"
-(cd app && mise install && mise run deps && mise run build)
-release_dir=$(mktemp -d)
-python3 app/scripts/macos_distribution.py sign \
-  --source app/flutter_app/build/macos/Build/Products/Release/my_dashboard.app \
-  --output "$release_dir/Agent Dashboard.app" --source-commit "$source_commit" --bundle-id io.github.5pecia1.mydashboard \
-  --team-id "$APPLE_TEAM_ID" --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE" \
-  --entitlements app/flutter_app/macos/Runner/Release.entitlements
+release_dir="$HOME/Library/Developer/Xcode/Archives/Agent-Dashboard-$release_tag-$source_commit"
+app_archive="$release_dir/Agent Dashboard.xcarchive"
+(cd app && mise install && mise exec -- python3 scripts/macos_distribution.py archive \
+  --project flutter_app --archive "$app_archive" \
+  --bundle-id io.github.5pecia1.mydashboard --source-commit "$source_commit")
+python3 app/scripts/macos_distribution.py cloud --submit \
+  --archive "$app_archive" --output "$release_dir/Agent Dashboard.app" \
+  --bundle-id io.github.5pecia1.mydashboard --team-id "$APPLE_TEAM_ID" --source-commit "$source_commit"
+```
+
+The archive records the commit before it goes to Apple. Xcode uploads with your team's automatic Developer ID signing. If processing is pending, repeat the `cloud` command with the same archive and omit `--submit`. Xcode downloads the notarized app and attaches the ticket. The tool checks Apple's submission ID, the `Accepted` result, and the app's code signature, bundle ID, team, hardened runtime, timestamp and Gatekeeper assessment before emitting the app.
+
+### Stage the signed release and push the tag
+
+```sh
 python3 app/scripts/release_product.py package --platform macos \
   --source "$release_dir/Agent Dashboard.app" --team-id "$APPLE_TEAM_ID" \
   --arch "$(uname -m)" --tag "$release_tag" --commit "$source_commit" --output "$release_dir/assets"
@@ -80,9 +83,24 @@ git tag "$release_tag" "$source_commit"
 git push origin "refs/tags/$release_tag"
 ```
 
-Apple receives a ZIP of the app. After acceptance, the signing tool attaches the ticket to the app, verifies the Developer ID, team, bundle ID, secure timestamp, hardened runtime and Gatekeeper result, then the packaging tool creates and verifies the final ZIP. The signed Info.plist records the source commit. The release receipt records the same commit, the ZIP SHA256 and the signing team. To inspect an unsuccessful submission, use `xcrun notarytool log SUBMISSION_ID --keychain-profile "$NOTARY_PROFILE"`.
+The packaging tool reopens the final ZIP and verifies the stapled app. The signed Info.plist and release receipt record the same source commit. The receipt also records the ZIP SHA256 and signing team. Keep the staging release in draft. After publication it can be deleted from the Releases page. Retries verify the already-published bytes. Versions through v0.1.10 retain their original signing status.
 
-Keep the staging release in draft. After successful publication it can be deleted from the Releases page. Retries verify the already-published ZIP and release receipt when the product release exists. Historical versions through v0.1.10 retain their original signing status.
+### Use a local Developer ID certificate
+
+A signing Mac with a matching **Developer ID Application** private key and a Keychain notary profile can also sign a built app directly. Obtain the certificate fingerprint from `security find-identity -v -p codesigning` and set `SIGNING_IDENTITY`. Set `NOTARY_PROFILE` to an existing profile or create one interactively with `xcrun notarytool store-credentials "$NOTARY_PROFILE"`. With the version, source commit, and fresh output directory from the preparation step, run the following commands before staging the ZIP. [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+
+```sh
+python3 app/scripts/macos_distribution.py preflight \
+  --bundle-id io.github.5pecia1.mydashboard --team-id "$APPLE_TEAM_ID" \
+  --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE"
+(cd app && mise install && mise run deps && mise run build)
+python3 app/scripts/macos_distribution.py sign \
+  --source app/flutter_app/build/macos/Build/Products/Release/my_dashboard.app \
+  --output "$release_dir/Agent Dashboard.app" --source-commit "$source_commit" \
+  --bundle-id io.github.5pecia1.mydashboard --team-id "$APPLE_TEAM_ID" \
+  --identity "$SIGNING_IDENTITY" --notary-profile "$NOTARY_PROFILE" \
+  --entitlements app/flutter_app/macos/Runner/Release.entitlements
+```
 
 ## Redeploy an existing release
 
