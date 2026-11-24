@@ -521,7 +521,8 @@ class TrayMenu {
           onSessionSelected: onSessionSelected == null
               ? null
               : (session) async {
-                  if (_ref
+                  if (_ref.context.mounted &&
+                      _ref
                           .read(dashboardApiConfigControllerProvider.notifier)
                           .serverRevision !=
                       input.serverRevision) {
@@ -571,125 +572,115 @@ class TrayMenu {
   }
 }
 
-bool _installed = false;
+_DashboardTrayController? _owner;
+// Native icon, title, and teardown operations must be ordered across owners.
+// In particular setIcon awaits an asset load before it reaches the plugin.
+Future<void>? _trayOperations;
 
-/// 테스트 전용 관측 지점 — [installTray]가 가드(idempotent 체크 +
-/// [traySupportedProvider])를 지나 실제로 [_DashboardTrayController.install]
-/// (그리고 그 안의 [trayManager] 플러그인 채널 호출)까지 갔는지 본다.
-/// 웹/비macOS에서 no-op이었다면 이 값은 절대 true가 되지 않는다 — 단위
-/// 테스트가 실제 플러그인 채널을 타지 않고도 "가드에서 멈췄다"를 확인하는
-/// 유일한 방법이다(`local_notifications_native_test.dart`가 순수 판정
-/// 함수만 테스트하고 부작용이 있는 오케스트레이터 자체는 부르지 않는 것과
-/// 같은 이유 — 다만 이 값은 부작용을 실행하지 않고도 "실행하려 했는가"만
-/// 드러낸다).
+Future<void> _queueTrayOperation(Future<void> Function() operation) {
+  final previous = _trayOperations;
+  final scheduled = (previous ?? Future<void>.value()).then((_) => operation());
+  final result = scheduled.catchError((Object error, StackTrace stack) {
+    debugPrint('Dashboard tray operation failed: ${error.runtimeType}');
+  });
+  _trayOperations = result;
+  unawaited(result.then((_) {
+    if (identical(result, _trayOperations)) _trayOperations = null;
+  }));
+  return result;
+}
+
 @visibleForTesting
 bool debugTrayInstallAttempted = false;
 
-/// TASK A-impl (2): 배지 구독 하나. [installTray]가 idempotent인 것과 같은
-/// 이유로 top-level에 둔다 — 트레이 아이콘이 하나뿐이라 그 배지도 하나뿐이다.
-ProviderSubscription<({int unseen, int waiting, int stalled})>?
-_badgeSubscription;
-
-/// TASK MUTE-impl + TRAY-unseen-menu: 메뉴 구독 하나. [_badgeSubscription]
-/// 과 같은 이유로 top-level이다.
-ProviderSubscription<TrayMenuInputs>? _menuSubscription;
-
-/// 테스트 간 위 전역 상태를 되돌린다. `installTray`가 idempotent이기 위해
-/// top-level 변수를 쓰는 대가다 — 테스트 파일의 `setUp`에서 부른다.
 @visibleForTesting
 void debugResetTrayInstallStateForTest() {
-  _installed = false;
+  _owner?.dispose();
   debugTrayInstallAttempted = false;
-  _badgeSubscription?.close();
-  _badgeSubscription = null;
-  _menuSubscription?.close();
-  _menuSubscription = null;
 }
 
-/// 부팅 이후(위젯 트리가 뜬 다음) 한 번 부른다(`app.dart`의
-/// `_AppHomeState.initState`, `residentModeApplyProvider`를 미는 것과 같은
-/// 자리 — 이유도 같다: `runApp` 이전에는 네이티브 쪽 엔진/플러그인 등록이
-/// 아직 안 끝났을 수 있다). 여러 번 불러도 안전하다(idempotent) — 이미
-/// 설치했으면 조용히 반환한다.
 Future<void> installTray(
   WidgetRef ref, {
   TraySessionSelectFn? onSessionSelected,
 }) async {
-  if (_installed) return;
-  if (!ref.read(traySupportedProvider)) return;
-  try {
-    debugTrayInstallAttempted = true;
-    final menu = TrayMenu(ref, onSessionSelected: onSessionSelected);
-    final controller = _DashboardTrayController(ref, menu);
-    await controller.install();
-    _installed = true;
-    // TASK A-impl (2): 아이콘이 실제로 선 다음에만 배지를 구독한다 —
-    // `setToolTip`/`setTitle`은 아이콘이 없으면 얹을 자리가 없다
-    // (`tray_manager` 문서). `ref.listen`이 아니라 `listenManual`인 이유는
-    // `alert_notify_provider.dart`와 같다(이 호출은 `build` 밖이다). 이
-    // 구독은 [installTray]를 부른 위젯이 dispose될 때 자동으로 닫힌다 —
-    // 그 위젯은 `app.dart`의 `_AppHome`이라 앱이 사는 동안 살아 있다.
-    _badgeSubscription?.close();
-    final badge = TrayBadge(ref);
-    _badgeSubscription = ref
-        .listenManual<({int unseen, int waiting, int stalled})>(
-          trayBadgeCountsListenable,
-          (
-            ({int unseen, int waiting, int stalled})? previous,
-            ({int unseen, int waiting, int stalled}) next,
-          ) => unawaited(
-            badge.apply(
-              unseen: next.unseen,
-              waiting: next.waiting,
-              stalled: next.stalled,
-            ),
-          ),
-          // 부팅 시점의 카운트(대개 0, 재시작 직후 이미 대기/미확인 세션이
-          // 있으면 그 수)를 곧바로 한 번 밀어 넣는다.
-          fireImmediately: true,
-        );
-    // 뮤트 상태, 미확인 세션 목록, 사용량도 배지와 같은 자리에서 구독한다.
-    // `install()`이 이미
-    // 기본 메뉴를 한 번 앉혀 뒀으므로, 부팅 시점에 이미 음소거 중이었거나
-    // 미확인 세션이 있었다면(예: 앱을 껐다 켠 경우) 이 구독의
-    // `fireImmediately`가 곧바로 "해제" 항목/"안읽은 세션" 항목들로
-    // 갈아 끼운다.
-    _menuSubscription?.close();
-    _menuSubscription = ref.listenManual<TrayMenuInputs>(
-      trayMenuInputsListenable,
-      (TrayMenuInputs? previous, TrayMenuInputs next) => unawaited(
-        menu.apply(
-          muted: next.muted,
-          muteUntil: next.muteUntil,
-          serverRevision: next.serverRevision,
-          unseen: next.unseen,
-          labels: next.labels,
-        ),
-      ),
-      fireImmediately: true,
-    );
-  } on Exception catch (error) {
-    debugPrint('installTray: 트레이 아이콘을 설치하지 못했다 ($error).');
-  }
+  if (!ref.read(traySupportedProvider) || identical(_owner?._ref, ref)) return;
+  _owner?.dispose();
+  final owner = _DashboardTrayController(
+    ref,
+    TrayMenu(ref, onSessionSelected: onSessionSelected),
+  );
+  _owner = owner;
+  debugTrayInstallAttempted = true;
+  await _queueTrayOperation(() async {
+    if (!owner.active) return;
+    try {
+      await owner.install();
+    } catch (_) {
+      owner.dispose();
+      rethrow;
+    }
+  });
 }
 
-/// [TrayListener] 구현 + 명령 배선. `UpegTray`(레퍼런스 `tray.dart`)와 같은
-/// 자리 — 다만 그 클래스는 전용 `Ref`를 들고 있는 반면 여기서는 이미
-/// [installTray]가 받은 [WidgetRef]를 그대로 들고 있다가 클릭 콜백에서
-/// [ref.read]로 세 Provider(`trayOpenProvider`/`trayMuteProvider`/
-/// `trayQuitProvider`)를 읊는다.
+/// Detach synchronously, even if the initial native icon installation is pending.
+void uninstallTray(WidgetRef ref) {
+  final owner = _owner;
+  if (owner != null && identical(owner._ref, ref)) owner.dispose();
+}
+
 class _DashboardTrayController with TrayListener {
   _DashboardTrayController(this._ref, this._menu);
 
   final WidgetRef _ref;
   final TrayMenu _menu;
 
+  ProviderSubscription<({int unseen, int waiting, int stalled})>?
+      _badgeSubscription;
+  ProviderSubscription<TrayMenuInputs>? _menuSubscription;
+
+  bool get active => identical(_owner, this) && _ref.context.mounted;
+
   Future<void> install() async {
+    await trayManager.setIcon(
+      dashboardHost.assetKey(_kTrayIconAssetPath),
+      isTemplate: false,
+    );
+    if (!active) return;
     trayManager.addListener(this);
-    // `isTemplate: false` — [_trayBadgeApplyBridge]와 같은 이유(컬러
-    // 아이콘을 macOS가 단색으로 재색칠하지 않게 한다).
-    await trayManager.setIcon(dashboardHost.assetKey(_kTrayIconAssetPath), isTemplate: false);
-    await trayManager.setContextMenu(Menu(items: buildTrayMenuItems(_ref)));
+    final badge = TrayBadge(_ref);
+    _badgeSubscription = _ref.listenManual(trayBadgeCountsListenable, (_, next) {
+      unawaited(_queueTrayOperation(() async {
+        if (active) {
+          await badge.apply(
+            unseen: next.unseen,
+            waiting: next.waiting,
+            stalled: next.stalled,
+          );
+        }
+      }));
+    }, fireImmediately: true);
+    _menuSubscription = _ref.listenManual(trayMenuInputsListenable, (_, next) {
+      unawaited(_queueTrayOperation(() async {
+        if (active) {
+          await _menu.apply(
+            muted: next.muted,
+            muteUntil: next.muteUntil,
+            serverRevision: next.serverRevision,
+            unseen: next.unseen,
+            labels: next.labels,
+          );
+        }
+      }));
+    }, fireImmediately: true);
+  }
+
+  void dispose() {
+    if (!identical(this, _owner)) return;
+    _owner = null;
+    trayManager.removeListener(this);
+    _badgeSubscription?.close();
+    _menuSubscription?.close();
+    unawaited(_queueTrayOperation(trayManager.destroy));
   }
 
   /// 좌클릭 = 창 소환(완료 기준 (3): "왼클릭=창 소환").
@@ -749,6 +740,7 @@ class _DashboardTrayController with TrayListener {
     required String errorKey,
   }) async {
     final ok = await fn();
+    if (!active) return;
     if (ok) {
       _ref.read(syncControllerProvider.notifier).triggerNow(force: true);
     }

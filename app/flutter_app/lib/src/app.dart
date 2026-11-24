@@ -65,7 +65,7 @@ import 'package:my_dashboard/src/platform/push_signal.dart' show PushSignal, kPu
 import 'package:my_dashboard/src/platform/resident_mode_native.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/platform/resident_mode_web.dart'
     as resident_bridge;
-import 'package:my_dashboard/src/platform/tray.dart' show installTray;
+import 'package:my_dashboard/src/platform/tray.dart' show installTray, uninstallTray;
 import 'package:my_dashboard/src/routing/app_router.dart';
 import 'package:my_dashboard/src/ui/window_navigation_actions.dart';
 import 'package:my_dashboard/src/ui/notification_click_actions.dart';
@@ -449,6 +449,7 @@ class _AppHomeState extends ConsumerState<_AppHome> with WidgetsBindingObserver 
 
   @override
   void dispose() {
+    uninstallTray(ref);
     _detachNotificationClicks?.call();
     WidgetsBinding.instance.removeObserver(this);
     _pushSignals?.cancel();

@@ -17,3 +17,5 @@ Future<void> installTray(
   WidgetRef ref, {
   Future<void> Function(SessionViewDto)? onSessionSelected,
 }) async {}
+
+void uninstallTray(WidgetRef ref) {}
