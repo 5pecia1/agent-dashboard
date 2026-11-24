@@ -54,6 +54,7 @@ import 'package:my_dashboard/src/data/dashboard_dto.dart'
         kDashboardStateWorking,
         kDashboardStates;
 import 'package:my_dashboard/src/data/sync_reducer.dart';
+import 'package:my_dashboard/src/state/dashboard_host_session.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/prompt_history_provider.dart';
 import 'package:my_dashboard/src/platform/background_activity_native.dart'
@@ -727,6 +728,9 @@ class SyncController extends Notifier<SyncControllerState>
     final cursor = sync.cursor;
     final seenWatermark = sync.seenWatermark;
     if (cursor == null && seenWatermark == null) return;
+    final session = ref.read(dashboardHostSessionProvider);
+    final scope = ref.read(dashboardSyncScopeProvider);
+    if (session != null && (scope == null || scope.isEmpty)) return;
     final patch = ref.read(configPatchFnProvider);
     try {
       // 저장된 설정으로 부팅했는데 파일이 사라졌으면(사용자가 고치려고
@@ -740,6 +744,15 @@ class SyncController extends Notifier<SyncControllerState>
                   .revision !=
               revision) {
             return current;
+          }
+          if (session != null) {
+            if (session.origin.origin != baseUrl.origin ||
+                session.syncScope?.call() != scope) {
+              return current;
+            }
+            return saveSessionCheckpoint(
+              current, baseUrl, scope!, cursor: cursor, seenWatermark: seenWatermark,
+            );
           }
           final storedUrl = current.serverUrl;
           if (storedUrl != null && parseServerUrl(storedUrl) != baseUrl) {

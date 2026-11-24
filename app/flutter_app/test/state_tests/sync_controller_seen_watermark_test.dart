@@ -13,12 +13,14 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/data/dashboard_dto.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
+import 'package:my_dashboard/src/state/dashboard_host_session.dart';
 import 'package:my_dashboard/src/state/sync_controller.dart';
 
 void main() {
@@ -40,12 +42,16 @@ void main() {
     ProviderContainer buildContainer({
       int? persistedCursor,
       int? persistedSeenWatermark,
+      DashboardConfigValues? stored,
+      DashboardHostSession? session,
     }) {
-      storedConfig = DashboardConfigValues(
-        cursor: persistedCursor,
-        seenWatermark: persistedSeenWatermark,
-        serverUrl: 'https://example.test',
-      );
+      storedConfig =
+          stored ??
+          DashboardConfigValues(
+            cursor: persistedCursor,
+            seenWatermark: persistedSeenWatermark,
+            serverUrl: 'https://example.test',
+          );
       return ProviderContainer(
         overrides: [
           syncScheduleFnProvider.overrideWithValue(fakeSchedule),
@@ -58,7 +64,18 @@ void main() {
           dashboardApiConfigProvider.overrideWithValue(
             DashboardApiConfig(baseUrl: Uri.parse('https://example.test')),
           ),
-          dashboardConfigValuesProvider.overrideWithValue(storedConfig),
+          if (session == null)
+            dashboardConfigValuesProvider.overrideWithValue(storedConfig)
+          else ...[
+            dashboardHostSessionProvider.overrideWithValue(session),
+            dashboardConfigValuesProvider.overrideWith(
+              (ref) => managedSessionValues(
+                storedConfig,
+                session,
+                ref.watch(dashboardSyncScopeProvider),
+              ),
+            ),
+          ],
           configLoadFnProvider.overrideWithValue(() async => storedConfig),
           configSaveFnProvider.overrideWithValue((
             DashboardConfigValues values,
@@ -106,8 +123,65 @@ void main() {
     };
 
     Future<ApiResponse> Function(ApiRequest) okHandler({int cursor = 1}) =>
-        (ApiRequest request) async =>
-            ApiResponse(statusCode: 200, body: jsonEncode(snapshotJson(cursor: cursor)));
+        (ApiRequest request) async => ApiResponse(
+          statusCode: 200,
+          body: jsonEncode(snapshotJson(cursor: cursor)),
+        );
+
+    test('계정 로그인 후 처음 한 번만 워터마크를 세우고 같은 계정의 재시작에서 이어받는다', () async {
+      var account = 'scope-A';
+      DashboardHostSession host(String url) => DashboardHostSession(
+        origin: Uri.parse(url),
+        syncScope: () => account,
+        accessToken: ({rejectedToken}) async => 'fixture',
+        wrapApp: (child) => child,
+        connectionSettings: (_, language) => const SizedBox(),
+      );
+      final session = host('https://example.test');
+      const legacy = DashboardConfigValues(
+        serverUrl: 'https://old.example.test',
+        clientToken: 'legacy',
+        cursor: 91,
+        seenWatermark: 88,
+        extra: {'theme-extension': 7},
+      );
+      final first = buildContainer(stored: legacy, session: session);
+      expect(first.read(syncControllerProvider).sync.seenWatermark, isNull);
+      httpHandler = okHandler(cursor: 31);
+      await fireScheduled();
+      expect(first.read(syncControllerProvider).sync.seenWatermark, 31);
+      first.dispose();
+      scheduled.clear();
+      final disk = DashboardConfigValues.fromJson(
+        jsonDecode(jsonEncode(storedConfig.toJson())) as Map<String, dynamic>,
+      );
+      expect(disk.cursor, 91);
+      expect(disk.seenWatermark, 88);
+      expect(disk.extra['theme-extension'], 7);
+      final same = buildContainer(stored: disk, session: session);
+      expect(same.read(syncControllerProvider).sync.cursor, 31);
+      expect(same.read(syncControllerProvider).sync.seenWatermark, 31);
+      String? since;
+      httpHandler = (request) {
+        since = request.url.queryParameters['since'];
+        return okHandler(cursor: 54)(request);
+      };
+      await fireScheduled();
+      expect(since, '31');
+      expect(same.read(syncControllerProvider).sync.seenWatermark, 31);
+      same.dispose();
+      scheduled.clear();
+
+      for (final value in [host('https://different.test'), session]) {
+        if (identical(value, session)) account = 'scope-B';
+        final other = buildContainer(stored: storedConfig, session: value);
+        final sync = other.read(syncControllerProvider).sync;
+        expect(sync.cursor, isNull);
+        expect(sync.seenWatermark, isNull);
+        other.dispose();
+        scheduled.clear();
+      }
+    });
 
     test('첫 스냅샷의 seenWatermark를 configProvider(ConfigSaveFn)로 영속화한다', () async {
       httpHandler = okHandler(cursor: 42);
@@ -133,27 +207,24 @@ void main() {
       expect(state.sync.seenWatermark, 30);
     });
 
-    test(
-      '이미 커서를 갖고 있던 기존 설치에 배포돼도 첫 스냅샷에서 seenWatermark 벽이 세워진다',
-      () async {
-        // 이 기능 도입 이전부터 커서만 저장돼 있던 기존 설치를 흉내낸다
-        // (persistedSeenWatermark 없음 = null). isFirstBoot(cursor==null)를
-        // 트리거로 쓰던 예전 로직이면 여기서 영영 벽이 안 세워진다.
-        httpHandler = okHandler(cursor: 99);
-        final container = buildContainer(
-          persistedCursor: 50,
-          persistedSeenWatermark: null,
-        );
-        addTearDown(container.dispose);
-        container.read(syncControllerProvider);
+    test('이미 커서를 갖고 있던 기존 설치에 배포돼도 첫 스냅샷에서 seenWatermark 벽이 세워진다', () async {
+      // 이 기능 도입 이전부터 커서만 저장돼 있던 기존 설치를 흉내낸다
+      // (persistedSeenWatermark 없음 = null). isFirstBoot(cursor==null)를
+      // 트리거로 쓰던 예전 로직이면 여기서 영영 벽이 안 세워진다.
+      httpHandler = okHandler(cursor: 99);
+      final container = buildContainer(
+        persistedCursor: 50,
+        persistedSeenWatermark: null,
+      );
+      addTearDown(container.dispose);
+      container.read(syncControllerProvider);
 
-        await fireScheduled();
+      await fireScheduled();
 
-        final state = container.read(syncControllerProvider);
-        expect(state.sync.seenWatermark, 99);
-        expect(savedConfigs.last.seenWatermark, 99);
-      },
-    );
+      final state = container.read(syncControllerProvider);
+      expect(state.sync.seenWatermark, 99);
+      expect(savedConfigs.last.seenWatermark, 99);
+    });
   });
 }
 
