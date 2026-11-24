@@ -106,15 +106,16 @@ void main() {
     await tester.pumpWidget(_setupPage(extra: [
       configLoadFnProvider.overrideWithValue(store.load),
       configSaveFnProvider.overrideWithValue(store.save),
+      localeProvider.overrideWithValue(LocaleDto.ko),
       dashboardHostSessionProvider.overrideWithValue(DashboardHostSession(
         origin: Uri.parse('https://dashboard.test'),
         accessToken: ({rejectedToken}) async => null,
         wrapApp: (child) => child,
-        connectionSettings: (_) => const Text('host account'),
+        connectionSettings: (context, language) => Text('host account in $language'),
       )),
     ]));
     await tester.pumpAndSettle();
-    expect(find.text('host account'), findsOneWidget);
+    expect(find.text('host account in ko'), findsOneWidget);
     expect(find.text('setup.server_url_label'), findsNothing);
     expect(find.text('setup.client_token_label'), findsNothing);
     expect(find.text('action.save'), findsNothing);

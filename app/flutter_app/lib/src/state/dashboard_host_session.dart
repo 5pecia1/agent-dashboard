@@ -38,7 +38,8 @@ class DashboardHostSession {
   final Widget Function(Widget dashboard) wrapApp;
 
   /// Replaces the manual connection fields inside the ordinary settings page.
-  final WidgetBuilder connectionSettings;
+  final Widget Function(BuildContext context, String languageCode)
+  connectionSettings;
 }
 
 final dashboardHostSessionProvider = Provider<DashboardHostSession?>(
