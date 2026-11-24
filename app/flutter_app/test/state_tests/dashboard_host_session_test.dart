@@ -21,7 +21,7 @@ DashboardHostSession session(
   origin: origin,
   accessToken: token,
   wrapApp: (child) => child,
-  connectionSettings: (_) => const SizedBox(),
+  connectionSettings: (context, language) => const SizedBox(),
 );
 
 void main() {
@@ -142,7 +142,7 @@ void main() {
           origin: Uri.parse(url),
           accessToken: ({rejectedToken}) async => null,
           wrapApp: (child) => child,
-          connectionSettings: (_) => const SizedBox(),
+          connectionSettings: (context, language) => const SizedBox(),
         ),
         throwsArgumentError,
       );

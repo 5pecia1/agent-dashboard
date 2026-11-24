@@ -633,7 +633,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (session != null)
-                  Builder(builder: session.connectionSettings)
+                  session.connectionSettings(context, ref.watch(localeProvider).name)
                 else ...[
                   _SectionHeader(
                     tokens: tokens,
