@@ -1,102 +1,104 @@
+"""Both release workflows share the verified draft-to-published transaction."""
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
-import subprocess
+import sys
 import tempfile
-import textwrap
 import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import publish_verified_release as release
 
 
-ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / 'distribution/public/.github/workflows/publish-server.yml'
-if not WORKFLOW.exists():
-    WORKFLOW = ROOT / '.github/workflows/publish-server.yml'
-
-
-class ServerPublicationRetryTests(unittest.TestCase):
+class PublicationRetryTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix='server-publication-test-')
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
-        self.release = self.root / 'release'
-        self.release.mkdir()
-        self.assets = {'server.tgz': 'verified library', 'server-starter.tar.gz': 'verified starter',
-                       'release-evidence.json': '{}', 'starter-test-receipt.json': '{}'}
-        for name in list(self.assets):
-            if name.endswith(('.tgz', '.tar.gz')):
-                digest = hashlib.sha256(self.assets[name].encode()).hexdigest()
-                self.assets[name + '.sha256'] = f'{digest}  {name}\n'
-        for name, value in self.assets.items():
-            (self.release / name).write_text(value)
-        self.state = self.root / 'remote.json'
-        self.state.write_text(json.dumps({'draft': True, 'assets': {}}))
-        binary = self.root / 'bin'
-        binary.mkdir()
-        command = binary / 'gh'
-        command.write_text('#!/usr/bin/env python3\n' + textwrap.dedent('''
-            import json, os, sys
-            from pathlib import Path
-            state_file = Path(os.environ['MOCK_RELEASE_STATE'])
-            state = json.loads(state_file.read_text())
-            args = sys.argv[1:]
-            action = args[1]
-            if action == 'view':
-                if '--json' in args:
-                    print('\\n'.join(state['assets']))
-            elif action == 'download':
-                name = args[args.index('--pattern') + 1]
-                directory = Path(args[args.index('--dir') + 1])
-                (directory / name).write_text(state['assets'][name])
-            elif action == 'upload':
-                file = Path(args[3])
-                assert file.name not in state['assets'], 'must never overwrite assets'
-                state['assets'][file.name] = file.read_text()
-            elif action == 'edit':
-                assert '--draft=false' in args and '--latest=false' in args
-                assert len(state['assets']) == 6, 'publish only when all assets exist'
-                state['draft'] = False
-            else:
-                raise AssertionError(action)
-            state_file.write_text(json.dumps(state))
-        '''))
-        command.chmod(0o755)
-        self.env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'],
-                        MOCK_RELEASE_STATE=str(self.state), RELEASE_TAG='server-v0.1.0-alpha.2')
-        content = WORKFLOW.read_text()
-        section = content.split('      - name: Create release with the verified archive\n', 1)[1]
-        body = section.split('        run: |\n', 1)[1]
-        lines = []
-        for line in body.splitlines():
-            if line.strip() and not line.startswith('          '):
-                break
-            lines.append(line)
-        self.script = textwrap.dedent('\n'.join(lines))
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.dir = self.root / 'release'
+        self.dir.mkdir()
+        self.assets = {'server.tgz': b'verified library', 'starter.tar.gz': b'verified starter'}
+        for name, data in self.assets.items():
+            (self.dir / name).write_bytes(data)
+        self.args = argparse.Namespace(directory=self.dir, tag='server-v0.1.0-alpha.2',
+                                      commit='a' * 40, notes=self.root/'notes', title='Server', latest='false',
+                                      prerelease=True)
+        self.remote = dict(draft=True, assets={})
+        self.calls = []
+        self.resolved = self.args.commit
 
-    def run_publish(self):
-        return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', self.script],
-                              cwd=self.root, env=self.env, capture_output=True, text=True)
+    def gh(self, *args):
+        self.calls.append(args)
+        if args[0] == 'api':
+            if '--paginate' not in args:
+                return self.resolved
+            records = []
+            if self.remote is not None:
+                records.append(dict(id=123, tag_name=self.args.tag, draft=self.remote['draft'],
+                                    assets=[dict(name=n, state='uploaded', digest='sha256:'+hashlib.sha256(v).hexdigest())
+                                            for n,v in self.remote['assets'].items()]))
+            return json.dumps([records])
+        cmd = args[1]
+        if cmd == 'create':
+            self.assertIn('--draft',args)
+            self.assertIn('--verify-tag',args)
+            self.assertIsNone(self.remote)
+            self.remote = dict(draft=True, assets={})
+        elif cmd == 'upload':
+            name = Path(args[-1]).name
+            self.assertTrue(self.remote['draft'])
+            self.assertNotIn(name,self.remote['assets'])
+            self.assertNotIn('--clobber',args)
+            self.remote['assets'][name] = (self.dir/name).read_bytes()
+        elif cmd == 'edit':
+            self.assertTrue(self.remote['draft'])
+            self.assertIn('--draft=false',args)
+            self.assertEqual(self.remote['assets'],self.assets)
+            self.remote['draft'] = False
+        else:
+            self.fail(cmd)
+        return ''
+
+    def publish(self):
+        with patch.dict(os.environ, {'GH_REPO':'example/project'}), patch.object(release, 'gh', side_effect=self.gh):
+            release.publish(self.args)
+
+    def test_new_release_has_all_assets_before_publication(self):
+        self.remote = None
+        self.publish()
+        self.assertFalse(self.remote['draft'])
 
     def test_partial_upload_is_completed_before_publication(self):
-        self.state.write_text(json.dumps({'draft': True, 'assets': {'server.tgz': self.assets['server.tgz']}}))
-        result = self.run_publish()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        state = json.loads(self.state.read_text())
-        self.assertEqual(state, {'draft': False, 'assets': self.assets})
+        self.remote['assets']['server.tgz'] = self.assets['server.tgz']
+        self.publish()
+        self.assertFalse(self.remote['draft'])
+        self.assertEqual(sum(a[:2] == ('release','upload') for a in self.calls),1)
 
     def test_different_existing_asset_blocks_all_uploads(self):
-        original = {'draft': True, 'assets': {'starter-test-receipt.json': 'different'}}
-        self.state.write_text(json.dumps(original))
-        result = self.run_publish()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(json.loads(self.state.read_text()), original)
+        self.remote['assets']['starter.tar.gz'] = b'different'
+        with self.assertRaisesRegex(ValueError,'bytes differ'):
+            self.publish()
+        self.assertFalse(any(a[0]=='release' for a in self.calls))
 
     def test_complete_release_retries_without_overwriting(self):
-        original = {'draft': False, 'assets': self.assets}
-        self.state.write_text(json.dumps(original))
-        result = self.run_publish()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.state.read_text()), original)
+        self.remote = dict(draft=False, assets=dict(self.assets))
+        self.publish()
+        self.assertFalse(any(a[0]=='release' for a in self.calls))
+
+    def test_missing_published_asset_never_receives_an_upload(self):
+        self.remote = dict(draft=False, assets={})
+        with self.assertRaisesRegex(ValueError,'published release has missing'):
+            self.publish()
+        self.assertFalse(any(a[0]=='release' for a in self.calls))
+
+    def test_moved_tag_is_rejected_before_publication(self):
+        self.resolved = 'b' * 40
+        with self.assertRaisesRegex(ValueError,'tag differs'):
+            self.publish()
+        self.assertFalse(any(a[0]=='release' for a in self.calls))
 
 
 if __name__ == '__main__':

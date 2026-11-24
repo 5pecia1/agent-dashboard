@@ -42,6 +42,14 @@ Browser settings are stored per origin. Enter your server URL and token again wh
 2. Push a version tag such as `v0.1.11` on that commit. The release workflow builds the public web app and the universal macOS archive. The macOS job signs with Developer ID, submits the signed app to Apple for notarization, and verifies the extracted universal ZIP. New releases include Apple’s acceptance record in `Apple-notarization.json`.
 3. The publish job uses the verified bytes from Actions. Stable releases deploy to the production Pages site. Prereleases deploy to a preview. Check the deployed web manifest after publication.
 
+### Release identity and recovery
+
+The repository owner creates product tags (`v*`) and server tags (`server-v*`) from reviewed `main` history. The protected tag points to the commit that was verified. The publisher stages files in a draft, compares their digests to the build output, uploads missing files, and checks the entire inventory before publishing. For an interrupted run, re-run the failed jobs while its verified Actions artifacts are available. A conflicting draft stays unpublished for review. Correct a published artifact in a new version.
+
+The Pages environment accepts the `main` branch for redeployment and release tags for initial deployment. Before extracting a new web archive, both deployment workflows verify the GitHub build attestation against the archive, repository, hosted release workflow, version tag and exact commit. For pre-attestation releases through v0.1.11, the deployer uses the reviewed tag commit and SHA256 in [the historical release list](../scripts/legacy-web-digests.json). Use the current `main` redeployment workflow for those releases.
+
+The public macOS installer checks the expected Developer ID team in addition to the bundle ID and Gatekeeper verdict. A signing team migration requires a reviewed installer update. Existing historical release exceptions remain scoped to their published version tags.
+
 ### Configure signing in GitHub Actions
 
 Create the `macos-signing` environment. Allow the release tags and trusted signing rehearsal branches. Set `APPLE_TEAM_ID` to the expected ten-character Apple Developer Team ID. Add the following environment secrets.

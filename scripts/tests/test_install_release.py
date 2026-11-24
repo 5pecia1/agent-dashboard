@@ -118,7 +118,7 @@ sys.exit(subprocess.call(['/usr/bin/plutil', *sys.argv[1:]]))
         self.release(tag, {filename: payload, filename + '.sha256': f'{digest}  {filename}\n'.encode()}, prerelease)
         return tag
 
-    def app(self, version='0.1.10', *, bad_hash=False, invalid=False, unsafe_link=False):
+    def app(self, version='0.1.10', *, bad_hash=False, invalid=False, unsafe_link=False, team=None):
         tag = 'v' + version
         info = dict(CFBundleIdentifier=BUNDLE_ID, CFBundleShortVersionString=version,
                     CFBundleExecutable='my_dashboard')
@@ -144,6 +144,8 @@ sys.exit(subprocess.call(['/usr/bin/plutil', *sys.argv[1:]]))
         receipt = dict(schema=1, product='Agent Dashboard', tag=tag, version=version,
                        source_commit='a' * 40, artifacts=[dict(platform='macos', arch=arch,
                        signing='unsigned', file=filename, sha256=digest)])
+        if team:
+            receipt['artifacts'][0].update(signing='developer-id', notarization='stapled', team_id=team, bundle_id=BUNDLE_ID)
         self.release(tag, {filename: payload, 'release.json': json.dumps(receipt).encode(),
                           'SHA256SUMS': f'{digest}  {filename}\n'.encode()})
         return tag
@@ -273,6 +275,13 @@ sys.exit(subprocess.call(['/usr/bin/plutil', *sys.argv[1:]]))
         target = self.directory / 'apps'
         result = self.run_installer('--dir', str(target), system='Darwin')
         self.assertFailure(result, 'requires a notarized Developer ID app', target)
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'Native macOS bundle extraction')
+    def test_release_manifest_cannot_choose_its_own_signing_team(self):
+        self.app('0.1.11', team='OTHER12345')
+        target = self.directory / 'apps'
+        result = self.run_installer('--dir', str(target), system='Darwin')
+        self.assertFailure(result, 'pinned Agent Dashboard signing team', target)
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Native macOS bundle extraction')
     def test_app_replace_is_explicit_and_canonicalizes_destination(self):

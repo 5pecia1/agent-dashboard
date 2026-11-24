@@ -1,0 +1,42 @@
+{
+  "v0.1.1": {
+    "commit": "c0e4910a1e0eab4764d652b517f7aaf49bf79d36",
+    "sha256": "a07cb06d9114caf1c12dc92f3212ba8f05b9d8578335e0273f327e8a8163b39a"
+  },
+  "v0.1.10": {
+    "commit": "225db3352642d60dbf09386e8a28a03829cde1ec",
+    "sha256": "c7b69b26266848b0ca73e23482cfe3221d05900dbc15cb5f66167c8e06964dde"
+  },
+  "v0.1.11": {
+    "commit": "197a628c8090cf0f8ff76c8466a396b2bf097ba7",
+    "sha256": "243962dc304c722eb46334f919b78fa1bd266a8197854bc967ecee5548cc3011"
+  },
+  "v0.1.2": {
+    "commit": "2356629a171de1e98d3c307163f8f6c29b62d249",
+    "sha256": "e764805e6b6e2abe61fe0519062648bef83bc9fd6a8690e0256fc1fb09cae443"
+  },
+  "v0.1.4": {
+    "commit": "6b7d5ccd4cb92b6b915bf497a3bd36a1ffffab64",
+    "sha256": "0b773d26e21e94bd66c6b54e3dc1674b9971cdee8a7f3a5b745d07510054af8f"
+  },
+  "v0.1.5": {
+    "commit": "febe2fea6212b9f47887cfab841da932f1386566",
+    "sha256": "dc185e7df2f4d8ef566f61a82a7221b68071150034d52c8616b01d693898610f"
+  },
+  "v0.1.6": {
+    "commit": "5d57db57120ab025bfe63fdf0e6ee65fece3e3f0",
+    "sha256": "4266de80f266da3542c7323d7a75a1be8638e62ec569ba7de90c7f48e13de456"
+  },
+  "v0.1.7": {
+    "commit": "bd08bd3e108c288ef35070a5925ca2bcbfb72b7d",
+    "sha256": "d23153f350b3203784a1241ac778f4b99bf5e2f9290361412c68a00dcc9abd3a"
+  },
+  "v0.1.8": {
+    "commit": "5baa6117febc16fd69f2d46b71b36de120c69cfc",
+    "sha256": "f55c75e01d9cdff3a5ff396da2c7815df2043794a5241d9badf14582148d9407"
+  },
+  "v0.1.9": {
+    "commit": "83370f3721399c867e55d1cf058d471770d0a1b9",
+    "sha256": "4630b1d394e36b434b5230b62a3090d87459f8f049b4645956379aacebb4ac3a"
+  }
+}
