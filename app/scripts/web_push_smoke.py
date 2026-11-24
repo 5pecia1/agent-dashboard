@@ -30,6 +30,8 @@ import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+from web_cache_smoke import verify_shared_profile
+
 # These three must match lib/src/platform/web_push.dart. They are repeated as
 # literals on purpose: this script is the check that the Dart constants and the
 # files in web/ actually agree in a real browser.
@@ -172,7 +174,11 @@ def main():
         # shell is a different runtime and disables Notification permissions.
         browser_options = {'executable_path': args.browser} if args.browser else {'channel': 'chromium'}
         browser = playwright.chromium.launch(**browser_options, headless=True)
+        verify_shared_profile(browser, origin)
         context = browser.new_context(viewport={'width': 900, 'height': 700})
+        legacy_key = 'my-dashboard.config.v1.before-extensions'
+        context.add_init_script('''localStorage.setItem('my-dashboard.config.v1.before-extensions',
+          JSON.stringify({client_token: 'discarded-fixture'}));''')
         page = context.new_page()
         errors, warnings, console, failed_requests = [], [], [], []
         page.on('pageerror', lambda error: errors.append(str(error)))
@@ -185,6 +191,7 @@ def main():
         try:
             page.goto(args.url)
             controller = boot(page, args.greeting)
+            assert page.evaluate('key => localStorage.getItem(key)', legacy_key) is None
             assert scopes(page) == [origin], f'expected only the app shell registration before the probe: {scopes(page)}'
 
             # The app registers this from lib/src/platform/web_push_web.dart once the
@@ -269,6 +276,7 @@ def main():
                 'click_with_window': 'focus+broadcast',
                 'click_without_window': 'openWindow',
                 'offline_reload': True,
+                'shared_profile_network_only_api': True,
                 'firebase_sdk_same_origin': True,
                 'permission_gate': bridge['configured']['status'],
                 'page_errors': errors,

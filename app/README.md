@@ -49,6 +49,12 @@ Quit the app before launching with a custom path. Adjust the app location for yo
 open --env AGY_CLI_PATH=/absolute/path/to/agy "$HOME/Applications/Agent Dashboard.app"
 ```
 
+## Browser storage and offline use
+
+A completed online launch makes the app shell available offline. Dashboard API requests, authenticated requests, and URLs with query parameters always require a network connection. The service worker caches only build-verified files under the app's own scope and honors `Cache-Control: private` and `no-store`. An upgrade removes older dashboard shell caches when the new worker activates.
+
+The browser keeps the current connection in this app's local storage. Loading or saving the configuration removes the redundant backup used by older versions, including after the active connection was cleared.
+
 ## Build from source
 
 For Linux web development, open the repository root in VS Code and select **Dev Containers: Reopen in Container**. The root [Devcontainer configuration](../.devcontainer/devcontainer.json) mounts the whole repository and initializes the app from `app/`. It uses Linux x86_64; native macOS builds require a macOS host. Server development separately requires Node.js 22 or newer and npm, as described in the [server guide](../server/README.md).

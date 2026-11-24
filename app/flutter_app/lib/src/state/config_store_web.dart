@@ -30,7 +30,9 @@ String get _location => 'localStorage[$_storageKey]';
 Future<DashboardConfigValues> loadDashboardConfig() async {
   final String? raw;
   try {
-    raw = web.window.localStorage.getItem(_storageKey);
+    final storage = web.window.localStorage;
+    storage.removeItem(_backupKey);
+    raw = storage.getItem(_storageKey);
   } catch (error) {
     // 저장소 접근 오류(SecurityError 등)의 메시지에는 저장된 값이 없다.
     throw ConfigReadException(
@@ -45,9 +47,7 @@ Future<DashboardConfigValues> loadDashboardConfig() async {
 
 Future<void> saveDashboardConfig(DashboardConfigValues values) async {
   final storage = web.window.localStorage;
-  final previous = storage.getItem(_storageKey);
-  if (previous != null && storage.getItem(_backupKey) == null) {
-    storage.setItem(_backupKey, previous);
-  }
+  // Old browser builds kept a second, unused copy of account credentials.
+  storage.removeItem(_backupKey);
   storage.setItem(_storageKey, jsonEncode(values.toJson()));
 }
