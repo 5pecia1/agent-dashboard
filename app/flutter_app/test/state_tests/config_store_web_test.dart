@@ -66,10 +66,9 @@ void main() {
       clientToken: 'next-fixture',
     );
     await saveDashboardConfig(updated);
-    expect(
-      jsonDecode(storage.getItem(activeKey)!)['client_token'],
-      'next-fixture',
-    );
+    final stored =
+        jsonDecode(storage.getItem(activeKey)!) as Map<String, dynamic>;
+    expect(stored['client_token'], 'next-fixture');
     expect(storage.getItem(backupKey), isNull);
     expect(storage.getItem(unrelatedKey), 'unrelated');
   });
