@@ -325,10 +325,26 @@ APP="$WORK/extracted/Agent Dashboard.app"
 INFO="$APP/Contents/Info.plist"
 [ "$(plutil -extract CFBundleIdentifier raw "$INFO")" = "$BUNDLE_ID" ] &&
   [ "$(plutil -extract CFBundleShortVersionString raw "$INFO")" = "${TAG#v}" ] || fail "Downloaded app identity or version differs"
-case "$SIGNING" in
-  signed|ad-hoc) codesign --verify --deep --strict "$APP" || fail "App code signature verification failed" ;;
-  unsigned) log "This release is unsigned; macOS will require explicit approval." ;;
-  *) fail "Unrecognized app signing metadata" ;;
+# Only immutable releases published before the signing rollout use the old policy.
+case "$TAG" in
+  v0.1.1|v0.1.2|v0.1.4|v0.1.5|v0.1.6|v0.1.7|v0.1.8|v0.1.9|v0.1.10)
+    case "$SIGNING" in
+      signed|ad-hoc) codesign --verify --deep --strict "$APP" || fail "App code signature verification failed" ;;
+      unsigned) log "Historical release $TAG has an unsigned app." ;;
+      *) fail "Unrecognized historical app signing metadata" ;;
+    esac ;;
+  *)
+    [ "$SIGNING" = developer-id ] &&
+      [ "$(json_get "$RELEASE_METADATA" "artifacts.$index.notarization")" = stapled ] &&
+      [ "$(json_get "$RELEASE_METADATA" "artifacts.$index.bundle_id")" = "$BUNDLE_ID" ] ||
+      fail "Release $TAG requires a notarized Developer ID app"
+    team=$(json_get "$RELEASE_METADATA" "artifacts.$index.team_id")
+    [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || fail "Invalid signing team in release receipt"
+    requirement="identifier \"$BUNDLE_ID\" and anchor apple generic and certificate leaf[subject.OU] = \"$team\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
+    codesign --verify --deep --strict --all-architectures "$APP" &&
+      codesign --verify --all-architectures -R="$requirement" "$APP" ||
+      fail "App Developer ID signature or signing team differs"
+    spctl --assess --type execute "$APP" || fail "Gatekeeper rejected the notarized app" ;;
 esac
 EXECUTABLE=$(plutil -extract CFBundleExecutable raw "$INFO")
 safe_name "$EXECUTABLE" && [[ "$EXECUTABLE" != */* ]] && [ -x "$APP/Contents/MacOS/$EXECUTABLE" ] || fail "Downloaded app executable is missing"
@@ -377,7 +393,7 @@ fi
 COMMITTED=1
 log "Installed $TAG: $FINAL"
 [ -z "$BACKUP" ] || log "Previous app preserved: $BACKUP"
-log "Existing server settings are unchanged. Open the app in Finder; macOS may ask you to approve this unsigned/not-notarized release."
+log "Open the installed app in Finder."
 
 }
 main "$@"

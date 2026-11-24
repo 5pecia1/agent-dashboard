@@ -118,7 +118,7 @@ sys.exit(subprocess.call(['/usr/bin/plutil', *sys.argv[1:]]))
         self.release(tag, {filename: payload, filename + '.sha256': f'{digest}  {filename}\n'.encode()}, prerelease)
         return tag
 
-    def app(self, version='1.2.3', *, bad_hash=False, invalid=False, unsafe_link=False):
+    def app(self, version='0.1.10', *, bad_hash=False, invalid=False, unsafe_link=False):
         tag = 'v' + version
         info = dict(CFBundleIdentifier=BUNDLE_ID, CFBundleShortVersionString=version,
                     CFBundleExecutable='my_dashboard')
@@ -268,8 +268,15 @@ sys.exit(subprocess.call(['/usr/bin/plutil', *sys.argv[1:]]))
             self.assertFailure(result, message, target)
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Native macOS bundle extraction')
+    def test_new_release_rejects_legacy_signing_before_installation(self):
+        self.app('0.1.11')
+        target = self.directory / 'apps'
+        result = self.run_installer('--dir', str(target), system='Darwin')
+        self.assertFailure(result, 'requires a notarized Developer ID app', target)
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'Native macOS bundle extraction')
     def test_app_replace_is_explicit_and_canonicalizes_destination(self):
-        self.app('1.2.3')
+        self.app('0.1.10')
         target = self.directory / 'apps'
         result = self.run_installer('--dir', str(target), system='Darwin')
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -1,9 +1,9 @@
 import 'dart:io';
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/data/saved_prompt.dart';
 import 'package:my_dashboard/src/state/dangling_link_io.dart';
 
-const _stateRelativePath = '.local/state/my-dashboard';
 const _promptsFilename = 'saved-prompts.json';
 const _privateDirectoryMode = '700';
 const _privateFileMode = '600';
@@ -23,7 +23,7 @@ SavedPromptsFileStore _defaultStore() {
     throw const FileSystemException('User home directory is unavailable');
   }
   return SavedPromptsFileStore(
-    File('$home/$_stateRelativePath/$_promptsFilename'),
+    File('${dashboardHost.stateDirectory(home)}/$_promptsFilename'),
   );
 }
 

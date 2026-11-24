@@ -1,0 +1,13 @@
+#!/bin/sh
+# Flutter 3.44 passes all required slices to a single -verify_arch. Xcode 27.2
+# rejects that form even when its own -archs reports every slice.
+set -eu
+if [ "$#" -gt 3 ] && [ "$2" = "-verify_arch" ]; then
+  binary=$1
+  shift 2
+  for architecture do
+    /usr/bin/xcrun lipo "$binary" -verify_arch "$architecture"
+  done
+  exit 0
+fi
+exec /usr/bin/xcrun lipo "$@"

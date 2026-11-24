@@ -31,9 +31,17 @@ List<Override> usageDashboardOverrides(DashboardConfigValues config) => [
 // Tests may override controllers and translation separately while exercising the
 // real integration wiring.
 final usageDashboardUiOverrides = <Override>[
-  dashboardHomeSectionsProvider.overrideWith((ref) => const [UsagePanels()]),
+  dashboardHomeSectionsProvider.overrideWith(
+    (ref) => [const UsagePanels(), ...ref.watch(additionalHomeSectionsProvider)],
+  ),
   dashboardSetupSectionsProvider.overrideWith(
-    (ref) => const [TeamClaudeSetup(), DevinSetup(), GrokSetup(), AgySetup()],
+    (ref) => [
+      const TeamClaudeSetup(),
+      const DevinSetup(),
+      const GrokSetup(),
+      const AgySetup(),
+      ...ref.watch(additionalSetupSectionsProvider),
+    ],
   ),
   dashboardExtensionRefreshingProvider.overrideWith(
     (ref) =>

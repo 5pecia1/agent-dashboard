@@ -9,10 +9,13 @@ from pathlib import Path, PurePosixPath
 import plistlib
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
+import zipfile
 
+from macos_distribution import MACHO_MAGIC, PUBLIC_BUNDLE_ID, SOURCE_COMMIT_KEY, requirement, verify
 from version_check import check
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,9 +28,6 @@ MAX_WEB_BYTES = 512 * 1024 * 1024  # Bound extraction before writing to disk.
 WEB_REQUIRED = ('index.html', 'flutter_bootstrap.js', 'main.dart.js',
                 'manifest.json', 'version.json')
 PRIVATE_SUFFIXES = {'.pem', '.key', '.p12', '.pfx'}
-MACHO_MAGIC = {bytes.fromhex(value) for value in (
-    'feedface', 'cefaedfe', 'feedfacf', 'cffaedfe',
-    'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca')}
 MACOS_ARCHITECTURES = {'arm64', 'x86_64'}
 
 
@@ -110,11 +110,13 @@ def package_web(source, destination, release):
                     archive.addfile(member, io.BytesIO(content))
 
 
-def package_macos(source, destination, release, arch):
+def verify_macos_bundle(source, release, arch, team_id):
     if source.suffix != '.app' or not source.is_dir() or source.is_symlink():
         raise ValueError('macOS source must be an existing .app bundle')
     with (source / 'Contents/Info.plist').open('rb') as stream:
         info = plistlib.load(stream)
+    if info.get(SOURCE_COMMIT_KEY) != release['source_commit']:
+        raise ValueError('macOS bundle source commit differs from the release; prepare it with --source-commit')
     if info.get('CFBundleShortVersionString') != release['version']:
         raise ValueError('built macOS version differs from the release tag')
     if any(info.get(key) != PRODUCT for key in ('CFBundleName', 'CFBundleDisplayName')):
@@ -134,15 +136,14 @@ def package_macos(source, destination, release, arch):
     required = MACOS_ARCHITECTURES if arch == 'universal' else {arch}
     if not required <= architectures:
         raise ValueError(f'macOS bundle architectures {sorted(architectures)} do not support {arch}')
-    signature = subprocess.run(['codesign', '-dv', '--verbose=4', str(source)],
-                               capture_output=True, text=True)
-    if signature.returncode == 0:
-        subprocess.run(['codesign', '--verify', '--deep', '--strict', str(source)], check=True)
-        signing = 'ad-hoc' if 'Signature=adhoc' in signature.stderr else 'signed'
-    elif 'not signed at all' in signature.stderr:
-        signing = 'unsigned'
-    else:
-        raise ValueError('cannot determine macOS code signature')
+    verify(source, PUBLIC_BUNDLE_ID, team_id)
+    return {'arch': arch, 'architectures': sorted(architectures),
+            'signing': 'developer-id', 'notarization': 'stapled',
+            'team_id': team_id, 'bundle_id': PUBLIC_BUNDLE_ID}
+
+
+def package_macos(source, destination, release, arch, team_id):
+    signing = verify_macos_bundle(source, release, arch, team_id)
     # Keep the bundle identifier and executable; use the product name in Finder.
     # ditto preserves framework symlinks, resource forks and executable permissions.
     with tempfile.TemporaryDirectory(prefix='agent-dashboard-macos-') as temporary:
@@ -150,8 +151,49 @@ def package_macos(source, destination, release, arch):
         subprocess.run(['ditto', str(source), str(staged)], check=True)
         subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent',
                         str(staged), str(destination)], check=True)
-    return {'arch': arch, 'architectures': sorted(architectures),
-            'signing': signing, 'notarization': 'not-verified'}
+        extracted = Path(temporary) / 'extracted'
+        subprocess.run(['ditto', '-x', '-k', str(destination), str(extracted)], check=True)
+        verify(extracted / staged.name, PUBLIC_BUNDLE_ID, team_id)
+    return signing
+
+
+def verify_macos_archive(args):
+    """Verify the exact maintainer-staged ZIP on a clean Mac before publication."""
+    release = metadata(args.tag, args.commit)
+    check(ROOT, args.tag)
+    receipts = list(args.input.glob('*.artifact.json'))
+    if len(receipts) != 1:
+        raise ValueError('expected exactly one staged macOS artifact receipt')
+    receipt = json.loads(receipts[0].read_text())
+    if any(receipt.get(key) != value for key, value in release.items()):
+        raise ValueError('staged macOS build has a different version or source commit')
+    artifact = receipt['artifact']
+    arch = artifact['arch']
+    filename = f'agent-dashboard-{args.tag}-macos-{arch}.zip'
+    if (artifact['platform'] != 'macos' or arch not in MACOS_ARCHITECTURES | {'universal'}
+            or artifact['file'] != filename or receipts[0].name != f'macos-{arch}.artifact.json'):
+        raise ValueError('unexpected macOS artifact name or architecture')
+    archive = args.input / filename
+    if archive.stat().st_size != artifact['size_bytes'] or sha256(archive) != artifact['sha256']:
+        raise ValueError('staged ZIP differs from the signed build receipt')
+    with zipfile.ZipFile(archive) as zipped:
+        entries = zipped.infolist()
+        if (len(entries) > 50_000 or sum(entry.file_size for entry in entries) > 1024**3
+                or len({e.filename for e in entries}) != len(entries)):
+            raise ValueError('invalid macOS archive size or member count')
+        for entry in entries:
+            path = safe_path(entry.filename.removesuffix('/'))
+            if path.parts[0] not in {f'{PRODUCT}.app', '__MACOSX'}:
+                raise ValueError('unexpected file outside the app bundle')
+            if stat.S_ISLNK(entry.external_attr >> 16):
+                safe_path(zipped.read(entry).decode())
+    with tempfile.TemporaryDirectory(prefix='verify-notarized-') as temp:
+        run_dir = Path(temp)
+        subprocess.run(['ditto', '-x', '-k', archive, run_dir], check=True)
+        observed = verify_macos_bundle(run_dir / f'{PRODUCT}.app', release, arch, args.team_id)
+        if any(artifact.get(key) != value for key, value in observed.items()):
+            raise ValueError('staged metadata differs from the verified app')
+    return receipt
 
 
 def package(args, root=ROOT):
@@ -175,7 +217,7 @@ def package(args, root=ROOT):
         if args.platform == 'web':
             package_web(source, destination, release)
         else:
-            extra = package_macos(source, destination, release, args.arch)
+            extra = package_macos(source, destination, release, args.arch, args.team_id)
         artifact = dict(platform=args.platform, file=filename, sha256=sha256(destination),
                         size_bytes=destination.stat().st_size, **extra)
         if not artifact['size_bytes']:
@@ -204,6 +246,11 @@ def combine(args):
         if (source.is_symlink() or not source.is_file() or sha256(source) != artifact['sha256']
                 or source.stat().st_size != artifact['size_bytes']):
             raise ValueError(f'artifact differs from its receipt: {name}')
+        if artifact['platform'] == 'macos':
+            if (artifact.get('signing') != 'developer-id' or artifact.get('notarization') != 'stapled'
+                    or artifact.get('bundle_id') != PUBLIC_BUNDLE_ID):
+                raise ValueError('macOS release requires a stapled Developer ID app')
+            requirement(PUBLIC_BUNDLE_ID, artifact.get('team_id'))
         identity = (artifact['platform'], artifact.get('arch'))
         if any((item['platform'], item.get('arch')) == identity or item['file'] == name
                for item in artifacts):
@@ -268,15 +315,20 @@ def verify_web(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('package', 'combine', 'verify-web'):
+    for name in ('package', 'combine', 'verify-web', 'verify-macos'):
         command = commands.add_parser(name)
         command.add_argument('--tag', required=True)
         command.add_argument('--commit', required=True)
-        command.add_argument('--output', type=Path, required=True)
+        if name != 'verify-macos':
+            command.add_argument('--output', type=Path, required=True)
         if name == 'package':
             command.add_argument('--platform', choices=['web', 'macos'], required=True)
             command.add_argument('--source', type=Path, required=True)
+            command.add_argument('--team-id', help='expected Developer ID team for macOS')
             command.add_argument('--arch', choices=['arm64', 'x86_64', 'universal'])
+        elif name == 'verify-macos':
+            command.add_argument('--team-id', required=True)
+            command.add_argument('--input', type=Path, required=True)
         elif name == 'combine':
             command.add_argument('--input', type=Path, required=True)
         else:
@@ -284,7 +336,8 @@ def main():
             command.add_argument('--sha256', required=True)
     args = parser.parse_args()
     try:
-        result = {'package': package, 'combine': combine, 'verify-web': verify_web}[args.command](args)
+        result = {'package': package, 'combine': combine, 'verify-web': verify_web,
+                  'verify-macos': verify_macos_archive}[args.command](args)
         print(json.dumps(result))
     except (ValueError, OSError, KeyError, tarfile.TarError, subprocess.SubprocessError) as error:
         parser.exit(1, f'{error}\n')

@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -142,10 +143,16 @@ class ProductReleaseTests(unittest.TestCase):
         mac_receipt = dict(release.metadata(TAG, COMMIT), artifact={
             'platform': 'macos', 'file': mac_archive.name, 'arch': 'arm64',
             'sha256': release.sha256(mac_archive), 'size_bytes': mac_archive.stat().st_size,
-            'signing': 'ad-hoc', 'notarization': 'not-verified'})
+            'signing': 'developer-id', 'notarization': 'stapled',
+            'team_id': 'ABC1234567', 'bundle_id': release.PUBLIC_BUNDLE_ID})
         (mac_dir / 'macos-arm64.artifact.json').write_text(json.dumps(mac_receipt))
         args = argparse.Namespace(input=self.root / 'download', output=self.root / 'release',
                                   tag=TAG, commit=COMMIT)
+        unsigned = dict(mac_receipt, artifact=dict(mac_receipt['artifact'], signing='ad-hoc'))
+        (mac_dir / 'macos-arm64.artifact.json').write_text(json.dumps(unsigned))
+        with self.assertRaisesRegex(ValueError, 'stapled Developer ID'):
+            release.combine(args)
+        (mac_dir / 'macos-arm64.artifact.json').write_text(json.dumps(mac_receipt))
         combined = release.combine(args)
         self.assertEqual(combined['source_commit'], COMMIT)
         self.assertEqual(len(combined['artifacts']), 2)
@@ -180,8 +187,8 @@ class ProductReleaseTests(unittest.TestCase):
         subprocess.run(['cc', '-x', 'c', '-', '-o', str(binary)],
                        input='int main(void) { return 0; }', text=True, check=True,
                        capture_output=True)
-        info = {'CFBundleShortVersionString': VERSION, 'CFBundleName': release.PRODUCT,
-                'CFBundleDisplayName': release.PRODUCT, 'CFBundleIdentifier': 'test.agent-dashboard',
+        info = {release.SOURCE_COMMIT_KEY: COMMIT, 'CFBundleShortVersionString': VERSION, 'CFBundleName': release.PRODUCT,
+                'CFBundleDisplayName': release.PRODUCT, 'CFBundleIdentifier': release.PUBLIC_BUNDLE_ID,
                 'CFBundleExecutable': 'my_dashboard', 'CFBundlePackageType': 'APPL'}
         (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
         resources = contents / 'Resources'
@@ -191,11 +198,22 @@ class ProductReleaseTests(unittest.TestCase):
         subprocess.run(['codesign', '--force', '--sign', '-', str(bundle)],
                        check=True, capture_output=True)
         args = argparse.Namespace(platform='macos', source=bundle, tag=TAG,
-                                  commit=COMMIT, output=self.root / 'native', arch=platform.machine())
-        receipt = release.package(args, root=self.app)
+                                  commit=COMMIT, output=self.root / 'native', arch=platform.machine(),
+                                  team_id='ABC1234567')
+        args.commit = 'f' * 40
+        with self.assertRaisesRegex(ValueError, 'bundle source commit differs'):
+            release.package(args, root=self.app)
+        args.commit = COMMIT
+        with self.assertRaises(subprocess.CalledProcessError):
+            release.package(args, root=self.app)
+        self.assertEqual(list(args.output.iterdir()), [])
+        # Exercise real ZIP packaging without uploading test code to Apple's notary service.
+        with patch.object(release, 'verify') as gatekeeper:
+            receipt = release.package(args, root=self.app)
+            self.assertEqual(gatekeeper.call_count, 2)
         artifact = receipt['artifact']
-        self.assertEqual(artifact['signing'], 'ad-hoc')
-        self.assertEqual(artifact['notarization'], 'not-verified')
+        self.assertEqual(artifact['signing'], 'developer-id')
+        self.assertEqual(artifact['notarization'], 'stapled')
         self.assertIn(platform.machine(), artifact['architectures'])
         with zipfile.ZipFile(args.output / artifact['file']) as archive:
             executable = archive.getinfo('Agent Dashboard.app/Contents/MacOS/my_dashboard')

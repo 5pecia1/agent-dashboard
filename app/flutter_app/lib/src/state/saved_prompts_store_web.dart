@@ -3,10 +3,11 @@ import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/data/saved_prompt.dart';
 
-const savedPromptsStorageKey = 'my-dashboard.saved-prompts.v1';
-const _storageLockName = '$savedPromptsStorageKey.write';
+String get savedPromptsStorageKey => dashboardHost.storageKey('saved-prompts.v1');
+String get _storageLockName => '$savedPromptsStorageKey.write';
 
 typedef SavedPromptsStore = SavedPromptsWebStore;
 

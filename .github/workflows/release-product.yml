@@ -136,19 +136,62 @@ jobs:
       - run: mise run verify
       - run: python3 -m unittest discover -s scripts/tests -p test_release_product.py
       - run: mise run build
-      - name: Package the unsigned macOS app
+  verify_signed_macos:
+    # Only collaborators with push access can see draft release assets.
+    permissions:
+      contents: write
+    needs: [source, macos]
+    runs-on: macos-15
+    environment: macos-signing
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - name: Fetch the maintainer's signed build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+        run: |
+          staging_tag="macos-stage-$RELEASE_TAG"
+          # On retries after the staging draft has been removed, verify published bytes.
+          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" != false ]; then
+            test "$(gh release view "$staging_tag" --json isDraft --jq .isDraft)" = true
+            gh release download "$staging_tag" --pattern '*.zip' --pattern '*.artifact.json' --dir "$RUNNER_TEMP/product-macos"
+          else
+            gh release download "$RELEASE_TAG" --pattern '*-macos-*.zip' --pattern 'release.json' --dir "$RUNNER_TEMP/product-macos"
+            python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          base = Path(os.environ['RUNNER_TEMP']) / 'product-macos'
+          manifest = base / 'release.json'
+          record = json.loads(manifest.read_text())
+          mac, = [a for a in record.pop('artifacts') if a['platform'] == 'macos']
+          (base / f"macos-{mac['arch']}.artifact.json").write_text(json.dumps(dict(record, artifact=mac)))
+          manifest.unlink()
+          PY
+          fi
+      - name: Require Developer ID, notarization and exact release provenance
         env:
           RELEASE_TAG: ${{ needs.source.outputs.tag }}
           SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
-        run: python3 scripts/release_product.py package --platform macos --source flutter_app/build/macos/Build/Products/Release/my_dashboard.app --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --arch "$(uname -m)" --output "$RUNNER_TEMP/product-macos"
-      - uses: actions/upload-artifact@v4
+          TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          python3 app/scripts/release_product.py verify-macos --input "$RUNNER_TEMP/product-macos" --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --team-id "$TEAM_ID"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: product-macos
           retention-days: 1
-          path: ${{ runner.temp }}/product-macos/*
+          path: |
+            ${{ runner.temp }}/product-macos/*.zip
+            ${{ runner.temp }}/product-macos/*.artifact.json
           if-no-files-found: error
   publish:
-    needs: [source, web, macos]
+    needs: [source, web, verify_signed_macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -182,6 +225,15 @@ jobs:
           release = json.load(open('existing/release.json'))
           if release['tag'] != os.environ['RELEASE_TAG'] or release['source_commit'] != os.environ['SOURCE_COMMIT']:
               raise SystemExit('Existing release belongs to another source; never replace published assets')
+          from pathlib import Path
+          from hashlib import file_digest
+          expected, = [a for a in json.load(open('release/release.json'))['artifacts'] if a['platform'] == 'macos']
+          current, = [a for a in release['artifacts'] if a['platform'] == 'macos']
+          if expected != current:
+              raise SystemExit('Existing macOS release differs from the Developer ID verified artifact')
+          with (Path('existing') / expected['file']).open('rb') as archive:
+              if file_digest(archive, 'sha256').hexdigest() != expected['sha256']:
+                  raise SystemExit('Existing macOS ZIP differs from the verified signed bytes')
           PY
           else
             args=()
@@ -193,7 +245,7 @@ jobs:
             cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
           Web and macOS builds of Agent Dashboard. See `release.json` for the source commit and artifact hashes, and `SHA256SUMS` to verify downloads.
 
-          The macOS archive is not Developer ID signed or notarized. It is intended for testing; macOS Gatekeeper can prevent it from opening.
+          The macOS app is Developer ID signed and includes an Apple notarization ticket. The release receipt records its signing team and bundle identifier.
 
           Cloudflare Pages deployment is the next job in this workflow. Stable versions update production; prereleases publish a preview.
           EOF

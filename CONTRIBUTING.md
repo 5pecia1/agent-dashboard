@@ -6,7 +6,7 @@ For server changes, run the server commands in the root README, including the pa
 
 Keep the versioned protocol compatible when possible. Include a migration and an upgrade test for schema changes. Never modify a released SQL migration. State changes must preserve event ordering, duplicate handling, cursors, and read markers.
 
-Changes proposed here are reviewed and imported into the maintainer's source repository, then exported back to this repository. Your public contribution attribution is retained. Read LICENSE before submitting; do not contribute code you are not entitled to license under its terms.
+Submit changes to the shared application, server, hooks and protocol directly to this repository. Consumers can pin a reviewed revision of the Flutter package at `app/flutter_app`. Read LICENSE before submitting and contribute only code you are entitled to license under its terms.
 
 
 Contributions are accepted under the repository license with your copyright

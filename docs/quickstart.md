@@ -13,7 +13,7 @@ open "$HOME/Applications/Agent Dashboard.app"
 
 The installer uses macOS tools and `curl`; it does not require Node.js, Python, Xcode, or Flutter. It downloads a released ZIP, checks SHA256, and installs the app in `~/Applications`. To choose another installation folder, pass `--dir /Applications` if your account can write there.
 
-The current release has an ad-hoc signature and is not Developer ID signed or notarized. If macOS blocks the first launch, review [Apple's instructions for opening an app from an unidentified developer](https://support.apple.com/en-us/102445). After attempting to open it, approve this app in **System Settings → Privacy & Security → Open Anyway** if you trust this download. The installer does not disable Gatekeeper or remove quarantine attributes.
+The v0.1.10 release uses ad-hoc signing. Later releases require Developer ID signing and Apple notarization. For a historical build through v0.1.10, if macOS blocks the first launch, review [Apple's instructions for opening an app from an unidentified developer](https://support.apple.com/en-us/102445). After attempting to open it, approve this app in **System Settings → Privacy & Security → Open Anyway** if you trust this download. The installer does not disable Gatekeeper or remove quarantine attributes.
 
 For manual installation, download the macOS ZIP from [GitHub Releases](https://github.com/5pecia1/agent-dashboard/releases), extract it, and move `Agent Dashboard.app` to your Applications folder.
 

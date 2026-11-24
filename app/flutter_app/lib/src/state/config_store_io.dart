@@ -19,6 +19,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/state/config_provider.dart'
     show
         ConfigReadException,
@@ -119,7 +120,7 @@ Future<void> _restrictConfigPermissions(File file) async {
 
 String _stateDir() {
   final home = Platform.environment['HOME'] ?? Directory.current.path;
-  return '$home/.local/state/my-dashboard';
+  return dashboardHost.stateDirectory(home);
 }
 
 String _configPath() => '${_stateDir()}/config.json';

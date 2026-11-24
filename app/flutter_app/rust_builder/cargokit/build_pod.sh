@@ -11,7 +11,6 @@ NEW_PATH=`echo $PATH | tr ":" "\n" | grep -v "Contents/Developer/" | tr "\n" ":"
 
 export PATH=${NEW_PATH%?} # remove trailing :
 
-env
 
 # Platform name (macosx, iphoneos, iphonesimulator)
 export CARGOKIT_DARWIN_PLATFORM_NAME=$PLATFORM_NAME
@@ -23,7 +22,8 @@ export CARGOKIT_DARWIN_ARCHS=$ARCHS
 export CARGOKIT_CONFIGURATION=$CONFIGURATION
 
 # Path to directory containing Cargo.toml.
-export CARGOKIT_MANIFEST_DIR=$PODS_TARGET_SRCROOT/$1
+CARGOKIT_MANIFEST_DIR=$(cd -P "$PODS_TARGET_SRCROOT" && cd -P "$1" && pwd -P)
+export CARGOKIT_MANIFEST_DIR
 
 # Temporary directory for build artifacts.
 export CARGOKIT_TARGET_TEMP_DIR=$TARGET_TEMP_DIR

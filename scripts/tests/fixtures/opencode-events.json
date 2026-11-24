@@ -1,0 +1,3044 @@
+{
+ "probe2_shared_server": [
+  {
+   "id": "evt_49992013",
+   "created": 1792295850599,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_01",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": ""
+   }
+  },
+  {
+   "id": "evt_46207443",
+   "created": 1792295850605,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_01",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_41778410",
+   "created": 1792295850608,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_01"
+   }
+  },
+  {
+   "id": "evt_87299347",
+   "created": 1792295854384,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_01"
+   }
+  },
+  {
+   "id": "evt_63771328",
+   "created": 1792295854386,
+   "type": "session.renamed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_01",
+    "title": "Ping pong exchange"
+   }
+  },
+  {
+   "id": "evt_10181910",
+   "created": 1792295856195,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_01",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_10456337",
+   "created": 1792295857324,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_01",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_59189723",
+   "created": 1792295857327,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_01"
+   }
+  },
+  {
+   "id": "evt_13439130",
+   "created": 1792295857329,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_01"
+   }
+  },
+  {
+   "id": "evt_56340162",
+   "created": 1792295868830,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/beta"
+   },
+   "data": {
+    "sessionID": "ses_02",
+    "location": {
+     "directory": "/workspace/beta"
+    },
+    "subpath": ""
+   }
+  },
+  {
+   "id": "evt_68468557",
+   "created": 1792295868880,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/beta"
+   },
+   "data": {
+    "sessionID": "ses_02",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_5072354",
+   "created": 1792295868881,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_02"
+   }
+  },
+  {
+   "id": "evt_3392576",
+   "created": 1792295879966,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/beta"
+   },
+   "data": {
+    "sessionID": "ses_02",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_39100289",
+   "created": 1792295880194,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/beta"
+   },
+   "data": {
+    "sessionID": "ses_02",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_37319257",
+   "created": 1792295880196,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_02"
+   }
+  },
+  {
+   "id": "evt_13694823",
+   "created": 1792295880196,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_02"
+   }
+  },
+  {
+   "id": "evt_12617212",
+   "created": 1792295885191,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_02"
+   }
+  },
+  {
+   "id": "evt_84904357",
+   "created": 1792295885192,
+   "type": "session.renamed",
+   "location": {
+    "directory": "/workspace/beta"
+   },
+   "data": {
+    "sessionID": "ses_02",
+    "title": "Ping pong test"
+   }
+  },
+  {
+   "id": "evt_88433486",
+   "created": 1792295924490,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/server-cwd"
+   },
+   "data": {
+    "sessionID": "ses_03",
+    "location": {
+     "directory": "/workspace/server-cwd"
+    },
+    "subpath": "",
+    "title": "G3 perm probe"
+   }
+  },
+  {
+   "id": "evt_84555289",
+   "created": 1792295935814,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": "",
+    "title": "G3 perm probe"
+   }
+  },
+  {
+   "id": "evt_72465560",
+   "created": 1792295954185,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "Use the bash tool to run `echo hi` and report the output."
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_57674906",
+   "created": 1792295954186,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_04"
+   }
+  },
+  {
+   "id": "evt_95315218",
+   "created": 1792295961716,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_36148308",
+   "created": 1792295962300,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "id": "callx76781",
+    "input": {
+     "code": "return { output: \"\" };"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_65841643",
+   "created": 1792295962326,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "id": "callx736443",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_42383110",
+   "created": 1792295962335,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "id": "callx76781",
+    "content": [
+     {
+      "type": "text",
+      "text": "{\n  \"output\": \"\"\n}"
+     }
+    ],
+    "metadata": {
+     "toolCalls": [],
+     "truncated": false
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_46619307",
+   "created": 1792295962351,
+   "type": "permission.asked",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "per_x100312",
+    "sessionID": "ses_04",
+    "action": "shell",
+    "resources": [
+     "echo hi"
+    ]
+   }
+  },
+  {
+   "id": "evt_37739062",
+   "created": 1792295988309,
+   "type": "permission.replied",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "requestID": "per_x100312",
+    "reply": "once"
+   }
+  },
+  {
+   "id": "evt_73840305",
+   "created": 1792295988614,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "id": "callx736443",
+    "content": [
+     {
+      "type": "text",
+      "text": "hi\n"
+     }
+    ],
+    "metadata": {
+     "status": "completed",
+     "truncated": false,
+     "exit": 0
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_81399543",
+   "created": 1792295988630,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_96015690",
+   "created": 1792295988631,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_04"
+   }
+  },
+  {
+   "id": "evt_50765858",
+   "created": 1792295989929,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_48760644",
+   "created": 1792295990125,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_04",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_88412083",
+   "created": 1792295990127,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_04"
+   }
+  },
+  {
+   "id": "evt_91205025",
+   "created": 1792295990128,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_04"
+   }
+  },
+  {
+   "id": "evt_6727435",
+   "created": 1792296031716,
+   "type": "session.deleted",
+   "data": {
+    "sessionID": "ses_03"
+   }
+  },
+  {
+   "id": "evt_62009384",
+   "created": 1792296052665,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": "",
+    "title": "G4 question probe"
+   }
+  },
+  {
+   "id": "evt_78842169",
+   "created": 1792296052685,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "Use the question tool to ask me whether I prefer red or blue, then stop."
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_14768788",
+   "created": 1792296052687,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_42810962",
+   "created": 1792296054021,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_56288070",
+   "created": 1792296054822,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "id": "callx321553",
+    "input": {
+     "questions": [
+      {
+       "question": "Which do you prefer: red or blue?",
+       "header": "Color preference",
+       "options": [
+        {
+         "label": "Red",
+         "description": "Prefer red"
+        },
+        {
+         "label": "Blue",
+         "description": "Prefer blue"
+        }
+       ]
+      }
+     ]
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_18006426",
+   "created": 1792296054829,
+   "type": "form.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "form": {
+     "id": "frm_x108719",
+     "sessionID": "ses_05",
+     "title": "Questions",
+     "metadata": {
+      "kind": "question",
+      "tool": {
+       "messageID": "msg_x710079",
+       "id": "callx321553"
+      }
+     },
+     "fields": [
+      {
+       "key": "q0",
+       "title": "Color preference",
+       "description": "Which do you prefer: red or blue?",
+       "type": "string",
+       "options": [
+        {
+         "value": "Red",
+         "label": "Red",
+         "description": "Prefer red"
+        },
+        {
+         "value": "Blue",
+         "label": "Blue",
+         "description": "Prefer blue"
+        }
+       ],
+       "custom": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "evt_58523357",
+   "created": 1792296076316,
+   "type": "form.replied",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "frm_x108719",
+    "sessionID": "ses_05",
+    "answer": {
+     "q0": "Blue"
+    }
+   }
+  },
+  {
+   "id": "evt_81727752",
+   "created": 1792296076317,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "id": "callx321553",
+    "content": [
+     {
+      "type": "text",
+      "text": "User has answered your questions: \"Which do you prefer: red or blue?\"=\"Blue\". You can now continue with the user's answe"
+     }
+    ],
+    "metadata": {
+     "answers": [
+      [
+       "Blue"
+      ]
+     ],
+     "truncated": false
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_59852349",
+   "created": 1792296076331,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_369066",
+   "created": 1792296076332,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_68994885",
+   "created": 1792296084050,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_55529649",
+   "created": 1792296084376,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_40382582",
+   "created": 1792296084378,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_98536063",
+   "created": 1792296084378,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_8858969",
+   "created": 1792296103107,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "Use the question tool once more to ask whether I prefer cats or dogs, then stop."
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_77568789",
+   "created": 1792296103110,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_47823049",
+   "created": 1792296103857,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_45241018",
+   "created": 1792296104467,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "id": "callx113430",
+    "input": {
+     "questions": [
+      {
+       "question": "Which do you prefer: cats or dogs?",
+       "header": "Animal preference",
+       "options": [
+        {
+         "label": "Cats",
+         "description": "Prefer cats"
+        },
+        {
+         "label": "Dogs",
+         "description": "Prefer dogs"
+        }
+       ]
+      }
+     ]
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_80023776",
+   "created": 1792296104473,
+   "type": "form.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "form": {
+     "id": "frm_x29103",
+     "sessionID": "ses_05",
+     "title": "Questions",
+     "metadata": {
+      "kind": "question",
+      "tool": {
+       "messageID": "msg_x610891",
+       "id": "callx113430"
+      }
+     },
+     "fields": [
+      {
+       "key": "q0",
+       "title": "Animal preference",
+       "description": "Which do you prefer: cats or dogs?",
+       "type": "string",
+       "options": [
+        {
+         "value": "Cats",
+         "label": "Cats",
+         "description": "Prefer cats"
+        },
+        {
+         "value": "Dogs",
+         "label": "Dogs",
+         "description": "Prefer dogs"
+        }
+       ],
+       "custom": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "evt_82533357",
+   "created": 1792296105218,
+   "type": "form.cancelled",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "frm_x29103",
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_71905380",
+   "created": 1792296105219,
+   "type": "session.tool.failed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "id": "callx113430",
+    "error": {
+     "type": "tool.execution",
+     "message": "probe cancelled"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_19430486",
+   "created": 1792296105237,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_33734660",
+   "created": 1792296105240,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_20888531",
+   "created": 1792296107485,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_94526781",
+   "created": 1792296110927,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_05",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": []
+   }
+  },
+  {
+   "id": "evt_9207268",
+   "created": 1792296110928,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_47508572",
+   "created": 1792296110929,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_05"
+   }
+  },
+  {
+   "id": "evt_72372735",
+   "created": 1792296139032,
+   "type": "session.deleted",
+   "data": {
+    "sessionID": "ses_01"
+   }
+  },
+  {
+   "id": "evt_99543596",
+   "created": 1792296232240,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/server-cwd"
+   },
+   "data": {}
+  }
+ ],
+ "probe1_standalone": [
+  {
+   "id": "evt_33407028",
+   "created": 1792294896972,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_06",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply with exactly the word pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_17527089",
+   "created": 1792294896973,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_06"
+   }
+  },
+  {
+   "id": "evt_86936480",
+   "created": 1792294898349,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_06",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_826030",
+   "created": 1792294898631,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_06",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_80294704",
+   "created": 1792294898632,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_06"
+   }
+  },
+  {
+   "id": "evt_26732367",
+   "created": 1792294898632,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_06"
+   }
+  },
+  {
+   "id": "evt_34494932",
+   "created": 1792294898637,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_63993510",
+   "created": 1792294914800,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Use the bash tool to run `echo hi` and tell me the output.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_81889768",
+   "created": 1792294914801,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_07"
+   }
+  },
+  {
+   "id": "evt_52826600",
+   "created": 1792294930100,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_07"
+   }
+  },
+  {
+   "id": "evt_97149741",
+   "created": 1792294930104,
+   "type": "session.renamed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "title": "Running echo hi command"
+   }
+  },
+  {
+   "id": "evt_86379104",
+   "created": 1792294946032,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_14507959",
+   "created": 1792294947576,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "id": "callx3500",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_80648356",
+   "created": 1792294947905,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "id": "callx3500",
+    "content": [
+     {
+      "type": "text",
+      "text": "hi\n"
+     }
+    ],
+    "metadata": {
+     "status": "completed",
+     "truncated": false,
+     "exit": 0
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_75914522",
+   "created": 1792294947942,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_64844929",
+   "created": 1792294947943,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_07"
+   }
+  },
+  {
+   "id": "evt_51367115",
+   "created": 1792294948970,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_99417329",
+   "created": 1792294949189,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_07",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_51674916",
+   "created": 1792294949190,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_07"
+   }
+  },
+  {
+   "id": "evt_39150132",
+   "created": 1792294949191,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_07"
+   }
+  },
+  {
+   "id": "evt_65799316",
+   "created": 1792294949197,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_5787443",
+   "created": 1792294972650,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Use the bash tool to run `echo hi` and tell me the output.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_71674071",
+   "created": 1792294972652,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_08"
+   }
+  },
+  {
+   "id": "evt_84464529",
+   "created": 1792294973925,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_25942723",
+   "created": 1792294975528,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "id": "callx749671",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_46772890",
+   "created": 1792294975848,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "id": "callx749671",
+    "content": [
+     {
+      "type": "text",
+      "text": "hi\n"
+     }
+    ],
+    "metadata": {
+     "status": "completed",
+     "truncated": false,
+     "exit": 0
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_39540430",
+   "created": 1792294975878,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_23112746",
+   "created": 1792294975879,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_08"
+   }
+  },
+  {
+   "id": "evt_86829798",
+   "created": 1792294977028,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_11601700",
+   "created": 1792294977249,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_08",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_41104474",
+   "created": 1792294977250,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_08"
+   }
+  },
+  {
+   "id": "evt_9517071",
+   "created": 1792294977250,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_08"
+   }
+  },
+  {
+   "id": "evt_53059778",
+   "created": 1792294977256,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_27681878",
+   "created": 1792294994270,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Use the bash tool to run `echo hi` and tell me the output.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_94763976",
+   "created": 1792294994271,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_79092254",
+   "created": 1792294995801,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_59406771",
+   "created": 1792294996429,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx107864",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_78733209",
+   "created": 1792294996455,
+   "type": "permission.asked",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "per_x808327",
+    "sessionID": "ses_09",
+    "action": "shell",
+    "resources": [
+     "echo hi"
+    ]
+   }
+  },
+  {
+   "id": "evt_31621109",
+   "created": 1792294996457,
+   "type": "permission.replied",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "requestID": "per_x808327",
+    "reply": "reject"
+   }
+  },
+  {
+   "id": "evt_32333357",
+   "created": 1792294996457,
+   "type": "session.tool.failed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx107864",
+    "error": {
+     "type": "permission.rejected",
+     "message": "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_74033006",
+   "created": 1792294996501,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_541342",
+   "created": 1792294996502,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_27425324",
+   "created": 1792294997527,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_41055865",
+   "created": 1792294999342,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx588880",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_77671841",
+   "created": 1792294999349,
+   "type": "permission.asked",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "per_x105351",
+    "sessionID": "ses_09",
+    "action": "shell",
+    "resources": [
+     "echo hi"
+    ]
+   }
+  },
+  {
+   "id": "evt_11263310",
+   "created": 1792294999352,
+   "type": "permission.replied",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "requestID": "per_x105351",
+    "reply": "reject"
+   }
+  },
+  {
+   "id": "evt_26455410",
+   "created": 1792294999354,
+   "type": "session.tool.failed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx588880",
+    "error": {
+     "type": "permission.rejected",
+     "message": "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_47475122",
+   "created": 1792294999403,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_55799404",
+   "created": 1792294999404,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_66788632",
+   "created": 1792295000432,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_88845865",
+   "created": 1792295000949,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx661588",
+    "input": {
+     "code": "return \"executed\""
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_51965866",
+   "created": 1792295000962,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx661588",
+    "content": [
+     {
+      "type": "text",
+      "text": "executed"
+     }
+    ],
+    "metadata": {
+     "toolCalls": [],
+     "truncated": false
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_72201547",
+   "created": 1792295001016,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_35166692",
+   "created": 1792295001018,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_48101353",
+   "created": 1792295002409,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_57619427",
+   "created": 1792295004705,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx920406",
+    "input": {
+     "command": "echo hi"
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_69444384",
+   "created": 1792295004714,
+   "type": "permission.asked",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "id": "per_x340030",
+    "sessionID": "ses_09",
+    "action": "shell",
+    "resources": [
+     "echo hi"
+    ]
+   }
+  },
+  {
+   "id": "evt_52409500",
+   "created": 1792295004718,
+   "type": "permission.replied",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "requestID": "per_x340030",
+    "reply": "reject"
+   }
+  },
+  {
+   "id": "evt_13800014",
+   "created": 1792295004720,
+   "type": "session.tool.failed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "id": "callx920406",
+    "error": {
+     "type": "permission.rejected",
+     "message": "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_27252371",
+   "created": 1792295004766,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_82927296",
+   "created": 1792295004767,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_38614932",
+   "created": 1792295005749,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_24636870",
+   "created": 1792295007303,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_59409382",
+   "created": 1792295007305,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_66061172",
+   "created": 1792295007305,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_60123142",
+   "created": 1792295007313,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_70854174",
+   "created": 1792295027487,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply with pong again.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_79347127",
+   "created": 1792295027488,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_31040661",
+   "created": 1792295028673,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_27525496",
+   "created": 1792295028879,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_09",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_5544965",
+   "created": 1792295028881,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_5936075",
+   "created": 1792295028881,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_09"
+   }
+  },
+  {
+   "id": "evt_6494851",
+   "created": 1792295028886,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_41307967",
+   "created": 1792295040816,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Use the task tool to delegate this to a subagent: reply with the word pong. Then report what it said.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_50526727",
+   "created": 1792295040817,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_10"
+   }
+  },
+  {
+   "id": "evt_44742514",
+   "created": 1792295042030,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_74099421",
+   "created": 1792295042723,
+   "type": "session.tool.called",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "id": "callx847392",
+    "input": {
+     "agent": "general",
+     "description": "Reply with pong",
+     "prompt": "Reply with exactly the word \"pong\" and nothing else."
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_57886932",
+   "created": 1792295042773,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_11",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": "",
+    "parentID": "ses_10",
+    "title": "Reply with pong",
+    "agent": "general"
+   }
+  },
+  {
+   "id": "evt_84210165",
+   "created": 1792295042776,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_11",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "You are a subagent spawned by another session.\nReply with exactly the word \"pong\" and nothing else."
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_88518916",
+   "created": 1792295042777,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_11"
+   }
+  },
+  {
+   "id": "evt_78124841",
+   "created": 1792295044601,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_11",
+    "agent": "general"
+   }
+  },
+  {
+   "id": "evt_76850041",
+   "created": 1792295045026,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_11",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_19297436",
+   "created": 1792295045027,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_11"
+   }
+  },
+  {
+   "id": "evt_5138517",
+   "created": 1792295045028,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_11"
+   }
+  },
+  {
+   "id": "evt_71112494",
+   "created": 1792295045030,
+   "type": "session.tool.success",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "id": "callx847392",
+    "content": [
+     {
+      "type": "text",
+      "text": "<subagent sessionID=\"ses_11\" state=\"completed\">\npong\n</subagent>"
+     }
+    ],
+    "metadata": {
+     "sessionID": "ses_11",
+     "status": "completed",
+     "truncated": false
+    },
+    "executed": false
+   }
+  },
+  {
+   "id": "evt_29287590",
+   "created": 1792295045065,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "finish": "tool-calls",
+    "rawFinish": "tool_calls",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_95126452",
+   "created": 1792295045066,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_10"
+   }
+  },
+  {
+   "id": "evt_74910905",
+   "created": 1792295046083,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_24520382",
+   "created": 1792295046324,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_10",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_96527372",
+   "created": 1792295046326,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_10"
+   }
+  },
+  {
+   "id": "evt_73267735",
+   "created": 1792295046326,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_10"
+   }
+  },
+  {
+   "id": "evt_11742109",
+   "created": 1792295046331,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_18433141",
+   "created": 1792295067672,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_12",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Count slowly from 1 to 200, one number per line.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_58350702",
+   "created": 1792295067673,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_12"
+   }
+  },
+  {
+   "id": "evt_67707000",
+   "created": 1792295069586,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_12",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_23931132",
+   "created": 1792295070097,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_89319101",
+   "created": 1792295105437,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_13",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": ""
+   }
+  },
+  {
+   "id": "evt_20506960",
+   "created": 1792295105443,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_13",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply with exactly the word pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_45735388",
+   "created": 1792295105444,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_13"
+   }
+  },
+  {
+   "id": "evt_82961030",
+   "created": 1792295106670,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_13",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_724162",
+   "created": 1792295106904,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_13",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl"
+    ]
+   }
+  },
+  {
+   "id": "evt_40151801",
+   "created": 1792295106905,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_13"
+   }
+  },
+  {
+   "id": "evt_60024263",
+   "created": 1792295106905,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_13"
+   }
+  },
+  {
+   "id": "evt_13716027",
+   "created": 1792295108508,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_13"
+   }
+  },
+  {
+   "id": "evt_73765574",
+   "created": 1792295108510,
+   "type": "session.renamed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_13",
+    "title": "Ping pong test"
+   }
+  },
+  {
+   "id": "evt_20982450",
+   "created": 1792295125556,
+   "type": "session.deleted",
+   "data": {
+    "sessionID": "ses_13"
+   }
+  },
+  {
+   "id": "evt_21475600",
+   "created": 1792295138389,
+   "type": "session.deleted",
+   "data": {
+    "sessionID": "ses_11"
+   }
+  },
+  {
+   "id": "evt_53497472",
+   "created": 1792295138390,
+   "type": "session.deleted",
+   "data": {
+    "sessionID": "ses_10"
+   }
+  },
+  {
+   "id": "evt_72267870",
+   "created": 1792295152832,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_14",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply with exactly the word pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_51915759",
+   "created": 1792295152834,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_14"
+   }
+  },
+  {
+   "id": "evt_79696611",
+   "created": 1792295154084,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_14",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_69740256",
+   "created": 1792295154238,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_14",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "files": [
+     "events.jsonl",
+     "s9.json"
+    ]
+   }
+  },
+  {
+   "id": "evt_58817381",
+   "created": 1792295154240,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_14"
+   }
+  },
+  {
+   "id": "evt_46981890",
+   "created": 1792295154240,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_14"
+   }
+  },
+  {
+   "id": "evt_21359791",
+   "created": 1792295154246,
+   "type": "location.shutdown",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {}
+  },
+  {
+   "id": "evt_24721719",
+   "created": 1792295167643,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_15",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": ""
+   }
+  },
+  {
+   "id": "evt_66888214",
+   "created": 1792295167648,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_15",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Count slowly from 1 to 200, one number per line.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_75396538",
+   "created": 1792295167649,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_15"
+   }
+  },
+  {
+   "id": "evt_3985157",
+   "created": 1792295168682,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_15",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_94579728",
+   "created": 1792295171659,
+   "type": "session.execution.interrupted",
+   "data": {
+    "sessionID": "ses_15",
+    "reason": "user"
+   }
+  },
+  {
+   "id": "evt_76126602",
+   "created": 1792295172966,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_15"
+   }
+  },
+  {
+   "id": "evt_73227187",
+   "created": 1792295172967,
+   "type": "session.renamed",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_15",
+    "title": "1"
+   }
+  },
+  {
+   "id": "evt_9225844",
+   "created": 1792295199239,
+   "type": "session.created",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_16",
+    "location": {
+     "directory": "/workspace/alpha"
+    },
+    "subpath": ""
+   }
+  },
+  {
+   "id": "evt_77367602",
+   "created": 1792295199244,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_16",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "\"Reply with exactly the word pong.\"",
+      "files": []
+     },
+     "delivery": "steer"
+    }
+   }
+  },
+  {
+   "id": "evt_55757054",
+   "created": 1792295199247,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_16"
+   }
+  },
+  {
+   "id": "evt_1848414",
+   "created": 1792295199568,
+   "type": "session.step.started",
+   "location": {
+    "directory": "/workspace/alpha"
+   },
+   "data": {
+    "sessionID": "ses_16",
+    "agent": "build"
+   }
+  },
+  {
+   "id": "evt_72601924",
+   "created": 1792295199646,
+   "type": "session.execution.failed",
+   "data": {
+    "sessionID": "ses_16",
+    "error": {
+     "type": "provider.auth",
+     "message": "provider auth failed",
+     "status": 403
+    }
+   }
+  },
+  {
+   "id": "evt_79660524",
+   "created": 1792295829770,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_4641454",
+   "created": 1792295842517,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_84832973",
+   "created": 1792295844832,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_35164391",
+   "created": 1792295847463,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_31112933",
+   "created": 1792295857897,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_84631653",
+   "created": 1792295861017,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_86549415",
+   "created": 1792295866081,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_37366282",
+   "created": 1792295871359,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_28810934",
+   "created": 1792295876148,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_87853043",
+   "created": 1792295882231,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_58055776",
+   "created": 1792295891161,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_95061604",
+   "created": 1792295910428,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_30810991",
+   "created": 1792295916228,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_32214469",
+   "created": 1792295922960,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_6787373",
+   "created": 1792295926048,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_6732813",
+   "created": 1792295931776,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_14658243",
+   "created": 1792295937769,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_51000747",
+   "created": 1792295942119,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_91227723",
+   "created": 1792295953266,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_18795707",
+   "created": 1792295953267,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_76412041",
+   "created": 1792296092567,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_16608538",
+   "created": 1792296100701,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_19446825",
+   "created": 1792296105976,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_44534125",
+   "created": 1792296112627,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_40466558",
+   "created": 1792296120843,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_66441634",
+   "created": 1792296173979,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_90357970",
+   "created": 1792296181930,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_3514499",
+   "created": 1792296192219,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_88143296",
+   "created": 1792296199358,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_58346749",
+   "created": 1792296209486,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_30816731",
+   "created": 1792296218633,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_67176295",
+   "created": 1792296226352,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_20772316",
+   "created": 1792296436857,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_47310799",
+   "created": 1792296446709,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_20224913",
+   "created": 1792296465985,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_72527477",
+   "created": 1792296474387,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_39316177",
+   "created": 1792296482432,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_65153385",
+   "created": 1792296496037,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_80955865",
+   "created": 1792296536775,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_23696467",
+   "created": 1792296542457,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_38109990",
+   "created": 1792296544919,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_20202274",
+   "created": 1792296557641,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_43771797",
+   "created": 1792296579826,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_15070328",
+   "created": 1792296592785,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_22072465",
+   "created": 1792296633993,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_29737754",
+   "created": 1792296645130,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_69700716",
+   "created": 1792296707907,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_21488237",
+   "created": 1792296717287,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_90999264",
+   "created": 1792296717288,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_45128098",
+   "created": 1792296794366,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_74760001",
+   "created": 1792296821761,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_42377259",
+   "created": 1792296922748,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_29993054",
+   "created": 1792296986726,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_33284279",
+   "created": 1792296999567,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_25234915",
+   "created": 1792297126974,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_20425597",
+   "created": 1792297133584,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_58506162",
+   "created": 1792297138556,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_72377779",
+   "created": 1792297189314,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_78587191",
+   "created": 1792297284624,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_90625342",
+   "created": 1792297302022,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_35623694",
+   "created": 1792297309970,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_79652281",
+   "created": 1792297353884,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_10331312",
+   "created": 1792297439564,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_11058711",
+   "created": 1792297629285,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_69615196",
+   "created": 1792297650551,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  },
+  {
+   "id": "evt_88822137",
+   "created": 1792297650551,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_17"
+   }
+  }
+ ]
+}

@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/platform/feature_status.dart' show hasDesktopHost;
 import 'package:my_dashboard/src/platform/local_notifications_native.dart'
     if (dart.library.js_interop) 'package:my_dashboard/src/platform/local_notifications_web.dart'
@@ -36,7 +37,7 @@ Future<void> _ensureDashboardStateDir() async {
   if (!hasDesktopHost) return;
   try {
     final home = Platform.environment['HOME'] ?? Directory.current.path;
-    final dir = Directory('$home/.local/state/my-dashboard');
+    final dir = Directory(dashboardHost.stateDirectory(home));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

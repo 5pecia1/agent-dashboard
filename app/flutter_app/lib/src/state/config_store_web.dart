@@ -15,6 +15,7 @@ import 'dart:convert';
 
 import 'package:web/web.dart' as web;
 
+import 'package:my_dashboard/src/state/dashboard_host.dart';
 import 'package:my_dashboard/src/state/config_provider.dart'
     show
         ConfigReadException,
@@ -22,9 +23,9 @@ import 'package:my_dashboard/src/state/config_provider.dart'
         DashboardConfigValues,
         decodeStoredDashboardConfig;
 
-const String _storageKey = 'my-dashboard.config.v1';
-const String _backupKey = '$_storageKey.before-extensions';
-const String _location = 'localStorage[$_storageKey]';
+String get _storageKey => dashboardHost.storageKey('config.v1');
+String get _backupKey => '$_storageKey.before-extensions';
+String get _location => 'localStorage[$_storageKey]';
 
 Future<DashboardConfigValues> loadDashboardConfig() async {
   final String? raw;
