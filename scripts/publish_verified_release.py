@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 from urllib.parse import quote
 
 
@@ -19,9 +20,25 @@ def file_digest(path):
         return 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def remote_release(repo, tag):
-    pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100'))
-    return next((item for page in pages for item in page if item['tag_name'] == tag), None)
+def release_id(repo, tag):
+    # Pending tags on draft releases are visible to the authenticated tag lookup.
+    owner, name = repo.split('/')
+    query = ('query($owner:String!, $repo:String!, $tag:String!) {'
+             'repository(owner:$owner,name:$repo) {release(tagName:$tag) {databaseId}}}')
+    response = json.loads(gh('api', 'graphql', '-f', 'query=' + query, '-f', 'owner=' + owner,
+                             '-f', 'repo=' + name, '-f', 'tag=' + tag))
+    release = response['data']['repository']['release']
+    return release['databaseId'] if release else None
+
+
+def by_id(repo, identifier, tag):
+    endpoint = f'repos/{repo}/releases/{identifier}'
+    release = json.loads(gh('api', endpoint))
+    if release['id'] != identifier or release['tag_name'] != tag:
+        raise ValueError('release identity changed during publication')
+    pages = json.loads(gh('api', '--paginate', '--slurp', endpoint + '/assets?per_page=100'))
+    release['assets'] = [asset for page in pages for asset in page]
+    return release
 
 
 def compare_assets(release, local, repo, tag):
@@ -50,14 +67,25 @@ def publish(args):
     if not assets or any(not p.is_file() or p.is_symlink() or not p.stat().st_size for p in assets):
         raise ValueError('expected a nonempty directory of verified release files')
     local = {path.name: file_digest(path) for path in assets}
-    release = remote_release(repo, args.tag)
-    flags = ['--prerelease'] if args.prerelease else []
-    if not release:
-        gh('release', 'create', args.tag, '--repo', repo, '--verify-tag', '--target', args.commit,
-           '--draft', '--latest=false', '--title', args.title, '--notes-file', str(args.notes), *flags)
-        release = remote_release(repo, args.tag)
-    if not release:
-        raise ValueError('new release draft is unavailable')
+    identifier = release_id(repo, args.tag)
+    if identifier is None:
+        created = json.loads(gh('api', '--method', 'POST', f'repos/{repo}/releases',
+                                '-f', 'tag_name=' + args.tag, '-f', 'target_commitish=' + args.commit,
+                                '-f', 'name=' + args.title, '-f', 'body=' + args.notes.read_text(),
+                                '-F', 'draft=true', '-F', 'prerelease=' + str(args.prerelease).lower(),
+                                '-f', 'make_latest=false'))
+        identifier = created['id']
+        if not created['draft'] or created['tag_name'] != args.tag:
+            raise ValueError('GitHub returned an unexpected draft')
+        # gh release upload resolves tags. Wait for the exact draft ID, not the release list.
+        for attempt in range(6):
+            if release_id(repo, args.tag) == identifier:
+                break
+            if attempt < 5:
+                time.sleep(2 ** attempt)
+        else:
+            raise ValueError(f'draft {identifier} is not visible by tag yet; rerun the failed publish job')
+    release = by_id(repo, identifier, args.tag)
     missing = compare_assets(release, local, repo, args.tag)
     if not release['draft']:
         if missing:
@@ -65,10 +93,18 @@ def publish(args):
         return
     for name in sorted(missing):
         gh('release', 'upload', args.tag, '--repo', repo, str(args.directory / name))
-    staged = remote_release(repo, args.tag)
-    if not staged or not staged['draft'] or staged['id'] != release['id'] or compare_assets(staged, local, repo, args.tag):
-        raise ValueError('draft asset verification failed')
-    gh('release', 'edit', args.tag, '--repo', repo, '--draft=false', '--latest=' + args.latest, *flags)
+    for attempt in range(5):
+        staged = by_id(repo, identifier, args.tag)
+        if not staged['draft']:
+            raise ValueError('draft was published concurrently')
+        if not compare_assets(staged, local, repo, args.tag):
+            break
+        if attempt < 4:
+            time.sleep(2 ** attempt)
+    else:
+        raise ValueError('draft asset verification failed; rerun after all assets are visible')
+    gh('api', '--method', 'PATCH', f'repos/{repo}/releases/{identifier}', '-F', 'draft=false',
+       '-f', 'make_latest=' + args.latest, '-F', 'prerelease=' + str(args.prerelease).lower())
 
 
 if __name__ == '__main__':
