@@ -39,16 +39,28 @@ Browser settings are stored per origin. Enter your server URL and token again wh
 ## Bump the version and deploy
 
 1. Update the workspace version in `app/Cargo.toml`, along with `version` and the numeric `msix_version` in `app/flutter_app/pubspec.yaml`. Commit changed lockfiles as well, and merge into `main` after review.
-2. Prepare the signed app and staging draft on your signing Mac, using the procedure below. Use the exact reviewed source commit that will receive the version tag.
-3. Push the public version tag after the staging upload completes. `release-product.yml` tests the app, builds the web and macOS products, and checks the signed ZIP independently on a fresh macOS runner. The publish job ships those verified ZIP bytes. Stable versions deploy to production Pages and prereleases deploy to a preview. Check the deployed web manifest after publication.
+2. Push a version tag such as `v0.1.11` on that commit. The release workflow builds the public web app and the universal macOS archive. The macOS job asks Apple to sign and notarize the archive, extracts and verifies the final ZIP, and saves the Apple receipt.
+3. The publish job uses the verified bytes from Actions. Stable releases deploy to the production Pages site. Prereleases deploy to a preview. Check the deployed web manifest after publication.
 
-### Configure the signing Mac
+### Configure signing in GitHub Actions
 
-Use an existing Apple Developer Program team. Sign in to the team in Xcode **Settings → Accounts** and select the full Xcode installation with `DEVELOPER_DIR`. Set `APPLE_TEAM_ID` to that team's ten-character ID. Xcode can submit the app using a cloud-managed Developer ID certificate when the signed-in account has the required access. The app uses bundle ID `io.github.5pecia1.mydashboard`. [Apple Developer ID certificates](https://developer.apple.com/help/account/certificates/create-developer-id-certificates) · [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+Create the `macos-signing` deployment environment. Allow the `v*` release tags and the trusted branches on which maintainers can rehearse signing. Store the Apple Developer Team ID in the environment variable `APPLE_TEAM_ID`. Supply a dedicated App Store Connect team API key with access to cloud-managed Developer ID signing and notarization using these environment secrets.
 
-Configure a GitHub environment named **macos-signing** with the non-secret variable `APPLE_TEAM_ID` set to the same Team ID. Restrict release tags and configure release reviewers where available. The GitHub-hosted verification job checks the signed ZIP against this team. Credentials remain on the Mac.
+| Environment secret | Value |
+|---|---|
+| `ASC_KEY_ID` | Key ID from App Store Connect |
+| `ASC_ISSUER_ID` | Team API issuer UUID |
+| `ASC_PRIVATE_KEY` | Original multiline PEM contents of the downloaded `.p8` file |
 
-### Prepare the macOS release using Xcode
+Only the signing step reads the private key. It passes Apple tools the path to a temporary file with owner-only access. The app, ZIP and uploaded receipt contain no key. The checks verify the expected team, bundle ID, signed source revision, secure timestamp, hardened runtime and stapled ticket. [Apple team API keys](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/) · [Developer ID](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
+
+Before creating a public tag, a repository owner can run a signing rehearsal for an exact pushed commit on an allowed branch. It produces the signed macOS ZIP and receipt as Actions artifacts. Web deployment and GitHub Release publication are skipped.
+
+```sh
+gh workflow run release-product.yml --ref main -f sign_only=true -f expected_sha="$(git rev-parse HEAD)"
+```
+
+### Sign on a development Mac
 
 Use a fresh public checkout of the reviewed commit. Replace the example tag with the new version. Preserve the archive directory until Gatekeeper and release verification have passed.
 
@@ -77,13 +89,11 @@ The archive records the commit before it goes to Apple. Xcode uploads with your 
 python3 app/scripts/release_product.py package --platform macos \
   --source "$release_dir/Agent Dashboard.app" --team-id "$APPLE_TEAM_ID" \
   --arch "$(uname -m)" --tag "$release_tag" --commit "$source_commit" --output "$release_dir/assets"
-gh release create "macos-stage-$release_tag" --draft --target "$source_commit" \
-  --title "Signed macOS build for $release_tag" --notes "Source commit $source_commit" "$release_dir"/assets/*
-git tag "$release_tag" "$source_commit"
-git push origin "refs/tags/$release_tag"
 ```
 
-The packaging tool reopens the final ZIP and verifies the stapled app. The signed Info.plist and release receipt record the same source commit. The receipt also records the ZIP SHA256 and signing team. Keep the staging release in draft. After publication it can be deleted from the Releases page. Retries verify the already-published bytes. Versions through v0.1.10 retain their original signing status.
+The local ZIP can be inspected with the same `verify-macos` command used by the release workflow.
+
+Release retries verify an existing published ZIP before reusing it. Historical versions through v0.1.10 retain their original signing status.
 
 ### Use a local Developer ID certificate
 

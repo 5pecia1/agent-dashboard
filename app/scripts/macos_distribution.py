@@ -177,6 +177,10 @@ def main():
         else:
             sub.add_argument('--output', type=Path, required=True)
             sub.add_argument('--team-id', required=True)
+            sub.add_argument('--api-key-env', action='store_true',
+                             help='authenticate with ASC_KEY_ID, ASC_ISSUER_ID and the raw multiline ASC_PRIVATE_KEY')
+            sub.add_argument('--wait-seconds', type=int, default=0,
+                             help='poll an API-key submission for at most this many seconds before export')
             sub.add_argument('--submit', action='store_true', help='upload this archive if it has never been submitted')
     args = parser.parse_args()
     try:

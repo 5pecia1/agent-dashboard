@@ -5,9 +5,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing app tag (dispatch from the same tag to retry)
+        description: Existing app tag for a release retry
         type: string
-        required: true
+        required: false
+      sign_only:
+        description: Sign and verify this branch commit without publishing
+        type: boolean
+        default: false
+      expected_sha:
+        description: Exact reviewed branch commit for a signing rehearsal
+        type: string
+        required: false
       allow_rollback:
         description: Allow an older stable version to replace production
         type: boolean
@@ -15,11 +23,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: product-release-${{ inputs.tag || github.ref_name }}
+  group: product-release-${{ inputs.sign_only && github.sha || inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   source:
-    if: github.repository == '5pecia1/agent-dashboard'
+    if: github.repository == '5pecia1/agent-dashboard' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.source.outputs.tag }}
@@ -29,16 +37,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Check the tag, source branch, and app version
         id: source
         env:
+          SIGN_ONLY: ${{ inputs.sign_only }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
-          git fetch origin main
-          git merge-base --is-ancestor HEAD origin/main
+          if [ "$SIGN_ONLY" = true ]; then
+            test "$GITHUB_REF_TYPE" = branch
+            test "$EXPECTED_SHA" = "$(git rev-parse HEAD)"
+            export RELEASE_TAG="v$(python3 app/scripts/version_check.py)"
+          else
+            test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+            git fetch origin main
+            git merge-base --is-ancestor HEAD origin/main
+          fi
           python3 app/scripts/version_check.py --tag "$RELEASE_TAG"
           python3 - <<'PY'
           import os, re, subprocess
@@ -52,6 +68,7 @@ jobs:
               output.write(f'tag={tag}\ncommit={commit}\nprerelease={str(prerelease).lower()}\npages_branch={branch}\n')
           PY
   web:
+    if: ${{ !inputs.sign_only }}
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -114,57 +131,32 @@ jobs:
     needs: source
     runs-on: macos-15
     timeout-minutes: 90
+    environment: macos-signing
+    permissions:
+      contents: read
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-    defaults:
-      run:
-        working-directory: app
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.source.outputs.commit }}
-      - uses: jdx/mise-action@v2
-        with:
-          working_directory: app
-      - run: mise run tools:rust
-      - run: mise run tools:licenses
-      - run: xcodebuild -version
-      - name: Register CocoaPods CDN
-        run: pod repo add-cdn trunk https://cdn.cocoapods.org/
-      - run: mise run deps
-      - run: mise run check
-      - run: mise run verify
-      - run: python3 -m unittest discover -s scripts/tests -p test_release_product.py
-      - run: mise run build
-  verify_signed_macos:
-    # Only collaborators with push access can see draft release assets.
-    permissions:
-      contents: write
-    needs: [source, macos]
-    runs-on: macos-15
-    environment: macos-signing
+      TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+      RELEASE_TAG: ${{ needs.source.outputs.tag }}
+      BUNDLE_ID: io.github.5pecia1.mydashboard
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.source.outputs.commit }}
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          python-version: '3.13'
-      - name: Fetch the maintainer's signed build
+          working_directory: app
+      - name: Reuse an already published release on retry
+        if: ${{ !inputs.sign_only }}
+        id: published
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.source.outputs.tag }}
         run: |
-          staging_tag="macos-stage-$RELEASE_TAG"
-          # On retries after the staging draft has been removed, verify published bytes.
-          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" != false ]; then
-            test "$(gh release view "$staging_tag" --json isDraft --jq .isDraft)" = true
-            gh release download "$staging_tag" --pattern '*.zip' --pattern '*.artifact.json' --dir "$RUNNER_TEMP/product-macos"
-          else
+          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
             gh release download "$RELEASE_TAG" --pattern '*-macos-*.zip' --pattern 'release.json' --dir "$RUNNER_TEMP/product-macos"
-            python3 - <<'PY'
+            python3 - <<'PYTHON'
           import json, os
           from pathlib import Path
           base = Path(os.environ['RUNNER_TEMP']) / 'product-macos'
@@ -173,25 +165,57 @@ jobs:
           mac, = [a for a in record.pop('artifacts') if a['platform'] == 'macos']
           (base / f"macos-{mac['arch']}.artifact.json").write_text(json.dumps(dict(record, artifact=mac)))
           manifest.unlink()
-          PY
+          PYTHON
+            echo 'reuse=true' >> "$GITHUB_OUTPUT"
           fi
-      - name: Require Developer ID, notarization and exact release provenance
-        env:
-          RELEASE_TAG: ${{ needs.source.outputs.tag }}
-          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
-          TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      - name: Check the public app and build its archive
+        if: steps.published.outputs.reuse != 'true'
+        working-directory: app
         run: |
-          python3 app/scripts/release_product.py verify-macos --input "$RUNNER_TEMP/product-macos" --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --team-id "$TEAM_ID"
+          mise run tools:rust
+          mise run tools:licenses
+          mise run deps
+          mise run check
+          mise run verify
+          mise exec -- python3 scripts/macos_distribution.py archive --project flutter_app \
+            --source-commit "$SOURCE_COMMIT" --bundle-id "$BUNDLE_ID" --archive "$RUNNER_TEMP/product.xcarchive"
+      - name: Request Developer ID signing and Apple notarization
+        if: steps.published.outputs.reuse != 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          python3 app/scripts/macos_distribution.py cloud --submit --api-key-env --wait-seconds 1800 \
+            --archive "$RUNNER_TEMP/product.xcarchive" --output "$RUNNER_TEMP/Agent Dashboard.app" \
+            --source-commit "$SOURCE_COMMIT" --bundle-id "$BUNDLE_ID" --team-id "$TEAM_ID"
+      - name: Package the signed universal app
+        if: steps.published.outputs.reuse != 'true'
+        run: |
+          python3 app/scripts/release_product.py package --platform macos --arch universal \
+            --source "$RUNNER_TEMP/Agent Dashboard.app" --team-id "$TEAM_ID" --tag "$RELEASE_TAG" \
+            --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/product-macos"
+      - name: Verify the extracted ZIP, signing team, notarization and source
+        run: |
+          python3 app/scripts/release_product.py verify-macos --input "$RUNNER_TEMP/product-macos" \
+            --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" --team-id "$TEAM_ID"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: product-macos
           retention-days: 1
-          path: |
-            ${{ runner.temp }}/product-macos/*.zip
-            ${{ runner.temp }}/product-macos/*.artifact.json
+          path: ${{ runner.temp }}/product-macos/
+          if-no-files-found: error
+      - name: Save the Apple acceptance record
+        if: steps.published.outputs.reuse != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: apple-notarization
+          retention-days: 1
+          path: ${{ runner.temp }}/product.xcarchive/Submissions/*/notarization-log.json
           if-no-files-found: error
   publish:
-    needs: [source, web, verify_signed_macos]
+    if: ${{ !inputs.sign_only }}
+    needs: [source, web, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
