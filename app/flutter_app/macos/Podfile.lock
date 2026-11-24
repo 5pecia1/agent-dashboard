@@ -2,21 +2,27 @@ PODS:
   - FlutterMacOS (1.0.0)
   - my_dashboard_frb (0.0.1):
     - FlutterMacOS
+    - Sparkle (= 2.10.1)
+  - Sparkle (2.10.1)
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
   - my_dashboard_frb (from `Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos`)
+  - Sparkle (from `Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos/Sparkle.podspec`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
   my_dashboard_frb:
     :path: Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos
+  Sparkle:
+    :podspec: Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos/Sparkle.podspec
 
 SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  my_dashboard_frb: 1928baeb2cb89eb8d123d174c9a4a97c8f1379e6
+  my_dashboard_frb: 8ec9c91f2cb3a006e0930f3b785f8d8f525e3dcc
+  Sparkle: 0006e88ce1b0882c10df95fc080973782813c36b
 
-PODFILE CHECKSUM: 1444308e41b2335c2dae13375ef65e0f1abe42d3
+PODFILE CHECKSUM: b83717d577a2437987e0c78cb3c1c16d5d1c4db3
 
 COCOAPODS: 1.17.0

@@ -78,6 +78,35 @@ def nested_code(app):
     return sorted(items, key=lambda p: (-len(p.parts), str(p)))
 
 
+def check_embedded_targets(bundle, items):
+    # These are the three executable helpers in the pinned, non-sandboxed Sparkle 2.10.1 distribution.
+    # Check their original entitlement dictionaries before any leaf executable is re-signed.
+    from sparkle_release import SPARKLE_VERSION
+
+    framework = Path('Contents/Frameworks/Sparkle.framework/Versions/B')
+    known = {
+        framework / 'Updater.app': ('org.sparkle-project.Sparkle.Updater', 'Updater'),
+        framework / 'XPCServices/Downloader.xpc': ('org.sparkle-project.DownloaderService', 'Downloader'),
+        framework / 'XPCServices/Installer.xpc': ('org.sparkle-project.InstallerLauncher', 'Installer'),
+    }
+    for item in items:
+        if not item.is_dir() or item.suffix not in {'.app', '.appex', '.xpc'}:
+            continue
+        rel = item.relative_to(bundle)
+        if rel not in known:
+            raise ValueError(f'configure explicit entitlements for embedded target {rel}')
+        version = plistlib.loads((bundle / framework / 'Resources/Info.plist').read_bytes())
+        info = plistlib.loads((item / 'Contents/Info.plist').read_bytes())
+        if (version.get('CFBundleIdentifier') != 'org.sparkle-project.Sparkle'
+                or version.get('CFBundleShortVersionString') != SPARKLE_VERSION
+                or (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')) != known[rel]):
+            raise ValueError(f'unexpected Sparkle helper identity or version: {rel}')
+        raw = subprocess.check_output(['codesign', '--display', '--entitlements', '-', '--xml', item],
+                                      stderr=subprocess.DEVNULL)
+        if raw and plistlib.loads(raw):
+            raise ValueError(f'unreviewed entitlements in Sparkle helper: {rel}')
+
+
 def preflight(args):
     requirement(args.bundle_id, args.team_id)
     if not re.fullmatch(r'[A-Fa-f0-9]{40}', args.identity):
@@ -99,6 +128,7 @@ def preflight(args):
 def sign_copy(source, bundle, bundle_id, team_id, identity, keychain, entitlements, source_commit):
     run('ditto', source, bundle)
     nested = nested_code(bundle)
+    check_embedded_targets(bundle, nested)
     if source_commit:
         if not re.fullmatch(r'[0-9a-f]{40}', source_commit):
             raise ValueError('expected a full source Git commit SHA')
@@ -110,10 +140,6 @@ def sign_copy(source, bundle, bundle_id, team_id, identity, keychain, entitlemen
         plist.write_bytes(plistlib.dumps(info, sort_keys=False))
     options = ['codesign', '--force', '--sign', identity, '--timestamp', '--options', 'runtime', *keychain]
     for item in nested:
-        # Individual Mach-O code and Flutter/plugin frameworks need no extra privileges.
-        # Signed app extensions and services can require their own entitlement sets.
-        if item.is_dir() and item.suffix in {'.app', '.appex', '.xpc'}:
-            raise ValueError(f'configure explicit entitlements for embedded target {item.name}')
         run(*options, item)
     root_entitlements = ['--entitlements', entitlements] if entitlements else []
     run(*options, *root_entitlements, bundle)
