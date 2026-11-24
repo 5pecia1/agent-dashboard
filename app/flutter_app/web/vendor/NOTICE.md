@@ -4,7 +4,7 @@ This directory contains third-party SDK files with only the transformations list
 
 ## Why vendor instead of using a CDN?
 
-1. **Offline behavior.** `web/my_dashboard_service_worker.js` caches only same-origin GET requests. Cross-origin responses are opaque and cannot be included in the shell cache. An SDK fetched from a CDN is unavailable on an offline reload.
+1. **Offline behavior.** `web/my_dashboard_service_worker.js` caches only build-verified public app resources on the same origin. Cross-origin responses are opaque and cannot be included in the shell cache. An SDK fetched from a CDN is unavailable on an offline reload.
 2. **COEP.** The local verification server (`app/scripts/serve_web.py`) and deployment headers can enable `Cross-Origin-Embedder-Policy: require-corp`. Cross-origin scripts without CORP headers are then blocked.
 3. **Supply chain.** The upstream bytes are pinned by the SHA-256 values below.
 

@@ -34,8 +34,8 @@
 // `Random().nextInt(1 << 32)`). dev 서버(`flutter run -d chrome`)와
 // `--pwa-strategy none`에서는 `null`이 되고, 그때는 SW를 아예 등록하지
 // 않는다 — dev 루프에서 캐시가 낡은 코드를 되돌려주면 안 되기 때문이다.
-// 빌드마다 값이 갈리는 덕에 셸 캐시 이름도 빌드 단위로 갈린다
-// (`my_dashboard_service_worker.js`의 `APP_SHELL_CACHE_PREFIX` 주석).
+// The Flutter stamp changes the registered script URL. build:web separately
+// binds the shell cache name and asset allowlist to their content hashes.
 const SOL_APP_SERVICE_WORKER_VERSION = {{flutter_service_worker_version}};
 const SOL_APP_SERVICE_WORKER_URL = `my_dashboard_service_worker.js?v=${SOL_APP_SERVICE_WORKER_VERSION}`;
 const SOL_APP_CANVASKIT_BASE_URL = 'canvaskit/';
@@ -48,7 +48,7 @@ async function solAppAwaitServiceWorkerControl() {
     return;
   }
   const expectedUrl = new URL(SOL_APP_SERVICE_WORKER_URL, document.baseURI).href;
-  await navigator.serviceWorker.register(expectedUrl);
+  await navigator.serviceWorker.register(expectedUrl, {updateViaCache: 'none'});
   await navigator.serviceWorker.ready;
   // An existing controller can still belong to the previous build. Loading
   // Flutter before the new worker claims this page leaves new assets in the
