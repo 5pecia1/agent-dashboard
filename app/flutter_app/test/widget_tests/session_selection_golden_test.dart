@@ -7,11 +7,8 @@ import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/sessions_page.dart';
+import '../test_helpers/host_golden.dart';
 import '../test_helpers/session_deletion_harness.dart';
-
-const _macos27VersionPrefix = 'Version 27.';
-const _macos15Golden = '../goldens/sessions_selection_macos.png';
-const _macos27Golden = '../goldens/sessions_selection_macos27.png';
 
 void main() {
   testWidgets(
@@ -69,13 +66,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // CI의 macOS 15와 로컬 macOS 27은 AppBar 아이콘의 8픽셀만 다르게
-      // 그린다. 각 호스트에서 생성한 이미지를 그대로 엄격하게 비교한다.
-      final golden =
-          Platform.operatingSystemVersion.startsWith(_macos27VersionPrefix)
-          ? _macos27Golden
-          : _macos15Golden;
-      await expectLater(find.byType(MaterialApp), matchesGoldenFile(golden));
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(hostGolden('sessions_selection')),
+      );
     },
     tags: <String>['golden'],
     skip: !Platform.isMacOS,

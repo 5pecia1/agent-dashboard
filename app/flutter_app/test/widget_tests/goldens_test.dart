@@ -27,7 +27,6 @@
 /// ```
 library;
 
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,6 +47,7 @@ import 'package:my_dashboard/src/ui/diagnostics_page.dart';
 import 'package:my_dashboard/src/ui/session_detail_page.dart';
 import 'package:my_dashboard/src/ui/sessions_page.dart';
 import 'package:my_dashboard/src/ui/setup_page.dart';
+import '../test_helpers/host_golden.dart';
 
 /// 골든이 네이티브 카탈로그 없이도 고정 문자열을 그리도록 하는 결정적
 /// 번역기 — 키의 마지막 dotted 세그먼트를 그대로 돌려준다. 실제 문구가
@@ -153,9 +153,7 @@ void main() {
       await tester.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
-        matchesGoldenFile(
-          '../goldens/home_page_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('home_page')),
       );
     });
 
@@ -185,9 +183,7 @@ void main() {
       await tester.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
-        matchesGoldenFile(
-          '../goldens/sessions_page_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('sessions_page')),
       );
     });
 
@@ -232,9 +228,7 @@ void main() {
       await tester.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
-        matchesGoldenFile(
-          '../goldens/session_detail_page_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('session_detail_page')),
       );
     });
 
@@ -268,9 +262,7 @@ void main() {
       await tester.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
-        matchesGoldenFile(
-          '../goldens/setup_page_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('setup_page')),
       );
     });
 
@@ -316,9 +308,7 @@ void main() {
       await tester.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
-        matchesGoldenFile(
-          '../goldens/diagnostics_page_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('diagnostics_page')),
       );
     });
   });

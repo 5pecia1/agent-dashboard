@@ -2,7 +2,6 @@
 /// 레이아웃 회귀이며 실제 한글 글리프 검토는 설치 앱 QA에서 수행한다.
 library;
 
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +18,7 @@ import 'package:my_dashboard/src/state/window_navigation_provider.dart';
 import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/widgets/window_connection_dialog.dart';
 import 'package:my_dashboard/src/ui/window_connections_page.dart';
+import '../test_helpers/host_golden.dart';
 
 const _host = '개발용-MacBook-Pro';
 const _project = '/Users/테스트/개발/팀프로젝트/업무-대시보드';
@@ -202,9 +202,7 @@ void main() {
     expect(find.text('일치하는 창: 2개'), findsOneWidget);
     await expectLater(
       find.byType(MaterialApp),
-      matchesGoldenFile(
-        '../goldens/window_connection_dialog_${Platform.operatingSystem}.png',
-      ),
+      matchesGoldenFile(hostGolden('window_connection_dialog')),
     );
     Navigator.of(dialogContext).pop();
     await tester.pumpAndSettle();
@@ -221,9 +219,7 @@ void main() {
     expect(find.byType(Card), findsNWidgets(3));
     await expectLater(
       find.byType(MaterialApp),
-      matchesGoldenFile(
-        '../goldens/window_connections_page_${Platform.operatingSystem}.png',
-      ),
+      matchesGoldenFile(hostGolden('window_connections_page')),
     );
   });
 }

@@ -21,6 +21,7 @@ import 'package:my_dashboard/src/theme/app_tokens.dart';
 import 'package:my_dashboard/src/ui/sessions_page.dart';
 import 'package:my_dashboard/src/ui/widgets/session_card.dart';
 import 'package:my_dashboard/src/ui/widgets/window_connection_dialog.dart';
+import '../test_helpers/host_golden.dart';
 
 const _session = SessionViewDto(
   key: 'codex:card-navigation',
@@ -268,9 +269,7 @@ void main() {
       await _hover(tester);
       await expectLater(
         find.byType(SessionCard),
-        matchesGoldenFile(
-          '../goldens/session_card_hover_${Platform.operatingSystem}.png',
-        ),
+        matchesGoldenFile(hostGolden('session_card_hover')),
       );
     },
   );
