@@ -11,7 +11,7 @@ import {
   type DevinInputState,
 } from "../src/dashboard/devin-input";
 import contract from "../../contracts/dashboard-protocol.v1.json";
-import { authHeaders } from "./fixtures";
+import { authHeaders, maintenanceHeaders } from "./fixtures";
 
 const app = worker as unknown as {
   fetch(request: Request, env: unknown, ctx: ExecutionContext): Response | Promise<Response>;
@@ -92,7 +92,7 @@ async function callRebuild() {
   const ctx = createExecutionContext();
   const request = new Request("http://dashboard.test/dashboard/admin/rebuild", {
     method: "POST",
-    headers: authHeaders(),
+    headers: maintenanceHeaders(),
   });
   const response = await app.fetch(request, env, ctx);
   await waitOnExecutionContext(ctx);

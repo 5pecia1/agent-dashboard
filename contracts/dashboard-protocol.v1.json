@@ -3,7 +3,7 @@
   "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
   "title": "Agent Dashboard protocol",
   "protocol_version": 1,
-  "revision": "2026-10-18",
+  "revision": "2026-11-24",
   "copies": {
     "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
     "package": "server/contracts/dashboard-protocol.v1.json"
@@ -52,11 +52,18 @@
           "POST /dashboard/ui-lang"
         ]
       },
-      "AUTH_TOKEN": {
-        "description": "전환기 호환용 단일 토큰. 양쪽 용도 모두 허용한다. 두 토큰이 다 배포되면 없앤다.",
-        "deprecated": true,
+      "MAINTENANCE_TOKEN": {
+        "description": "Optional operator credential for manual administrative operations. Use a value distinct from every other token.",
         "endpoints": [
-          "*"
+          "POST /dashboard/admin/rebuild"
+        ]
+      },
+      "AUTH_TOKEN": {
+        "description": "Legacy credential for ingestion and client operations. Manual administration requires the separate maintenance token.",
+        "deprecated": true,
+        "inherits": [
+          "INGEST_TOKEN",
+          "CLIENT_TOKEN"
         ]
       }
     },

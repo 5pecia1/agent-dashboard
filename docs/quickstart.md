@@ -118,3 +118,5 @@ bash install.sh
 ```
 
 This URL follows `main`. For a reproducible installer revision, replace `main` in the Raw URL with a reviewed commit SHA that contains the script, and use `--version` for the component. The script lives in GitHub Raw; archives, release metadata, and checksums live in GitHub Releases. Web deployment or rollback does not change the installer.
+
+Operators who need manual projection rebuilds can set a separate `MAINTENANCE_TOKEN` with `npx wrangler secret put MAINTENANCE_TOKEN`. This secret authorizes `POST /dashboard/admin/rebuild` only. Ordinary setup and scheduled maintenance use the bindings above.

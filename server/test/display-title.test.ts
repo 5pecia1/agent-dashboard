@@ -1,3 +1,4 @@
+import { maintenanceHeaders } from "./fixtures";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -281,7 +282,7 @@ describe("display_title 수집과 노출", () => {
     await worker.fetch(
       new Request("https://worker.example/dashboard/admin/rebuild", {
         method: "POST",
-        headers: { Authorization: "Bearer test-auth-token" },
+        headers: maintenanceHeaders(),
       }),
       bindings,
       createExecutionContext(),

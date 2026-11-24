@@ -46,7 +46,7 @@ try {
   assert.deepEqual(await readFile(path.join(installed, 'contracts/dashboard-protocol.v1.json')), await readFile(path.join(packageRoot, '../contracts/dashboard-protocol.v1.json')));
   run('npm', ['run','check'], consumer);
   wrangler(consumer, ['deploy','--dry-run','--outdir',path.join(workspace,'bundle')]);
-  await writeFile(path.join(consumer, '.dev.vars'), 'AUTH_TOKEN=test-auth-token\nINGEST_TOKEN=test-ingest-token\nCLIENT_TOKEN=test-client-token\n');
+  await writeFile(path.join(consumer, '.dev.vars'), 'AUTH_TOKEN=test-auth-token\nINGEST_TOKEN=test-ingest-token\nCLIENT_TOKEN=test-client-token\nMAINTENANCE_TOKEN=test-maintenance-token\n');
   const persist = path.join(workspace,'d1');
   wrangler(consumer, ['d1','migrations','apply','DB','--local','--persist-to',persist]);
   const reapplied = wrangler(consumer, ['d1','migrations','apply','DB','--local','--persist-to',persist]);
@@ -54,6 +54,11 @@ try {
   worker = await startWorker(consumer, persist);
   await api(worker.origin,'/dashboard/auth/ingest-check',{token:'test-ingest-token',status:204});
   await api(worker.origin,'/dashboard/auth/ingest-check',{token:'test-client-token',status:403});
+  for (const token of ['test-ingest-token', 'test-client-token', 'test-auth-token']) {
+    await api(worker.origin, '/dashboard/admin/rebuild', { token, method: 'POST', status: 403 });
+  }
+  await api(worker.origin, '/dashboard/admin/rebuild', { token: 'test-maintenance-token', method: 'POST' });
+  await api(worker.origin, '/dashboard/sessions', { token: 'test-maintenance-token', status: 403 });
   await api(worker.origin,'/dashboard/events',{token:'test-ingest-token',body:{protocol_version:1,event:'Status',source:'generic',session_id:'installed',event_id:'installed-1',state:'working',project:'/workspace/example',host:'example-host',message:'package-content-canary',unexpected:'package-content-canary',raw:'package-content-canary'}});
   const stored = JSON.parse(wrangler(consumer,['d1','execute','DB','--local','--persist-to',persist,'--json','--command',"SELECT raw, message FROM dashboard_events WHERE event_id = 'installed-1'"]));
   assert.equal(stored[0].results[0].message,null);

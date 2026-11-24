@@ -68,6 +68,7 @@ try {
   worker = await startWorker(consumer, persist);
   await api(worker.origin, '/dashboard/auth/ingest-check', { token: 'test-ingest-token', status: 204 });
   await api(worker.origin, '/dashboard/auth/ingest-check', { token: 'test-client-token', status: 403 });
+  await api(worker.origin, '/dashboard/admin/rebuild', { token: 'test-client-token', method: 'POST', status: 403 });
   await api(worker.origin, '/dashboard/events', { token: 'test-ingest-token', body: { protocol_version: 1, event: 'Status', source: 'generic', session_id: 'button-install', event_id: 'button-1', state: 'working', project: '/workspace/example', host: 'example-host' } });
   const sync = await api(worker.origin, '/dashboard/sync');
   assert.equal(sync.sessions.find(row => row.key === 'generic:button-install')?.state, 'working');

@@ -1,3 +1,5 @@
 # Generate two distinct random values and set them locally or with wrangler secret put.
 INGEST_TOKEN=
 CLIENT_TOKEN=
+# Optional operator secret for manual rebuilds. Use a third independent random value.
+# MAINTENANCE_TOKEN=

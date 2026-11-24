@@ -6,10 +6,10 @@ import worker from "./worker";
 
 const bindings = env as unknown as DashboardEnv;
 const secret = "arbitrary-private-content-canary-8142";
-async function request(path: string, body: unknown, flag?: string) {
+async function request(path: string, body: unknown, flag?: string, token = "test-auth-token") {
   const ctx = createExecutionContext();
   const response = await worker.fetch(new Request("https://worker.example/dashboard" + path, {
-    method:"POST",headers:{Authorization:"Bearer test-auth-token","Content-Type":"application/json"},body:JSON.stringify(body),
+    method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(body),
   }), {...bindings,DASHBOARD_STORE_MESSAGE:flag},ctx);
   await waitOnExecutionContext(ctx);
   return response;
@@ -49,7 +49,7 @@ describe("content retention is explicit opt-in", () => {
     }
     const before=await projection();
     expect(JSON.stringify(before)).not.toContain(secret);
-    expect((await request("/admin/rebuild",{})).status).toBe(200);
+    expect((await request("/admin/rebuild",{},undefined,"test-maintenance-token")).status).toBe(200);
     expect(await projection()).toEqual(before);
     const rows=await bindings.DB.prepare("SELECT raw FROM dashboard_events").all<{raw:string}>();
     for(const row of rows.results){expect(()=>JSON.parse(row.raw)).not.toThrow();expect(row.raw).not.toContain(secret);}

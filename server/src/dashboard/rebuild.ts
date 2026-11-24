@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { dashboardMaintenanceAuth } from "../middleware/auth";
 import type { Env } from "../env";
 import { resolveUserAckTransition } from "./client-actions";
 import { resolveDevinInput } from "./devin-input";
@@ -446,17 +447,15 @@ export async function rebuildProjection(db: D1Database): Promise<RebuildResult> 
   };
 }
 
-/**
- * Hono 서브앱. registry.ts가 다른 dashboard feature들과 같은 "/dashboard" prefix에 붙인다.
- * 인증은 src/index.ts의 공통 미들웨어가 담당한다 - POST /dashboard/events만 INGEST_TOKEN
- * 전용이고 그 외 경로는 전부 CLIENT_TOKEN(or AUTH_TOKEN)이라, 이 경로는 별도 처리 없이도
- * 이미 클라이언트 인증으로 막혀 있다.
- */
+/** Mounted at /dashboard/admin with an independent maintenance credential. */
 export const dashboardAdmin = new Hono<{ Bindings: Env }>();
 
-dashboardAdmin.post("/admin/rebuild", async (c) => {
+dashboardAdmin.use("*", dashboardMaintenanceAuth);
+dashboardAdmin.post("/rebuild", async (c) => {
   const result = await rebuildProjection(c.env.DB);
   return c.json({ ok: true, ...result });
 });
+
+dashboardAdmin.all("*", (c) => c.notFound());
 
 export default dashboardAdmin;

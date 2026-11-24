@@ -7,6 +7,8 @@ export interface DashboardEnv {
   INGEST_TOKEN?: string;
   /** Read, device registration, and client actions; cannot ingest events. */
   CLIENT_TOKEN?: string;
+  /** Optional operator-only credential for manual administrative operations. */
+  MAINTENANCE_TOKEN?: string;
   /** Comma-separated origins, for example https://dashboard.example,http://localhost:8080. */
   ALLOWED_ORIGINS?: string;
   DASHBOARD_STALE_MS?: string;

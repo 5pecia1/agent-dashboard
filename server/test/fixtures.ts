@@ -23,6 +23,10 @@ export function authHeaders(extra: Record<string, string> = {}): Record<string, 
   return { authorization: `Bearer ${AUTH_TOKEN}`, ...extra };
 }
 
+export function maintenanceHeaders(): Record<string, string> {
+  return { authorization: "Bearer test-maintenance-token" };
+}
+
 /** contract.event_payload.example을 복제해 오버라이드를 얹는다. 필드 이름·예시 값은 정본에서만 온다. */
 export function eventPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return { ...contract.event_payload.example, ...overrides };
