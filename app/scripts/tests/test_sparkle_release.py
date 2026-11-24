@@ -1,9 +1,11 @@
 import base64
 import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import plistlib
 import sys
 import tempfile
+from threading import Thread
 import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
@@ -63,6 +65,28 @@ class SparkleReleaseTests(unittest.TestCase):
               patch.object(sparkle, 'verify_ed') as verify, patch.object(sparkle, 'live_feed', return_value=live)):
             sparkle.stage_pages(self.pages)
             return verify
+
+    def test_운영_피드_요청이_Pages_배포_클라이언트를_식별한다(self):
+        feed = b'<rss version="2.0"><channel /></rss>'
+
+        class Pages(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.headers.get('User-Agent') != 'AgentDashboard-Pages-Deployment/1':
+                    self.send_error(403)
+                    return
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(feed)
+
+            def log_message(self, *args):
+                pass
+
+        with HTTPServer(('127.0.0.1', 0), Pages) as server:
+            listener = Thread(target=server.handle_request, daemon=True)
+            listener.start()
+            with patch.object(sparkle, 'PUBLIC_FEED', f'http://127.0.0.1:{server.server_port}/appcast.xml'):
+                self.assertEqual(sparkle.live_feed(), feed)
+            listener.join(2)
 
     def test_웹_롤백시에도_가장_높은_정식_맥_빌드의_피드를_보존한다(self):
         self.stable('v0.1.11', 12)

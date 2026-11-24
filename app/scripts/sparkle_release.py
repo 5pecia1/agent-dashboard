@@ -213,8 +213,10 @@ def gh_download(tag, name, dest):
 
 def live_feed():
     url = f'{PUBLIC_FEED}?check={time.time_ns()}'
+    # The production Pages front end requires an identified deployment client for feed checks.
+    request = urllib.request.Request(url, headers={'User-Agent': 'AgentDashboard-Pages-Deployment/1'})
     try:
-        with urllib.request.urlopen(url, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=15) as response:
             data = response.read(1024 * 1024 + 1)
     except urllib.error.HTTPError as error:
         if error.code == 404:
