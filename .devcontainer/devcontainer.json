@@ -54,6 +54,5 @@
     "--platform=linux/amd64",
     "--init"
   ],
-  "waitFor": "postCreateCommand",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+  "waitFor": "postCreateCommand"
 }

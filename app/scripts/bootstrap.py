@@ -176,7 +176,11 @@ def initialize(project, name, org, prepare_only=False, targets=None, license_pol
         if json.loads(existing_fvm.read_text(encoding="utf-8")) != {'flutter': version}:
             raise ValueError('.fvmrc conflicts with pinned Flutter; no files changed')
     if state.exists():
-        if json.loads(state.read_text(encoding="utf-8")) != identity:
+        existing_identity = json.loads(state.read_text(encoding="utf-8"))
+        display_name = existing_identity.get('display_name') if isinstance(existing_identity, dict) else None
+        if isinstance(display_name, str) and display_name.strip():
+            identity['display_name'] = display_name
+        if existing_identity != identity:
             raise ValueError('already initialized with different identity/options; existing app files are preserved. Generate a separate fresh seed with the desired features and review its dependency, startup and source changes before migrating this app')
     else:
         prepare(project, identity)
