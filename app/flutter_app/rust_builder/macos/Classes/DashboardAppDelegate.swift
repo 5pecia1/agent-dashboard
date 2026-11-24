@@ -38,6 +38,16 @@ open class DashboardAppDelegate: FlutterAppDelegate {
   /// 살아 있어야 한다 — `DashboardFlutterWindow.swift` 문서 참고.
   static var residentChannel: FlutterMethodChannel?
 
+  @MainActor private lazy var launchUpdater = DashboardLaunchUpdater()
+
+  /// A private distribution may exchange local authorization for a scoped feed
+  /// URL here. Call complete(nil) if no authorized feed is available.
+  open func prepareDashboardUpdateFeed(_ complete: @escaping (URL?) -> Void) {
+    let url = (Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String)
+      .flatMap { URL(string: $0) }
+    complete(url)
+  }
+
   private var isResident = true
 
   private static var mainWindow: DashboardFlutterWindow?
@@ -148,6 +158,7 @@ open class DashboardAppDelegate: FlutterAppDelegate {
   // 델리게이트라 이 메서드를 프로토콜 채택으로만 갖고 있어 Swift가
   // `override` 키워드를 요구한다.
   open override func applicationDidFinishLaunching(_ notification: Notification) {
+    launchUpdater.checkOnce(prepare: prepareDashboardUpdateFeed)
     NSWorkspace.shared.notificationCenter.addObserver(
       self,
       selector: #selector(handleWake),

@@ -71,6 +71,11 @@ jobs:
                           '--tag', release['tag'], '--commit', release['source_commit'],
                           '--output', os.environ['RUNNER_TEMP'] + '/pages-web'], check=True)
           PY
+      - name: Stage the latest published stable Mac appcast
+        if: env.PAGES_BRANCH == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 app/scripts/sparkle_release.py stage-pages --directory "$RUNNER_TEMP/pages-web"
       - name: Verify Pages access and production version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -92,3 +97,6 @@ jobs:
       - name: Confirm the deployed production manifest
         if: env.PAGES_BRANCH == 'main'
         run: python3 scripts/pages_deployment.py confirm
+      - name: Confirm the public stable update feed
+        if: env.PAGES_BRANCH == 'main'
+        run: python3 app/scripts/sparkle_release.py confirm-pages --directory "$RUNNER_TEMP/pages-web"

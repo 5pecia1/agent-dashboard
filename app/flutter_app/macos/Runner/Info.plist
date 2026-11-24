@@ -26,6 +26,18 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>DashboardUpdateBundleIdentifier</key>
+	<string>io.github.5pecia1.mydashboard</string>
+	<key>SUFeedURL</key>
+	<string>https://agent-dashboard.5pecia1.dev/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>t9w4EtKvR8LSpJ/fDBfjgSZirjYCWSmE2JzGGoXuUHM=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

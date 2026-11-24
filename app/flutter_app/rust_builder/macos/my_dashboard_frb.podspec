@@ -20,6 +20,7 @@ A new Flutter FFI plugin project.
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'FlutterMacOS'
+  s.dependency 'Sparkle', '= 2.10.1'
 
   s.platform = :osx, '12.0'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }

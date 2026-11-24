@@ -53,6 +53,7 @@ Create the `macos-signing` environment. Allow the release tags and trusted signi
 | `ASC_KEY_ID` | Identifier of the App Store Connect team API key used to submit and check notarization |
 | `ASC_ISSUER_ID` | Issuer UUID for the same API key |
 | `ASC_PRIVATE_KEY` | Original multiline PEM contents of its downloaded `.p8` file |
+| `SPARKLE_PRIVATE_KEY` | Base64 Ed25519 private seed exported by Sparkle for the public Agent Dashboard update channel |
 
 The signing step imports the Developer ID identity into a temporary keychain. The dedicated Developer-role API key authenticates the notarization request. Apple’s log must report acceptance of the exact ZIP submitted. The job staples the ticket, packages the app, and reopens the final ZIP to check its signature, team, bundle ID, signed source commit, Gatekeeper assessment and architecture. `release.json` identifies the distributed ZIP; `Apple-notarization.json` identifies the pre-staple upload. [Apple team API keys](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/) · [Apple Developer ID](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)
 
@@ -63,6 +64,14 @@ gh workflow run release-product.yml --ref main -f sign_only=true -f expected_sha
 ```
 
 On a failure after upload starts, select **Re-run failed jobs** on the same Actions run within one day. The macOS job restores the signed upload and available submission metadata for that run and resumes the original request. A new workflow dispatch creates a separate run. A retry of an already-published release downloads and verifies the published macOS bytes. Historical assets remain immutable.
+
+### Publish a Sparkle update
+
+Increase both the app version and its numeric Flutter build number before releasing. Keep the public key in the app’s `SUPublicEDKey` consistent across updates. Store the corresponding private key only in the public product’s signing environment. The macOS CI uses the pinned Sparkle 2.10.1 `sign_update` tool, passes its key on standard input, and verifies the signature against the public key from the final ZIP. The signing rehearsal creates an appcast artifact for inspection.
+
+Each GitHub app release includes `appcast.xml`. Its enclosure identifies the immutable release ZIP, its byte count, and its Ed25519 signature. The stable updater reads [the production appcast](https://agent-dashboard.5pecia1.dev/appcast.xml). Once the release exists on GitHub, a production Pages deployment downloads and checks the stable release ZIP and feed. It selects the highest published stable build independently of the web version being deployed. Redeploying an older web version carries that same stable Mac feed forward. Prerelease and sign-only runs never promote an update to the production channel.
+
+For local packaging, sign the exact distributed ZIP after notarization. `sparkle_release.py tools --output DIR` installs the checksum-pinned tools. Set `SPARKLE_BIN_DIR` to that directory and provide `SPARKLE_PRIVATE_KEY` through a protected environment. Run `sparkle_release.py sign --help` for the archive, product identity, HTTPS enclosure URL and output arguments. The command prints the signature, archive SHA256, size, display version and build number. [Sparkle publishing guide](https://sparkle-project.org/documentation/publishing/)
 
 ### Sign on a development Mac
 

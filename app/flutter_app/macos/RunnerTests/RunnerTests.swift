@@ -7,6 +7,31 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  @MainActor
+  func test업데이트_피드는_지정된_서버_경로에서만_티켓을_사용한다() {
+    let pinned = URLComponents(string: "https://updates.example.com/appcast.xml")!
+    let product = "org.example.dashboard"
+    XCTAssertTrue(DashboardLaunchUpdater.permits(
+      URL(string: "https://updates.example.com/appcast.xml?ticket=temporary")!,
+      for: pinned, bundleID: product))
+    for invalid in [
+      "https://public.example.com/appcast.xml", "https://updates.example.com/another.xml",
+      "https://user@updates.example.com/appcast.xml", "https://updates.example.com:8443/appcast.xml",
+      "http://updates.example.com/appcast.xml", "https://updates.example.com/appcast.xml#fragment",
+    ] {
+      XCTAssertFalse(DashboardLaunchUpdater.permits(URL(string: invalid)!, for: pinned, bundleID: product))
+    }
+  }
+
+  @MainActor
+  func test_HTTP_피드는_QA_번들의_루프백_주소만_허용한다() {
+    let local = URLComponents(string: "http://127.0.0.1:18762/appcast.xml")!
+    XCTAssertTrue(DashboardLaunchUpdater.permits(local.url!, for: local, bundleID: "org.example.test.qa"))
+    XCTAssertFalse(DashboardLaunchUpdater.permits(local.url!, for: local, bundleID: "org.example.real"))
+    let remote = URLComponents(string: "http://updates.example.com/appcast.xml")!
+    XCTAssertFalse(DashboardLaunchUpdater.permits(remote.url!, for: remote, bundleID: "org.example.test.qa"))
+  }
+
   func test앱이재시작되면기존창토큰을거부한다() {
     let launch = Date(timeIntervalSince1970: 100)
     XCTAssertFalse(WindowNavigation.targetIsCurrent(

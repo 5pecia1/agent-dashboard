@@ -19,6 +19,12 @@ For a specific version, use `bash -s -- --version v0.1.1` at the end of the comm
 
 The v0.1.10 release uses ad-hoc signing. Later releases require Developer ID signing and Apple notarization. See the [quickstart](../docs/quickstart.md#macos-installation-and-updates) for the first-launch approval, installer options, and server setup. Open the app and enter your own server origin and client token.
 
+## macOS updates
+
+The macOS app checks for a new version once when its process launches. When an update is available, choose **Install Update** or **Remind Me Later**. Dismissing the offer keeps the installed build in place. The app starts normally when the update service is unavailable. Reopening a window or waking the Mac does not start another check.
+
+Sparkle verifies the downloaded archive using the Ed25519 public key in the installed app before extracting the update. Builds released before the updater was introduced can be upgraded using the [release installer](../install.sh).
+
 ## Delete multiple sessions
 
 Choose **Select sessions** above the session list to select cards across projects. You can select a whole project or use **Select all shown** for every non-ended session in the current list, including cards below the viewport. Choose **Delete selected** to review the selected count and the count for each project. Canceling keeps the selection; confirming deletes only the sessions selected when the confirmation opened and then exits selection mode. While selecting, tapping a card changes its selection instead of opening a work window or session details.
@@ -95,3 +101,11 @@ Future<void> main() => runDashboard(
 Give the app its own bundle identifier and state directory name. The name selects its desktop files under `~/.local/state/` and its browser storage keys. Use `packageAssets: true` when the dashboard is a dependency so its tray icons resolve from the Flutter package. To append panels, pass provider overrides for `additionalHomeSectionsProvider` or `additionalSetupSectionsProvider` through `extensions`.
 
 The macOS Runner supplies its generated plugin registrant. Follow the small [application delegate](flutter_app/macos/Runner/AppDelegate.swift) and [Flutter window](flutter_app/macos/Runner/MainFlutterWindow.swift) adapters in your Runner. The linked `my_dashboard_frb` CocoaPod provides the resident-window behavior, Accessibility window navigation and Rust bridge. Retain the package's repository layout so CargoKit can locate the Rust workspace.
+
+For a macOS host, declare the Sparkle pod immediately after `flutter_install_all_macos_pods` in its Podfile. The shared plugin supplies the pinned 2.10.1 specification and upstream checksum.
+
+```ruby
+pod 'Sparkle', :podspec => 'Flutter/ephemeral/.symlinks/plugins/my_dashboard_frb/macos/Sparkle.podspec'
+```
+
+To enable launch checks for an embedded app, set `DashboardUpdateBundleIdentifier` to its own bundle ID, `SUFeedURL` to its fixed HTTPS appcast, and `SUPublicEDKey` to its update signing public key. Use `SUVerifyUpdateBeforeExtraction` and disable automatic installs with `SUAllowsAutomaticUpdates` as in the public [Runner configuration](flutter_app/macos/Runner/Info.plist). A host that needs authenticated updates can override `prepareDashboardUpdateFeed` to supply a short-lived ticket on the configured feed's origin and path.
