@@ -107,17 +107,9 @@ Widget buildDashboardRoot(
   DashboardHostSession? session,
 }) {
   final values = configure?.call(stored) ?? stored;
-  // Legacy static credentials and server-specific watermarks have no account
-  // identity. An embedded session starts from a fresh server snapshot.
   final configValues = session == null
       ? bootConfigValuesFor(values)
-      : DashboardConfigValues(
-          serverUrl: session.origin.origin,
-          resident: values.resident,
-          themeMode: values.themeMode,
-          uiLang: values.uiLang,
-          extra: values.extra,
-        );
+      : managedSessionValues(values, session, null);
 
   // T-wire 계약(U-fix): 서버 주소가 아직 없으면(첫 실행) placeholder URL로
   // 채워 넣지 않는다 — `dashboardApiConfigFor`가 이때 null을 돌려주므로 시작
@@ -139,7 +131,16 @@ Widget buildDashboardRoot(
   return ProviderScope(
     key: kDashboardRootKey,
     overrides: [
-      dashboardConfigValuesProvider.overrideWithValue(configValues),
+      if (session == null)
+        dashboardConfigValuesProvider.overrideWithValue(configValues)
+      else
+        dashboardConfigValuesProvider.overrideWith(
+          (ref) => managedSessionValues(
+            values,
+            session,
+            ref.watch(dashboardSyncScopeProvider),
+          ),
+        ),
       // 빌드 기본값이 아니라 저장소에서 읽은 값으로 정한다 — 실행 중에 이
       // 파일이 사라지면 백그라운드 저장이 새 파일을 만들지 않는다
       // (`config_provider.dart`의 `backgroundConfigPatch`).

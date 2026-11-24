@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:my_dashboard/src/data/dashboard_api.dart';
+import 'package:my_dashboard/src/data/sync_reducer.dart' show parseCursor;
+import 'package:my_dashboard/src/state/config_provider.dart';
 
 /// An embedding application owns account selection, credential storage and refresh.
 class DashboardHostSession {
@@ -10,6 +12,7 @@ class DashboardHostSession {
     required this.accessToken,
     required this.wrapApp,
     required this.connectionSettings,
+    this.syncScope,
   }) {
     final loopback =
         origin.scheme == 'http' &&
@@ -37,6 +40,11 @@ class DashboardHostSession {
   /// when the account changes so its complete provider scope is disposed.
   final Widget Function(Widget dashboard) wrapApp;
 
+  /// A non-secret identifier for the active account or grant. Keep it stable
+  /// across token refresh and restart, and change it on identity replacement.
+  /// The callback is read when the signed-in dashboard scope mounts.
+  final String? Function()? syncScope;
+
   /// Replaces the manual connection fields inside the ordinary settings page.
   final Widget Function(BuildContext context, String languageCode)
   connectionSettings;
@@ -44,6 +52,56 @@ class DashboardHostSession {
 
 final dashboardHostSessionProvider = Provider<DashboardHostSession?>(
   (ref) => null,
+);
+
+const _checkpointKey = 'dashboard_host_sync.v1';
+
+final dashboardSyncScopeProvider = Provider<String?>(
+  (ref) => ref.watch(dashboardHostSessionProvider)?.syncScope?.call(),
+);
+
+DashboardConfigValues managedSessionValues(
+  DashboardConfigValues values,
+  DashboardHostSession session,
+  String? scope,
+) {
+  final saved = values.extra[_checkpointKey];
+  final checkpoint =
+      scope != null &&
+          scope.isNotEmpty &&
+          saved is Map<String, Object?> &&
+          saved['scope'] == scope &&
+          saved['origin'] == session.origin.origin
+      ? saved
+      : null;
+  // Legacy top-level cursors and static credentials do not identify an account.
+  return DashboardConfigValues(
+    serverUrl: session.origin.origin,
+    cursor: parseCursor(checkpoint?['cursor']),
+    seenWatermark: parseCursor(checkpoint?['seen_watermark']),
+    resident: values.resident,
+    themeMode: values.themeMode,
+    uiLang: values.uiLang,
+    extra: values.extra,
+  );
+}
+
+DashboardConfigValues saveSessionCheckpoint(
+  DashboardConfigValues stored,
+  Uri origin,
+  String scope, {
+  required int? cursor,
+  required int? seenWatermark,
+}) => stored.copyWith(
+  extra: {
+    ...stored.extra,
+    _checkpointKey: {
+      'origin': origin.origin,
+      'scope': scope,
+      'cursor': cursor,
+      'seen_watermark': seenWatermark,
+    },
+  },
 );
 
 /// Only DashboardApi uses this transport. Other plugins have independent
