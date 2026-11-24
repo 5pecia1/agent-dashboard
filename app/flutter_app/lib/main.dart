@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod/misc.dart' show Override;
 
 import 'package:my_dashboard/src/app.dart';
+import 'package:my_dashboard/src/data/dashboard_api.dart';
 import 'package:my_dashboard/src/platform/feature_setup.dart';
 import 'package:my_dashboard/src/rust/frb_generated.dart';
 import 'package:my_dashboard/src/rust/api.dart';
 import 'package:my_dashboard/src/state/capability_provider.dart'
     show isWasmRuntimeProvider;
 import 'package:my_dashboard/src/state/dashboard_host.dart';
+import 'package:my_dashboard/src/state/dashboard_host_session.dart';
 import 'package:my_dashboard/src/state/config_provider.dart';
 import 'package:my_dashboard/src/state/notification_click_inbox.dart';
 import 'package:my_dashboard/src/state/http_provider.dart';
@@ -31,6 +33,7 @@ Future<void> runDashboard({
   bool packageAssets = false,
   DashboardConfigValues Function(DashboardConfigValues)? configure,
   DashboardBootOverrides? extensions,
+  DashboardHostSession? session,
 }) async {
   dashboardHost = DashboardHost(
     stateDirectoryName: stateDirectoryName,
@@ -68,7 +71,8 @@ Future<void> runDashboard({
   // 못하면 실패 화면을 띄우고, 다시 읽기에 성공한 순간 대시보드 루트로
   // 바꿔 끼운다(`runApp`을 다시 부르면 루트가 교체된다). 웹에서 브라우저가
   // 저장소를 막았으면 예전처럼 저장된 설정 없이 시작한다(`buildBootRoot`).
-  runApp(
+  void showRoot(Widget root) => runApp(session?.wrapApp(root) ?? root);
+  showRoot(
     await buildBootRoot(
       load: load,
       webRuntime: webRuntime,
@@ -77,8 +81,9 @@ Future<void> runDashboard({
         app: SolApp(greeting: greeting),
         configure: configure,
         extensions: extensions,
+        session: session,
       ),
-      replaceRoot: runApp,
+      replaceRoot: showRoot,
     ),
   );
 }
@@ -99,8 +104,20 @@ Widget buildDashboardRoot(
   required Widget app,
   DashboardConfigValues Function(DashboardConfigValues)? configure,
   DashboardBootOverrides? extensions,
+  DashboardHostSession? session,
 }) {
-  final configValues = bootConfigValuesFor(configure?.call(stored) ?? stored);
+  final values = configure?.call(stored) ?? stored;
+  // Legacy static credentials and server-specific watermarks have no account
+  // identity. An embedded session starts from a fresh server snapshot.
+  final configValues = session == null
+      ? bootConfigValuesFor(values)
+      : DashboardConfigValues(
+          serverUrl: session.origin.origin,
+          resident: values.resident,
+          themeMode: values.themeMode,
+          uiLang: values.uiLang,
+          extra: values.extra,
+        );
 
   // T-wire 계약(U-fix): 서버 주소가 아직 없으면(첫 실행) placeholder URL로
   // 채워 넣지 않는다 — `dashboardApiConfigFor`가 이때 null을 돌려주므로 시작
@@ -132,6 +149,23 @@ Widget buildDashboardRoot(
       httpSendProviderOverride,
       ...usageDashboardOverrides(configValues),
       ...?extensions?.call(configValues),
+      if (session != null) ...[
+        dashboardHostSessionProvider.overrideWithValue(session),
+        dashboardApiProvider.overrideWith((ref) {
+          var active = true;
+          ref.onDispose(() => active = false);
+          final config = ref.watch(dashboardApiConfigProvider);
+          return DashboardApi(
+            config: config,
+            send: sessionTransport(
+              session,
+              ref.watch(httpSendProvider),
+              active: () => active,
+              timeout: config.timeout,
+            ),
+          );
+        }),
+      ],
     ],
     child: app,
   );
