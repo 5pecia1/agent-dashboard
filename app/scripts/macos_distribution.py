@@ -167,9 +167,26 @@ def main():
                 sub.add_argument('--source-commit', help='record this source SHA in the signed Info.plist')
                 sub.add_argument('--output', type=Path, required=True)
                 sub.add_argument('--entitlements', type=Path)
+    for command in ('archive', 'cloud'):
+        sub = commands.add_parser(command)
+        sub.add_argument('--archive', type=Path, required=True)
+        sub.add_argument('--bundle-id', required=True)
+        sub.add_argument('--source-commit', required=True)
+        if command == 'archive':
+            sub.add_argument('--project', type=Path, required=True, help='Flutter app root')
+        else:
+            sub.add_argument('--output', type=Path, required=True)
+            sub.add_argument('--team-id', required=True)
+            sub.add_argument('--submit', action='store_true', help='upload this archive if it has never been submitted')
     args = parser.parse_args()
     try:
-        if args.action == 'verify':
+        if args.action in ('archive', 'cloud'):
+            from macos_cloud import archive_host, cloud_release
+            if args.action == 'archive':
+                archive_host(args)
+            else:
+                cloud_release(args)
+        elif args.action == 'verify':
             verify(args.app, args.bundle_id, args.team_id)
         elif args.action == 'preflight':
             preflight(args)
