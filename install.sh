@@ -8,6 +8,8 @@ main() {
 REPOSITORY=5pecia1/agent-dashboard
 API="https://api.github.com/repos/$REPOSITORY/releases"
 BUNDLE_ID=io.github.5pecia1.mydashboard
+# Apple Developer ID team for the published app. Review issuer changes separately.
+PUBLISHER_TEAM=5GJYL35857
 TARGET=app
 VERSION=
 INCLUDE_PRERELEASE=0
@@ -339,8 +341,8 @@ case "$TAG" in
       [ "$(json_get "$RELEASE_METADATA" "artifacts.$index.bundle_id")" = "$BUNDLE_ID" ] ||
       fail "Release $TAG requires a notarized Developer ID app"
     team=$(json_get "$RELEASE_METADATA" "artifacts.$index.team_id")
-    [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || fail "Invalid signing team in release receipt"
-    requirement="identifier \"$BUNDLE_ID\" and anchor apple generic and certificate leaf[subject.OU] = \"$team\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
+    [ "$team" = "$PUBLISHER_TEAM" ] || fail "Release receipt does not match the pinned Agent Dashboard signing team"
+    requirement="identifier \"$BUNDLE_ID\" and anchor apple generic and certificate leaf[subject.OU] = \"$PUBLISHER_TEAM\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
     codesign --verify --deep --strict --all-architectures "$APP" &&
       codesign --verify --all-architectures -R="$requirement" "$APP" ||
       fail "App Developer ID signature or signing team differs"

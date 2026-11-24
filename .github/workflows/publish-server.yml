@@ -21,16 +21,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tarball: ${{ steps.archive.outputs.tarball }}
+      commit: ${{ steps.source.outputs.commit }}
     steps:
       - name: Require dispatch from the release tag
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - name: Bind the server tag to reviewed main history
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^server-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          commit=$(git rev-parse HEAD)
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$commit"
+          test "$(git rev-parse "$GITHUB_SHA^{commit}")" = "$commit"
+          git merge-base --is-ancestor "$commit" refs/remotes/origin/main
+          test "server-v$(node -p 'require("./server/package.json").version')" = "$RELEASE_TAG"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -85,7 +99,7 @@ jobs:
         run: |
           STARTER="agent-dashboard-server-${RELEASE_TAG#server-v}-starter.tar.gz"
           npm --prefix server run verify:starter -- --tarball "$GITHUB_WORKSPACE/release/$TARBALL" --starter "$GITHUB_WORKSPACE/release/$STARTER" --receipt "$GITHUB_WORKSPACE/release/starter-test-receipt.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verified-server-package
           if-no-files-found: error
@@ -101,7 +115,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: verified-server-package
           path: release
@@ -110,39 +129,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
-          TARBALL: ${{ needs.verify.outputs.tarball }}
+          SOURCE_COMMIT: ${{ needs.verify.outputs.commit }}
         run: |
-          cd release
-          sha256sum --check ./*.sha256
-          prerelease_args=()
-          if [[ "$RELEASE_TAG" =~ ^server-v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
-            prerelease_args=(--prerelease)
-          fi
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            mkdir existing
-            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > existing-assets.txt
-            for artifact in ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json; do
-              if grep -Fxq "${artifact##*/}" existing-assets.txt; then
-                gh release download "$RELEASE_TAG" --pattern "${artifact##*/}" --dir existing
-                cmp "$artifact" "existing/${artifact##*/}"
-              fi
-            done
-            for artifact in ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json; do
-              if ! grep -Fxq "${artifact##*/}" existing-assets.txt; then
-                gh release upload "$RELEASE_TAG" "$artifact"
-              fi
-            done
-          else
-            gh release create "$RELEASE_TAG" --verify-tag --draft --latest=false "${prerelease_args[@]}" --title "Server ${RELEASE_TAG#server-}" --notes 'Standalone server starter and reusable server package, each with SHA256 checksums. The starter includes a pinned lockfile and the same verified package. See release-evidence.json and starter-test-receipt.json for validation details.' ./*.tgz ./*.tar.gz ./*.sha256 release-evidence.json starter-test-receipt.json
-          fi
-          # A failed upload leaves a draft; retries add only missing assets and
-          # compare every existing file before making the complete release visible.
-          gh release edit "$RELEASE_TAG" --draft=false --latest=false "${prerelease_args[@]}"
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
-          path: source
-      - uses: actions/setup-node@v4
+          (cd release && sha256sum --check ./*.sha256)
+          args=()
+          if [[ "${RELEASE_TAG#server-v}" == *-* ]]; then args+=(--prerelease); fi
+          echo 'Standalone server starter and reusable server package, each with SHA256 checksums. See release-evidence.json and starter-test-receipt.json for validation details.' > "$RUNNER_TEMP/server-notes.md"
+          python3 source/scripts/publish_verified_release.py --directory release --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT" \
+            --title "Server ${RELEASE_TAG#server-}" --notes "$RUNNER_TEMP/server-notes.md" --latest false "${args[@]}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
       - name: Verify the published button dependency
@@ -158,11 +153,11 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: verified-server-package
           path: release
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
