@@ -27,39 +27,52 @@ class PublicationRetryTests(unittest.TestCase):
                                       commit='a' * 40, notes=self.root/'notes', title='Server', latest='false',
                                       prerelease=True)
         self.remote = dict(draft=True, assets={})
+        self.args.notes.write_text('Release notes')
+        self.visibility_delay = 0
+        self.inventory_delay = 0
         self.calls = []
         self.resolved = self.args.commit
 
     def gh(self, *args):
         self.calls.append(args)
         if args[0] == 'api':
-            if '--paginate' not in args:
+            if args[1] == 'graphql':
+                obj = {'databaseId': 123} if self.remote is not None else None
+                if obj and self.visibility_delay > 0:
+                    self.visibility_delay -= 1
+                    obj = None
+                return json.dumps({'data':{'repository':{'release':obj}}})
+            if '--method' in args:
+                method = args[args.index('--method') + 1]
+                if method == 'POST':
+                    self.assertIn('draft=true', args)
+                    self.assertIsNone(self.remote)
+                    self.remote = dict(draft=True, assets={})
+                    return json.dumps(dict(id=123, tag_name=self.args.tag, draft=True))
+                self.assertEqual(method, 'PATCH')
+                self.assertIn('draft=false', args)
+                self.assertIn('repos/example/project/releases/123', args)
+                self.assertEqual(self.remote['assets'], self.assets)
+                self.assertTrue(self.remote['draft'])
+                self.remote['draft'] = False
+                return '{}'
+            if '--paginate' in args:
+                self.assertIn('/releases/123/assets', args[-1])
+                if len(self.remote['assets']) == len(self.assets) and self.inventory_delay:
+                    self.inventory_delay -= 1
+                    return '[[]]'
+                return json.dumps([[dict(name=n, state='uploaded', digest='sha256:'+hashlib.sha256(v).hexdigest())
+                                    for n,v in self.remote['assets'].items()]])
+            if '/commits/' in args[1]:
                 return self.resolved
-            records = []
-            if self.remote is not None:
-                records.append(dict(id=123, tag_name=self.args.tag, draft=self.remote['draft'],
-                                    assets=[dict(name=n, state='uploaded', digest='sha256:'+hashlib.sha256(v).hexdigest())
-                                            for n,v in self.remote['assets'].items()]))
-            return json.dumps([records])
-        cmd = args[1]
-        if cmd == 'create':
-            self.assertIn('--draft',args)
-            self.assertIn('--verify-tag',args)
-            self.assertIsNone(self.remote)
-            self.remote = dict(draft=True, assets={})
-        elif cmd == 'upload':
-            name = Path(args[-1]).name
-            self.assertTrue(self.remote['draft'])
-            self.assertNotIn(name,self.remote['assets'])
-            self.assertNotIn('--clobber',args)
-            self.remote['assets'][name] = (self.dir/name).read_bytes()
-        elif cmd == 'edit':
-            self.assertTrue(self.remote['draft'])
-            self.assertIn('--draft=false',args)
-            self.assertEqual(self.remote['assets'],self.assets)
-            self.remote['draft'] = False
-        else:
-            self.fail(cmd)
+            self.assertTrue(args[1].endswith('/releases/123'))
+            return json.dumps(dict(id=123, tag_name=self.args.tag, draft=self.remote['draft']))
+        self.assertEqual(args[:2], ('release','upload'))
+        name = Path(args[-1]).name
+        self.assertTrue(self.remote['draft'])
+        self.assertNotIn(name,self.remote['assets'])
+        self.assertNotIn('--clobber',args)
+        self.remote['assets'][name] = (self.dir/name).read_bytes()
         return ''
 
     def publish(self):
@@ -69,6 +82,18 @@ class PublicationRetryTests(unittest.TestCase):
     def test_new_release_has_all_assets_before_publication(self):
         self.remote = None
         self.publish()
+        self.assertFalse(self.remote['draft'])
+
+    def test_new_draft_and_last_uploaded_asset_can_take_time_to_be_visible(self):
+        self.remote = None
+        self.visibility_delay = 2
+        self.inventory_delay = 2
+        with patch.object(release.time, 'sleep') as wait:
+            self.publish()
+        self.assertEqual(wait.call_count, 4)
+        self.assertEqual(sum('POST' in args for args in self.calls), 1)
+        self.assertEqual(sum('PATCH' in args for args in self.calls), 1)
+        self.assertEqual(sum(args[:2] == ('release','upload') for args in self.calls), len(self.assets))
         self.assertFalse(self.remote['draft'])
 
     def test_partial_upload_is_completed_before_publication(self):
