@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:my_dashboard/src/state/dashboard_host_session.dart';
 import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/rust/api/i18n.dart' show LocaleDto;
 import 'package:my_dashboard/src/state/capability_provider.dart' show isWasmRuntimeProvider;
@@ -95,6 +96,31 @@ Widget _setupPage({
 );
 
 void main() {
+  testWidgets('호스트 계정 설정은 수동 서버와 토큰 입력만 대체한다', (tester) async {
+    final store = _MemoryConfigStore(
+      const DashboardConfigValues(
+        serverUrl: 'https://legacy.test',
+        clientToken: 'legacy-fixture',
+      ),
+    );
+    await tester.pumpWidget(_setupPage(extra: [
+      configLoadFnProvider.overrideWithValue(store.load),
+      configSaveFnProvider.overrideWithValue(store.save),
+      dashboardHostSessionProvider.overrideWithValue(DashboardHostSession(
+        origin: Uri.parse('https://dashboard.test'),
+        accessToken: ({rejectedToken}) async => null,
+        wrapApp: (child) => child,
+        connectionSettings: (_) => const Text('host account'),
+      )),
+    ]));
+    await tester.pumpAndSettle();
+    expect(find.text('host account'), findsOneWidget);
+    expect(find.text('setup.server_url_label'), findsNothing);
+    expect(find.text('setup.client_token_label'), findsNothing);
+    expect(find.text('action.save'), findsNothing);
+    expect(store.saves, isEmpty);
+  });
+
   group('상주 토글 (A안 설계 ④)', () {
     testWidgets('상주 토글이 없는 호스트에는 그려지지 않는다 (웹/linux/windows)', (tester) async {
       _useTallViewport(tester);

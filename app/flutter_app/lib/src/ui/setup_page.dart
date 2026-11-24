@@ -40,6 +40,7 @@ import 'package:my_dashboard/src/i18n/t.dart';
 import 'package:my_dashboard/src/state/background_activity_provider.dart'
     show backgroundActivityControllerProvider;
 import 'package:my_dashboard/src/state/config_provider.dart';
+import 'package:my_dashboard/src/state/dashboard_host_session.dart';
 import 'package:my_dashboard/src/state/capability_provider.dart'
     show isWasmRuntimeProvider;
 import 'package:my_dashboard/src/state/notification_probe_provider.dart';
@@ -140,8 +141,10 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       final values = ref.read(configDefaultsFnProvider)(stored);
       if (!mounted) return;
       setState(() {
-        _serverUrlController.text = values.serverUrl ?? '';
-        _clientTokenController.text = values.clientToken ?? '';
+        if (ref.read(dashboardHostSessionProvider) == null) {
+          _serverUrlController.text = values.serverUrl ?? '';
+          _clientTokenController.text = values.clientToken ?? '';
+        }
         _resident = values.residentOrDefault;
         _themeMode = parseThemeMode(values.themeMode);
         _uiLang = parseUiLang(values.uiLang);
@@ -597,6 +600,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(dashboardHostSessionProvider);
     final tokens = context.tokens;
     // 결함 수정(뮤트 무표시): `syncControllerProvider`(동기화가 매 폴링마다
     // 새로 읽어 오는 서버 설정)에서 파생한, 지금 이 순간(서버 시각 기준)
@@ -628,30 +632,34 @@ class _SetupPageState extends ConsumerState<SetupPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _SectionHeader(
-                  tokens: tokens,
-                  text: t(ref, 'setup.section.server'),
-                ),
-                TextField(
-                  controller: _serverUrlController,
-                  decoration: InputDecoration(
-                    labelText: t(ref, 'setup.server_url_label'),
+                if (session != null)
+                  Builder(builder: session.connectionSettings)
+                else ...[
+                  _SectionHeader(
+                    tokens: tokens,
+                    text: t(ref, 'setup.section.server'),
                   ),
-                  keyboardType: TextInputType.url,
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _clientTokenController,
-                  decoration: InputDecoration(
-                    labelText: t(ref, 'setup.client_token_label'),
+                  TextField(
+                    controller: _serverUrlController,
+                    decoration: InputDecoration(
+                      labelText: t(ref, 'setup.server_url_label'),
+                    ),
+                    keyboardType: TextInputType.url,
                   ),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _busy ? null : _save,
-                  child: Text(t(ref, 'action.save')),
-                ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _clientTokenController,
+                    decoration: InputDecoration(
+                      labelText: t(ref, 'setup.client_token_label'),
+                    ),
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _busy ? null : _save,
+                    child: Text(t(ref, 'action.save')),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 ...ref.watch(dashboardSetupSectionsProvider),
                 if (ref.watch(windowNavigationSupportedProvider))

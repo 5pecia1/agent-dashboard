@@ -6,3 +6,4 @@ export 'src/state/config_provider.dart'
     show DashboardConfigValues, configDefaultsFnProvider;
 export 'src/state/dashboard_extensions.dart'
     show additionalHomeSectionsProvider, additionalSetupSectionsProvider;
+export 'src/state/dashboard_host_session.dart' show DashboardHostSession;
