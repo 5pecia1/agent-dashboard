@@ -157,7 +157,26 @@ open class DashboardAppDelegate: FlutterAppDelegate {
   // `override` 자체는 남긴다 — `FlutterAppDelegate`가 `NSObject` 계열의
   // 델리게이트라 이 메서드를 프로토콜 채택으로만 갖고 있어 Swift가
   // `override` 키워드를 요구한다.
+  @MainActor
+  func installDashboardUpdateMenu(in menu: NSMenu) {
+    let action = #selector(checkForDashboardUpdates(_:))
+    guard menu.indexOfItem(withTarget: self, andAction: action) == -1 else { return }
+    let title = DashboardLaunchUpdater.isKorean() ? "업데이트 확인…" : "Check for Updates…"
+    let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+    item.target = self
+    item.identifier = NSUserInterfaceItemIdentifier("DashboardCheckForUpdates")
+    let about = menu.items.firstIndex { $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:)) }
+    menu.insertItem(item, at: about.map { $0 + 1 } ?? 0)
+  }
+
+  @MainActor @objc private func checkForDashboardUpdates(_ sender: Any?) {
+    launchUpdater.checkNow(prepare: prepareDashboardUpdateFeed)
+  }
+
   open override func applicationDidFinishLaunching(_ notification: Notification) {
+    if DashboardLaunchUpdater.configuredFeed != nil, let menu = NSApp.mainMenu?.items.first?.submenu {
+      installDashboardUpdateMenu(in: menu)
+    }
     launchUpdater.checkOnce(prepare: prepareDashboardUpdateFeed)
     NSWorkspace.shared.notificationCenter.addObserver(
       self,
