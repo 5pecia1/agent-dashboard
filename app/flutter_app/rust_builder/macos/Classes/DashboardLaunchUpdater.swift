@@ -10,6 +10,7 @@ final class DashboardLaunchUpdater: NSObject, SPUUpdaterDelegate {
   private var launchChecked = false
   private var preparation: CheckKind?
   private var activeKind: CheckKind?
+  private var permittedCheck: SPUUpdateCheck?
   private var canFocusObservation: NSKeyValueObservation?
   private var delayedManualCheck: DashboardFeedPreparation?
   private var feedURL: URL?
@@ -75,6 +76,7 @@ final class DashboardLaunchUpdater: NSObject, SPUUpdaterDelegate {
             driver.automaticallyChecksForUpdates = true
             driver.automaticallyDownloadsUpdates = false
             self.activeKind = requested
+            self.permittedCheck = requested == .manual ? .updates : .updatesInBackground
             if requested == .manual { driver.checkForUpdates() }
             else { driver.checkForUpdatesInBackground() }
           } catch {
@@ -147,11 +149,25 @@ final class DashboardLaunchUpdater: NSObject, SPUUpdaterDelegate {
       (host == "127.0.0.1" || host == "[::1]")
   }
 
+  func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
+    // Resetting Sparkle's schedule can decide that the cleared ticket changed
+    // the feed and immediately start a new check. A fresh preparation permits
+    // exactly one network cycle, including when the plist has a public base URL.
+    guard feedURL != nil, permittedCheck == updateCheck else {
+      throw NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)
+    }
+    permittedCheck = nil
+  }
+
   func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
                error: Error?) {
     updater.automaticallyChecksForUpdates = false
     activeKind = nil
-    feedURL = nil
+    permittedCheck = nil
+    // Sparkle compares its last effective feed on a delayed schedule reset.
+    // Retain the scoped URL in process memory only; clearing it here makes
+    // Sparkle see the bare plist URL as a new feed. The one-use delegate gate
+    // and the required prepareCheck prevent reuse for an independent request.
     if let prepare = delayedManualCheck {
       delayedManualCheck = nil
       DispatchQueue.main.async { [weak self] in self?.checkNow(prepare: prepare) }
