@@ -8,6 +8,24 @@ import XCTest
 class RunnerTests: XCTestCase {
 
   @MainActor
+  func test앱메뉴의_업데이트_항목은_정보_아래에_한_번만_배치된다() {
+    let menu = NSMenu()
+    menu.addItem(withTitle: "About", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                 keyEquivalent: "")
+    menu.addItem(.separator())
+    let delegate = AppDelegate()
+    delegate.installDashboardUpdateMenu(in: menu)
+    delegate.installDashboardUpdateMenu(in: menu)
+    XCTAssertEqual(menu.items.count, 3)
+    let item = menu.items[1]
+    XCTAssertEqual(item.identifier?.rawValue, "DashboardCheckForUpdates")
+    XCTAssertEqual(item.action, NSSelectorFromString("checkForDashboardUpdates:"))
+    XCTAssertTrue(item.target === delegate)
+    XCTAssertTrue(DashboardLaunchUpdater.isKorean(["ko-KR", "en-US"]))
+    XCTAssertFalse(DashboardLaunchUpdater.isKorean(["en-US", "ko-KR"]))
+  }
+
+  @MainActor
   func test업데이트_피드는_지정된_서버_경로에서만_티켓을_사용한다() {
     let pinned = URLComponents(string: "https://updates.example.com/appcast.xml")!
     let product = "org.example.dashboard"

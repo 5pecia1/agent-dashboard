@@ -21,7 +21,7 @@ The v0.1.10 release uses ad-hoc signing. Later releases require Developer ID sig
 
 ## macOS updates
 
-The macOS app checks for a new version once when its process launches. When an update is available, choose **Install Update** or **Remind Me Later**. Dismissing the offer keeps the installed build in place. The app starts normally when the update service is unavailable. Reopening a window or waking the Mac does not start another check.
+The macOS app checks once when its process launches. Choose **Check for Updates…** in the application menu to check again while the app is open. An explicit check shows the available version, confirms that the app is up to date, or reports an error. When offered an update, choose **Install Update** or **Remind Me Later**. Dismissing the offer keeps the installed build in place. The app starts normally when the update service is unavailable. Reopening a window or waking the Mac does not start another check.
 
 Sparkle verifies the downloaded archive using the Ed25519 public key in the installed app before extracting the update. Builds released before the updater was introduced can be upgraded using the [release installer](../install.sh).
 
