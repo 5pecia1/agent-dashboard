@@ -65,7 +65,10 @@ class DeletionTestController extends SyncController {
 }
 
 class SessionDeletionHarness {
-  SessionDeletionHarness({required HttpSendFn send}) {
+  SessionDeletionHarness({
+    required HttpSendFn send,
+    DashboardApiConfig Function()? readConfig,
+  }) {
     controller = DeletionTestController(
       SyncControllerState(
         sync: SyncState(
@@ -95,7 +98,10 @@ class SessionDeletionHarness {
             baseUrl: Uri.parse('https://original.example.test'),
           ),
         ),
-        dashboardApiConfigProviderOverride,
+        if (readConfig == null)
+          dashboardApiConfigProviderOverride
+        else
+          dashboardApiConfigProvider.overrideWith((_) => readConfig()),
         dashboardConfigValuesProvider.overrideWithValue(
           const DashboardConfigValues(),
         ),

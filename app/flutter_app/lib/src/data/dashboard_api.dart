@@ -662,6 +662,15 @@ class DashboardApi {
     }
   }
 
+  Future<void> deleteSessions(Set<String> keys) async {
+    await _request(
+      'POST',
+      kSessionsPath,
+      extraSegments: const ['delete'],
+      body: {'keys': keys.toList(growable: false)},
+    );
+  }
+
   // ─── 내부 ──────────────────────────────────────────────────────────────
 
   Uri _url(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,10 +69,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('session.selection.delete_action').last);
     await tester.pumpAndSettle();
-    expect(requests.map((request) => request.url.pathSegments.last), [
-      deletionFirstKey,
-      deletionOtherKey,
-    ]);
+    expect(jsonDecode(requests.single.body!), {
+      'keys': [deletionFirstKey, deletionOtherKey],
+    });
     expect(
       harness.state.sync.sessions.keys,
       containsAll([deletionSecondKey, 'grok:new']),
@@ -81,6 +81,46 @@ void main() {
       findsNothing,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('API 설정을 읽지 못해도 확인창을 닫고 같은 선택으로 다시 시도할 수 있다', (tester) async {
+    final requests = <ApiRequest>[];
+    DashboardApiConfig? config;
+    final harness = SessionDeletionHarness(
+      readConfig: () =>
+          config ?? (throw StateError('Missing server configuration')),
+      send: (request) async {
+        requests.add(request);
+        return const ApiResponse(statusCode: 200, body: '{}');
+      },
+    );
+    addTearDown(harness.container.dispose);
+    await _pump(tester, harness);
+    await tester.tap(find.byKey(const ValueKey('session-selection-enter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('select-project-$deletionProject')));
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      expect(find.text('session.selection.count 2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('session-selection-delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('session.selection.delete_action').last);
+      await tester.pumpAndSettle();
+      if (attempt == 0) {
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(requests, isEmpty);
+        expect(harness.state.sync.sessions, hasLength(3));
+        expect(harness.state.lastError, isNotNull);
+        config = DashboardApiConfig(
+          baseUrl: Uri.parse('https://original.example.test'),
+        );
+        harness.container.invalidate(dashboardApiConfigProvider);
+      }
+    }
+    expect(jsonDecode(requests.single.body!), {
+      'keys': [deletionFirstKey, deletionSecondKey],
+    });
+    expect(harness.state.sync.sessions.keys, [deletionOtherKey]);
   });
 
   testWidgets('프로젝트 선택과 현재 목록 전체 선택을 전환한다', (tester) async {

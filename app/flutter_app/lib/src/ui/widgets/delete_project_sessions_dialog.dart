@@ -45,7 +45,7 @@ Future<bool> _showDeleteSessionsDialog(
       .read(dashboardApiConfigControllerProvider.notifier)
       .revision;
   final targets = List<SessionViewDto>.unmodifiable(sessions);
-  final message = await showDialog<String>(
+  final result = await showDialog<({String message, bool deleted})>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _DeleteSessionsDialog(
@@ -55,10 +55,10 @@ Future<bool> _showDeleteSessionsDialog(
     ),
   );
   // 삭제하면서 프로젝트 헤더가 사라져도 결과는 목록의 Scaffold에 표시한다.
-  if (message != null && messenger.mounted) {
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+  if (result != null && messenger.mounted) {
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
   }
-  return message != null;
+  return result?.deleted ?? false;
 }
 
 class _DeleteSessionsDialog extends ConsumerStatefulWidget {
@@ -225,6 +225,9 @@ class _DeleteSessionsDialogState extends ConsumerState<_DeleteSessionsDialog> {
           });
     // PopScope도 완료 상태로 되돌려 결과를 정상적으로 닫는다.
     setState(() => _deleting = false);
-    Navigator.of(context).pop(message);
+    Navigator.of(context).pop((
+      message: message,
+      deleted: !result.connectionChanged && result.failedCount == 0,
+    ));
   }
 }

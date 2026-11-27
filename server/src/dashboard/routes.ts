@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import type { Env } from "../env";
 import { HOOK_REV } from "../hooks/routes";
 import { RESERVED_CLIENT_ACTION_EVENTS, resolveUserAckTransition } from "./client-actions";
@@ -589,14 +590,32 @@ dashboard.get("/events", async (c) => {
   return c.json(await readHistory(c.env.DB, query));
 });
 
-/** 대시보드에서 세션 카드를 지울 때 사용한다. */
+async function deleteSessions(db: D1Database, keys: string[]): Promise<void> {
+  // One JSON parameter per statement avoids D1's bound-parameter limit for large selections.
+  const selected = "IN (SELECT value FROM json_each(?))";
+  const json = JSON.stringify(keys);
+  await db.batch([
+    db.prepare(`DELETE FROM dashboard_sessions WHERE key ${selected}`).bind(json),
+    db.prepare(`DELETE FROM dashboard_events WHERE session_key ${selected}`).bind(json),
+    db.prepare(`DELETE FROM dashboard_seen WHERE session_key ${selected}`).bind(json),
+  ]);
+}
+
 dashboard.delete("/sessions/:key", async (c) => {
-  const key = c.req.param("key");
-  await c.env.DB.prepare("DELETE FROM dashboard_sessions WHERE key = ?").bind(key).run();
-  await c.env.DB.prepare("DELETE FROM dashboard_events WHERE session_key = ?").bind(key).run();
-  // seen 마커도 세션과 함께 지운다 - 세션이 없는데 seen 행만 남으면 고아가 된다(maintenance.ts의
-  // 주기적 고아 정리와 별개로, 사람이 직접 지우는 이 경로는 그 자리에서 바로 같이 치운다).
-  await c.env.DB.prepare("DELETE FROM dashboard_seen WHERE session_key = ?").bind(key).run();
+  await deleteSessions(c.env.DB, [c.req.param("key")]);
+  return c.json({ ok: true });
+});
+
+dashboard.post("/sessions/delete", bodyLimit({
+  maxSize: 1024 * 1024,
+  onError: (c) => c.json({ error: "request too large" }, 413),
+}), async (c) => {
+  const body = await c.req.json<{ keys?: unknown }>().catch(() => null);
+  const keys = body?.keys;
+  if (!Array.isArray(keys) || keys.length === 0 || !keys.every(key => typeof key === "string" && key.trim().length > 0)) {
+    return c.json({ error: "keys must be a non-empty array of non-blank strings" }, 400);
+  }
+  await deleteSessions(c.env.DB, keys);
   return c.json({ ok: true });
 });
 

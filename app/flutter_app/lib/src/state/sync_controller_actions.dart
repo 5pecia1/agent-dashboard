@@ -137,87 +137,86 @@ mixin SyncControllerActions on Notifier<SyncControllerState> {
     }
   }
 
-  /// 삭제 UI 사양: 세션 카드 hover의 ×, 상세 화면 AppBar의 삭제 아이콘이
-  /// 확인 다이얼로그를 거쳐 부른다(`DELETE /dashboard/sessions/{key}`).
-  ///
-  /// **낙관 제거 + 롤백.** 요청을 기다리지 않고 목록에서 즉시 지운다 —
-  /// 실패하면 지웠던 [SessionViewDto]를 그대로 되돌리고, [ackSession]과
-  /// 같은 관례로 [SyncControllerState.lastError]를 세운다(기존 오류 표시
-  /// 관례 — `StaleDataBanner`가 그린다). 삭제된 키가 이후 델타 전이로
-  /// 부활하는 것은 정상이다(살아있는 세션) — `sync_reducer.dart`는 그
-  /// 전이를 새 세션처럼 그냥 반영하므로 여기서 특별히 막을 것이 없다.
-  ///
-  /// 성공 여부를 [bool]로 돌려준다(예외를 던지지 않는다 — 실패는 이미 위
-  /// 롤백·[lastError]로 다 처리됐다) — 상세 화면 AppBar의 삭제 액션은 이
-  /// 값을 보고 성공했을 때만 목록으로 pop한다(카드의 hover 삭제는 이 값을
-  /// 무시해도 된다 — 실패 시 카드가 목록에 그대로/다시 보이는 것 자체가
-  /// 이미 충분한 신호다).
   Future<bool> deleteSession(String key) async {
-    final previous = state.sync.sessions[key];
-    if (previous == null) return false;
-    final revision = _connectionRevision;
-    final alertIds = {
-      for (final alert in state.sync.pendingAlerts)
-        if (alert.sessionKey == key) alert.id,
-    };
-    _removeSession(key);
-    final nowMsFn = ref.read(syncNowMsFnProvider);
-    try {
-      final api = ref.read(dashboardApiProvider);
-      await api.deleteSession(key);
-      if (_connectionRevision != revision) return false;
-      ref.invalidate(promptHistoryProvider);
-      // 삭제 중에 도착한 새 활동은 남기고, 삭제 전에 있던 알림만 정리한다.
-      state = state.copyWith(
-        sync: state.sync.copyWith(
-          pendingAlerts: state.sync.pendingAlerts
-              .where((alert) => !alertIds.contains(alert.id))
-              .toList(growable: false),
-        ),
-      );
-      return true;
-    } catch (error) {
-      if (_connectionRevision != revision) return false;
-      _restoreSession(key, previous);
-      state = state.copyWith(
-        lastError: SyncErrorInfo.fromError(error, atMs: nowMsFn()),
-      );
-      return false;
-    }
+    if (!state.sync.sessions.containsKey(key)) return false;
+    final result = await _deleteSessions(
+      {key},
+      _connectionRevision,
+      (api) => api.deleteSession(key),
+    );
+    return result.deletedCount == 1;
   }
 
-  /// 확인창에 표시했던 키만 삭제한다. 단건 API를 순차 호출하므로 실패한
-  /// 세션은 개별 복구하고 나머지는 계속 처리한다. 연결이 바뀌면 중단한다.
+  /// 확인창을 열 때 고정한 키를 한 번의 요청으로 삭제한다.
   Future<SessionDeletionResult> deleteSessions(
     Iterable<String> keys, {
     required int expectedConnectionRevision,
-  }) async {
-    final targets = keys.toSet().toList(growable: false);
-    var deleted = 0;
-    var failed = 0;
-    for (final key in targets) {
-      if (_connectionRevision != expectedConnectionRevision) {
-        return SessionDeletionResult(
-          deletedCount: deleted,
-          failedCount: failed,
-          connectionChanged: true,
-        );
-      }
-      final success = await deleteSession(key);
-      if (_connectionRevision != expectedConnectionRevision) {
-        return SessionDeletionResult(
-          deletedCount: deleted,
-          failedCount: failed,
-          connectionChanged: true,
-        );
-      }
-      if (success) {
-        deleted++;
-      } else {
-        failed++;
-      }
+  }) {
+    final targets = keys.toSet();
+    return _deleteSessions(
+      targets,
+      expectedConnectionRevision,
+      (api) => api.deleteSessions(targets),
+    );
+  }
+
+  Future<SessionDeletionResult> _deleteSessions(
+    Set<String> targets,
+    int revision,
+    Future<void> Function(DashboardApi) send,
+  ) async {
+    const connectionChanged = SessionDeletionResult(
+      deletedCount: 0,
+      failedCount: 0,
+      connectionChanged: true,
+    );
+    if (_connectionRevision != revision) return connectionChanged;
+    if (targets.isEmpty) {
+      return const SessionDeletionResult(deletedCount: 0, failedCount: 0);
     }
-    return SessionDeletionResult(deletedCount: deleted, failedCount: failed);
+    final previous = {
+      for (final key in targets) key: ?state.sync.sessions[key],
+    };
+    final alertIds = {
+      for (final alert in state.sync.pendingAlerts)
+        if (targets.contains(alert.sessionKey)) alert.id,
+    };
+    final nowMsFn = ref.read(syncNowMsFnProvider);
+    state = state.copyWith(
+      sync: state.sync.copyWith(
+        sessions: Map.unmodifiable({
+          for (final entry in state.sync.sessions.entries)
+            if (!targets.contains(entry.key)) entry.key: entry.value,
+        }),
+      ),
+    );
+    try {
+      if (_connectionRevision != revision) return connectionChanged;
+      await send(ref.read(dashboardApiProvider));
+    } catch (error) {
+      if (_connectionRevision != revision) return connectionChanged;
+      // 요청 중 같은 키에 새 활동이 도착했다면 최신 세션을 유지한다.
+      state = state.copyWith(
+        sync: state.sync.copyWith(
+          sessions: Map.unmodifiable({...previous, ...state.sync.sessions}),
+        ),
+        lastError: SyncErrorInfo.fromError(error, atMs: nowMsFn()),
+      );
+      return SessionDeletionResult(
+        deletedCount: 0,
+        failedCount: targets.length,
+      );
+    }
+    if (_connectionRevision != revision) return connectionChanged;
+    ref.invalidate(promptHistoryProvider);
+    state = state.copyWith(
+      sync: state.sync.copyWith(
+        pendingAlerts: state.sync.pendingAlerts
+            .where((alert) => !alertIds.contains(alert.id))
+            .toList(growable: false),
+      ),
+    );
+    return SessionDeletionResult(deletedCount: targets.length, failedCount: 0);
   }
 
   /// [ackSession]이 낙관 갱신·성공 반영·실패 되돌리기 세 자리에서 공유하는
@@ -262,33 +261,6 @@ mixin SyncControllerActions on Notifier<SyncControllerState> {
     state = state.copyWith(
       sync: state.sync.copyWith(
         seenTransitionIds: Map<String, int>.unmodifiable(patched),
-      ),
-    );
-  }
-
-  /// [deleteSession]의 낙관 제거. 맵에 그 키가 없으면 아무것도 하지 않는다.
-  void _removeSession(String key) {
-    if (!state.sync.sessions.containsKey(key)) return;
-    final patched = Map<String, SessionViewDto>.of(state.sync.sessions)
-      ..remove(key);
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        sessions: Map<String, SessionViewDto>.unmodifiable(patched),
-      ),
-    );
-  }
-
-  /// [deleteSession] 실패 시 롤백 — 지웠던 세션을 그대로 되살린다. 그 사이
-  /// 진짜 폴링이 같은 키를 이미 다시 채워 넣었다면(예: 살아있는 세션이 그
-  /// 새 이벤트로 부활) 그 최신 값을 덮어쓰지 않는다 — 서버가 이미 더 새
-  /// 진실을 줬는데 롤백이 그걸 과거 값으로 되돌리면 안 된다.
-  void _restoreSession(String key, SessionViewDto previous) {
-    if (state.sync.sessions.containsKey(key)) return;
-    final patched = Map<String, SessionViewDto>.of(state.sync.sessions)
-      ..[key] = previous;
-    state = state.copyWith(
-      sync: state.sync.copyWith(
-        sessions: Map<String, SessionViewDto>.unmodifiable(patched),
       ),
     );
   }

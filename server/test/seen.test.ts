@@ -221,6 +221,89 @@ describe("DELETE /dashboard/sessions/:key: dashboard_seen 동반 삭제", () => 
   });
 });
 
+describe("POST /dashboard/sessions/delete", () => {
+  function bulkDelete(body: string, token = "test-client-token"): Promise<Response> {
+    return call("/dashboard/sessions/delete", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body,
+    });
+  }
+
+  it("removes only selected projections, histories and markers, retaining cursor history across retries", async () => {
+    const ids = ["bulk-a", "bulk-b", "bulk-retained"];
+    const keys = ids.map(id => `claude-code:${id}`);
+    for (const [i, id] of ids.entries()) {
+      expect((await postEvent(eventPayload({
+        session_id: id, event: "UserPromptSubmit", event_id: nextEventId("bulk"),
+      }))).status).toBe(200);
+      expect((await postSeen(keys[i]!)).status).toBe(200);
+    }
+    // Includes duplicates, absent keys, and more keys than D1's limit on SQL parameters.
+    const body = JSON.stringify({ keys: [keys[0], keys[1], keys[0], ...Array.from({ length: 110 }, (_, i) => `missing:${i}`)] });
+    for (const response of await Promise.all([bulkDelete(body), bulkDelete(body)])) {
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+    }
+    for (const [i, key] of keys.entries()) {
+      const retained = i === 2;
+      expect(Boolean(await sessionRow(key))).toBe(retained);
+      expect(Boolean(await seenRow(key))).toBe(retained);
+      expect(await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM dashboard_events WHERE session_key = ?")
+        .bind(key).first("n")).toBe(retained ? 1 : 0);
+      expect(await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM dashboard_transitions WHERE session_key = ?")
+        .bind(key).first("n")).toBe(1);
+    }
+  });
+
+  it("rolls back the batch on a database failure and allows the same request to be retried", async () => {
+    const key = "claude-code:bulk-rollback";
+    const body = JSON.stringify({ keys: [key] });
+    const db = testEnv.DB;
+    expect((await postEvent(eventPayload({
+      session_id: "bulk-rollback", event: "UserPromptSubmit", event_id: nextEventId("rollback"),
+    }))).status).toBe(200);
+    expect((await postSeen(key)).status).toBe(200);
+
+    const session = await sessionRow(key);
+    const marker = await seenRow(key);
+    const event = db.prepare("SELECT id FROM dashboard_events WHERE session_key = ?").bind(key);
+    const eventId = await event.first("id");
+    expect(session).toBeTruthy();
+    expect(marker).toBeTruthy();
+    expect(eventId).toBeTypeOf("number");
+
+    await db.prepare(`CREATE TRIGGER fail_bulk_event_delete BEFORE DELETE ON dashboard_events
+      WHEN OLD.session_key = 'claude-code:bulk-rollback'
+      BEGIN SELECT RAISE(ABORT, 'forced deletion failure'); END`).run();
+    try {
+      expect((await bulkDelete(body)).status).toBe(500);
+      expect(await sessionRow(key)).toEqual(session);
+      expect(await event.first("id")).toBe(eventId);
+      expect(await seenRow(key)).toEqual(marker);
+    } finally {
+      await db.prepare("DROP TRIGGER fail_bulk_event_delete").run();
+    }
+
+    expect((await bulkDelete(body)).status).toBe(200);
+    expect(await sessionRow(key)).toBeNull();
+    expect(await event.first("id")).toBeNull();
+    expect(await seenRow(key)).toBeNull();
+  });
+
+  it("rejects invalid or unauthorized batches before changing any rows", async () => {
+    const key = "claude-code:bulk-guard";
+    await postSeen(key);
+    for (const body of ["{", "null", "[]", "{}", '{"keys":[]}', JSON.stringify({ keys: [key, 5] }),
+      JSON.stringify({ keys: [key, "  "] })]) {
+      expect((await bulkDelete(body)).status).toBe(400);
+    }
+    expect((await bulkDelete(JSON.stringify({ keys: [key, "x".repeat(1024 * 1024)] }))).status).toBe(413);
+    expect((await bulkDelete(JSON.stringify({ keys: [key] }), "test-ingest-token")).status).toBe(403);
+    expect(await seenRowCount(key)).toBe(1);
+  });
+});
+
 describe("0004_dashboard_seen.sql 백필: last_transition_id", () => {
   it("전이가 있던 세션은 MAX(전이 id)로 채워지고, 전이가 없던 세션은 NULL로 남는다", async () => {
     // 이 테스트 파일이 도는 시점에는 이미 0004가 빈 DB에 적용된 뒤라 백필 UPDATE는 대상이 0건이다
