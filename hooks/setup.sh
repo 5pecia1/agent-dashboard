@@ -35,6 +35,8 @@ Agent Dashboard 원클릭 부트스트랩. repo를 clone하지 않고도 새 기
   curl -fsSL <서버 origin>/setup.sh | bash -s -- --dry-run         # 미리보기(아무것도 안 씀)
 
 옵션:
+  --include-content  Enable prompt and response collection on this machine.
+  --device-auth  Connect hooks through browser approval on a supporting server.
   --dry-run   실제로 아무것도 쓰지 않고 무엇을 할지만 보여준다.
   -h, --help  이 도움말을 출력한다.
 
@@ -45,9 +47,13 @@ HELP_EOF
 }
 
 DRY_RUN=0
+DEVICE_AUTH=0
+INCLUDE_CONTENT=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --device-auth) DEVICE_AUTH=1 ;;
+    --include-content) INCLUDE_CONTENT=1 ;;
     -h|--help)
       show_help
       exit 0
@@ -58,6 +64,17 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+CHILD_PID=""
+trap '[ -z "$CHILD_PID" ] || kill "$CHILD_PID" 2>/dev/null; exit 130' INT TERM
+run_child() {
+  "$@" &
+  CHILD_PID=$!
+  local result=0
+  wait "$CHILD_PID" || result=$?
+  CHILD_PID=""
+  return "$result"
+}
 
 log() { printf '%s\n' "$*" >&2; }
 
@@ -83,8 +100,8 @@ CONFIG_FILE="$CONFIG_DIR/env"
 # setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 8종만 GET /hooks/files/<name>로 받는다.
 # opencode-plugin.mjs는 OpenCode가 import하는 ES 모듈이라 실행 권한이 필요 없다.
 EXECUTABLE_FILES="agent-event-hook.sh codex-notify.sh install.sh send-generic.sh test-hooks.sh"
-NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py opencode-plugin.mjs"
-ALL_FILES="$EXECUTABLE_FILES $NON_EXECUTABLE_FILES"
+NON_EXECUTABLE_FILES="transport.sh device-auth.py codex-hooks.toml herdr-context.py opencode-plugin.mjs"
+ALL_FILES="$NON_EXECUTABLE_FILES $EXECUTABLE_FILES"
 
 log "== my-dashboard hooks 설치/갱신: $ORIGIN =="
 
@@ -93,10 +110,15 @@ if [ "$DRY_RUN" -eq 1 ]; then
   log "  1) 다운로드: $ALL_FILES"
   log "     -> $HOOKS_DIR/ (실행 파일은 chmod +x)"
   log "  2) $CONFIG_FILE"
-  if [ -f "$CONFIG_FILE" ]; then
+  if [ "$DEVICE_AUTH" -eq 1 ]; then
+    log "     Browser approval, private device credentials, and server/auth settings."
+  elif [ -f "$CONFIG_FILE" ]; then
     log "     이미 있음 - 값은 건드리지 않음(MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄 보강)"
   else
     log "     없음 - 새로 생성 (MY_DASHBOARD_URL=$ORIGIN, MY_DASHBOARD_TOKEN=<입력값>, chmod 600)"
+  fi
+  if [ "$INCLUDE_CONTENT" -eq 1 ]; then
+    log "     Enable prompt and response collection (MY_DASHBOARD_INCLUDE_CONTENT=1)."
   fi
   log "  3) $HOOKS_DIR/install.sh --claude --codex --devin --antigravity --opencode 실행"
   exit 0
@@ -107,7 +129,7 @@ fi
 mkdir -p "$HOOKS_DIR"
 for f in $ALL_FILES; do
   log "다운로드: $f"
-  if ! curl -fsSL "$ORIGIN/hooks/files/$f" -o "$HOOKS_DIR/$f.download"; then
+  if ! run_child curl --disable -fsSL --connect-timeout 5 --max-time 20 "$ORIGIN/hooks/files/$f" -o "$HOOKS_DIR/$f.download"; then
     log "다운로드 실패: $ORIGIN/hooks/files/$f"
     rm -f "$HOOKS_DIR/$f.download"
     exit 1
@@ -124,7 +146,12 @@ log "설치 위치: $HOOKS_DIR/ (재실행하면 이 자리가 갱신된다 = �
 
 # ---------- (c) 환경 파일 (있으면 그대로 둔다) ----------
 
-if [ -f "$CONFIG_FILE" ]; then
+if [ "$DEVICE_AUTH" -eq 1 ]; then
+  log "Approve the code and verification_uri shown below in your browser."
+  run_child python3 "$HOOKS_DIR/device-auth.py" login --server "$ORIGIN"
+elif [ -f "$CONFIG_FILE" ] && ( set +u; . "$CONFIG_FILE" >/dev/null 2>&1; [ "${MY_DASHBOARD_AUTH:-}" = device ] ); then
+  log "Using the existing browser-approved hook connection."
+elif [ -f "$CONFIG_FILE" ]; then
   # 기존 파일의 값은 건드리지 않지만, hook이 실제로 읽는 키(MY_DASHBOARD_TOKEN)가 있는지는
   # 확인한다 - 구식 명명(INGEST/CLIENT 분리)만 있는 env면 hook이 조용히 아무것도 보내지
   # 않는 함정이 있어서다. 값 노출 없이 존재 여부만 서브셸에서 확인한다.
@@ -196,7 +223,44 @@ else
 
 fi
 
+if [ "$DEVICE_AUTH" -eq 1 ] || [ "$INCLUDE_CONTENT" -eq 1 ]; then
+  python3 - "$CONFIG_FILE" "$ORIGIN" "$DEVICE_AUTH" "$INCLUDE_CONTENT" <<'PY_CONFIG'
+from pathlib import Path
+import os, re, sys, tempfile
+path = Path(sys.argv[1]).resolve()
+path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+old = path.read_text() if path.exists() else ''
+values = {}
+if sys.argv[3] == '1':
+    values.update(MY_DASHBOARD_URL=sys.argv[2], MY_DASHBOARD_AUTH='device')
+if sys.argv[4] == '1':
+    values['MY_DASHBOARD_INCLUDE_CONTENT'] = '1'
+lines = []
+for line in old.splitlines():
+    match = re.match(r'^(?:export )?([A-Z_]+)=', line)
+    if not match or match[1] not in values:
+        lines.append(line)
+lines.extend(key + '=' + value for key, value in values.items())
+updated = '\n'.join(lines) + '\n'
+if updated != old:
+    fd, temp = tempfile.mkstemp(dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(updated)
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp): os.unlink(temp)
+PY_CONFIG
+fi
+
 # 기존 설정을 재사용하는 설치도 실제 hook 설정으로 검증한다. 값을 로그에 쓰지 않는다.
+if [ "$DEVICE_AUTH" -eq 1 ]; then
+  VERIFIED=1
+elif ( set +u; . "$CONFIG_FILE" >/dev/null 2>&1; [ "${MY_DASHBOARD_AUTH:-}" = device ] ); then
+  VERIFY_ORIGIN="$(set +u; . "$CONFIG_FILE" >/dev/null 2>&1; printf '%s' "${MY_DASHBOARD_URL:-}")"
+  python3 "$HOOKS_DIR/device-auth.py" check --server "$VERIFY_ORIGIN"
+  VERIFIED=1
+else
 TOKEN="$(set +u; . "$CONFIG_FILE" >/dev/null 2>&1; printf '%s' "${MY_DASHBOARD_TOKEN:-}")"
 VERIFY_ORIGIN="$(set +u; . "$CONFIG_FILE" >/dev/null 2>&1; printf '%s' "${MY_DASHBOARD_URL:-}")"
 VERIFIED=0
@@ -212,6 +276,8 @@ case "$VERIFY_HTTP_CODE" in
   404) log "이 서버는 수집 토큰 검증 API를 지원하지 않습니다. 토큰은 검증되지 않았습니다." ;;
   *) log "서버 연결을 확인할 수 없습니다(HTTP $VERIFY_HTTP_CODE). 토큰은 검증되지 않았습니다." ;;
 esac
+
+fi
 
 # ---------- (d) Claude Code / Codex / Devin / Antigravity / OpenCode 등록 ----------
 

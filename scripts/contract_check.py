@@ -52,12 +52,14 @@ HOOKS_DIST_DIR: Path
 HOOKS_DIST_FILES = [
     "agent-event-hook.sh",
     "codex-notify.sh",
+    "device-auth.py",
     "codex-hooks.toml",
     "herdr-context.py",
     "install.sh",
     "opencode-plugin.mjs",
     "send-generic.sh",
     "test-hooks.sh",
+    "transport.sh",
     "setup.sh",
 ]
 OPENCODE_PLUGIN_PATH = REPO_ROOT / "hooks" / "opencode-plugin.mjs"

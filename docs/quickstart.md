@@ -92,6 +92,25 @@ curl -fsSL https://raw.githubusercontent.com/5pecia1/agent-dashboard/main/instal
 
 Hook versions come from your server, so `hooks` does not accept `--version`. The common installer's `--dry-run` downloads and checks the setup script without executing it. To preview the hook configuration changes, download your server's script and run `bash setup.sh --dry-run` as shown in the [hook guide](../hooks/README.md). Repeating the hook setup updates the files while retaining existing connection values.
 
+### Browser approval on account-enabled hosts
+
+Hosts that implement `dashboard:ingest` device authorization at `/dashboard/ingest-auth` can connect hooks through their existing browser account.
+
+```sh
+curl -fsSL https://YOUR_SERVER/setup.sh | bash -s -- --device-auth
+```
+
+Open the displayed approval link, compare the code, and approve event collection for that machine. The installer registers the hooks after authorization succeeds. In Codex, trust the new hooks in `/hooks` and run a new task to confirm delivery. Add `--include-content` when you want prompts and responses included under your server's collection policy.
+
+The helper keeps device credentials in `~/.config/my-dashboard/ingest-auth.json` with owner-only permissions. Concurrent hooks share a refresh lock. Failed delivery retains the event in the existing bounded spool. Repeating setup reuses a valid authorization and updates its managed settings idempotently. An expired or revoked grant requires browser approval again.
+
+Use the installed helper to inspect this machine or stop collection. `status` returns connection state, last confirmed delivery, and queued-event count without credentials or event bodies. `disconnect` stops local collection immediately and attempts server revocation. Retry it if revocation fails.
+
+```sh
+python3 ~/.local/share/my-dashboard/hooks/device-auth.py status --server https://YOUR_SERVER
+python3 ~/.local/share/my-dashboard/hooks/device-auth.py disconnect --server https://YOUR_SERVER
+```
+
 ## Installer options
 
 | Option | Behavior |

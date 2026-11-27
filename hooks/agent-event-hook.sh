@@ -75,6 +75,8 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 STATE_DIR="${MY_DASHBOARD_STATE_DIR:-$HOME/.local/state/my-dashboard}"
+# shellcheck source=transport.sh
+. "$(dirname "${BASH_SOURCE[0]}")/transport.sh"
 SPOOL_FILE="$STATE_DIR/spool.ndjson"
 LOCK_DIR="$STATE_DIR/spool.lock"
 HEARTBEAT_DIR="$STATE_DIR/heartbeat"
@@ -256,12 +258,8 @@ send_payload() {
   local payload
   payload="$(privacy_payload "$1")" || return 1
   [ -n "$payload" ] || return 1
-  local url="${MY_DASHBOARD_URL%/}/dashboard/events"
   local code
-  code="$(curl -sS --max-time "$CURL_MAX_TIME" -o /dev/null -w '%{http_code}' -X POST "$url" \
-    -H "Authorization: Bearer $MY_DASHBOARD_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data-raw "$payload" 2>/dev/null)"
+  code="$(dashboard_send_payload "$payload")"
   # 마지막 응답 코드(연결 실패·시간 초과는 000). antigravity_spool_behind가 본다.
   LAST_SEND_CODE="$code"
   case "$code" in
@@ -457,9 +455,7 @@ antigravity_admit() {
 
 # ---------- 본문 ----------
 
-if [ -z "${MY_DASHBOARD_URL:-}" ] || [ -z "${MY_DASHBOARD_TOKEN:-}" ]; then
-  exit 0
-fi
+dashboard_hook_enabled || exit 0
 
 PAYLOAD=""
 EVENT_NAME=""
