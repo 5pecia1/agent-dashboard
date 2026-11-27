@@ -26,6 +26,8 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 STATE_DIR="${MY_DASHBOARD_STATE_DIR:-$HOME/.local/state/my-dashboard}"
+# shellcheck source=transport.sh
+. "$(dirname "${BASH_SOURCE[0]}")/transport.sh"
 SPOOL_FILE="$STATE_DIR/spool.ndjson"
 LOCK_DIR="$STATE_DIR/spool.lock"
 SPOOL_MAX_LINES=500
@@ -159,12 +161,8 @@ send_payload() {
   local payload
   payload="$(privacy_payload "$1")" || return 1
   [ -n "$payload" ] || return 1
-  local url="${MY_DASHBOARD_URL%/}/dashboard/events"
   local code
-  code="$(curl -sS --max-time "$CURL_MAX_TIME" -o /dev/null -w '%{http_code}' -X POST "$url" \
-    -H "Authorization: Bearer $MY_DASHBOARD_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data-raw "$payload" 2>/dev/null)"
+  code="$(dashboard_send_payload "$payload")"
   case "$code" in
     2??) return 0 ;;
     *) return 1 ;;
@@ -212,9 +210,8 @@ flush_spool() {
   release_lock
 }
 
-if [ -z "${MY_DASHBOARD_URL:-}" ] || [ -z "${MY_DASHBOARD_TOKEN:-}" ] || [ -z "$JSON" ]; then
-  exit 0
-fi
+dashboard_hook_enabled || exit 0
+[ -n "$JSON" ] || exit 0
 
 PAYLOAD=""
 
