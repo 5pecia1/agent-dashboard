@@ -406,6 +406,7 @@ class HookHerdrTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, directory, True)
         lonely = directory / 'agent-event-hook.sh'
         shutil.copy(HOOKS / 'agent-event-hook.sh', lonely)
+        shutil.copy(HOOKS / 'transport.sh', directory / 'transport.sh')
         received, _spool, _result, _state = self.run_hook(
             'agent-event-hook.sh', args=['claude-code'], stdin=self.claude_stdin(),
             env=herdr_env(socket_path='/nonexistent.sock'), cwd=lonely)
