@@ -571,9 +571,10 @@ class OpenCodePluginTranslationTests(unittest.TestCase):
             '${OPENCODE_CONFIG_DIR:-$HOME/.opencode}/plugins', "경로")
 
     def test_setup_must_download_plugin_module(self):
+        original = next(line for line in load().SETUP_SH_PATH.read_text().splitlines()
+                        if line.startswith('NON_EXECUTABLE_FILES='))
         self.assert_file_change_fails(
-            "SETUP_SH_PATH", 'NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py opencode-plugin.mjs"',
-            'NON_EXECUTABLE_FILES="codex-hooks.toml herdr-context.py"', "setup.sh")
+            "SETUP_SH_PATH", original, original.replace('opencode-plugin.mjs', ''), "setup.sh")
 
 
 if __name__ == "__main__":
