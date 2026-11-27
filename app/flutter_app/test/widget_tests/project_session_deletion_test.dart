@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -136,10 +137,9 @@ void main() {
     expect(requests, hasLength(1));
     response.complete(const ApiResponse(statusCode: 200, body: '{}'));
     await tester.pumpAndSettle();
-    expect(requests.map((r) => r.url.pathSegments.last), [
-      deletionFirstKey,
-      deletionSecondKey,
-    ]);
+    expect(jsonDecode(requests.single.body!), {
+      'keys': [deletionFirstKey, deletionSecondKey],
+    });
     expect(
       harness.state.sync.sessions.keys,
       containsAll([newKey, deletionOtherKey]),
@@ -149,14 +149,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('일부 실패 시 성공과 실패 개수를 표시하고 실패한 세션은 복구된다', (tester) async {
+  testWidgets('일괄 삭제 실패 시 실패 개수를 표시하고 세션을 복구한다', (tester) async {
     final harness = SessionDeletionHarness(
-      send: (request) async => ApiResponse(
-        statusCode: request.url.pathSegments.last == deletionSecondKey
-            ? 500
-            : 200,
-        body: '{}',
-      ),
+      send: (request) async => ApiResponse(statusCode: 500, body: '{}'),
     );
     addTearDown(harness.container.dispose);
     await _pump(tester, harness);
@@ -164,10 +159,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('session.group.delete_action'));
     await tester.pumpAndSettle();
-    expect(find.text('session.group.delete_partial 1 / 1'), findsOneWidget);
+    expect(find.text('session.group.delete_partial 0 / 2'), findsOneWidget);
     expect(
       harness.state.sync.sessions.keys,
-      containsAll([deletionSecondKey, deletionOtherKey]),
+      containsAll([deletionFirstKey, deletionSecondKey, deletionOtherKey]),
     );
     expect(tester.takeException(), isNull);
   });

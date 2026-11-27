@@ -79,6 +79,13 @@ try {
   assert.equal((await fetch(worker.origin+'/__scheduled')).status,200);
   const stalled = await api(worker.origin,'/dashboard/sync');
   assert.equal(stalled.sessions.find(row => row.key==='generic:installed')?.state,'stalled');
+  await api(worker.origin, '/dashboard/sessions/delete', {token:'test-ingest-token', body:{keys:['generic:installed']}, status:403});
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await api(worker.origin, '/dashboard/sessions/delete', {body:{keys:['generic:installed','codex:missing']}});
+  }
+  const deleted = await api(worker.origin, '/dashboard/sync');
+  assert(!deleted.sessions.some(row => row.key==='generic:installed'));
+  assert.equal(deleted.cursor, stalled.cursor);
   await worker.stop(); worker = undefined;
   await writeFile(path.join(consumer, '.dev.vars'), 'DASHBOARD_STORE_MESSAGE=1\nAUTH_TOKEN=test-auth-token\nINGEST_TOKEN=test-ingest-token\nCLIENT_TOKEN=test-client-token\n');
   const { spawnSync } = await import('node:child_process');
@@ -89,7 +96,7 @@ try {
   await writeFile(path.join(workspace,'hooks-test.log'),(hooks.stdout ?? '')+(hooks.stderr ?? ''));
   if (hooks.status !== 0) throw new Error(`Installed hook integration failed: ${hooks.stderr} ${hooks.stdout}`);
   assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'),verifiedHash,'tarball changed during verification');
-  const receipt = {ok:true,tarball,sha256:verifiedHash,consumer,checks:['archive','negative missing assets','strict consumer types','Worker dry-run','D1 first install and no-op','HTTP role isolation and default privacy',`all ${hookNames.length} hook assets`,'actual scheduled maintenance','installed hook integration']};
+  const receipt = {ok:true,tarball,sha256:verifiedHash,consumer,checks:['archive','negative missing assets','strict consumer types','Worker dry-run','D1 first install and no-op','HTTP role isolation and default privacy',`all ${hookNames.length} hook assets`,'actual scheduled maintenance','bulk session deletion and idempotent retry','installed hook integration']};
   const receiptIndex = process.argv.indexOf('--receipt');
   if (receiptIndex !== -1) await writeFile(path.resolve(process.argv[receiptIndex+1]),JSON.stringify(receipt,null,2)+'\n');
   console.log(JSON.stringify(receipt,null,2));

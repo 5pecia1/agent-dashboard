@@ -3,7 +3,7 @@
   "$note": "대시보드 프로토콜의 정본(single source of truth)이다. 서버·hook·PWA·앱은 모두 이 파일의 어휘를 따른다. 순수 JSON이라 주석 문법이 없으므로, 모든 노드의 뜻은 형제 키 description 또는 $note에 적는다. 값이 있는 키는 규범(normative)이고 description/$note/example은 설명(informative)이다.",
   "title": "Agent Dashboard protocol",
   "protocol_version": 1,
-  "revision": "2026-11-24",
+  "revision": "2026-11-27",
   "copies": {
     "$note": "The root contracts file is the editing source. Build copies are checked by SHA256.",
     "package": "server/contracts/dashboard-protocol.v1.json"
@@ -42,6 +42,7 @@
           "GET /dashboard/sessions",
           "GET /dashboard/events",
           "DELETE /dashboard/sessions/{key}",
+          "POST /dashboard/sessions/delete",
           "POST /dashboard/sessions/{key}/ack",
           "POST /dashboard/devices",
           "GET /dashboard/devices",
@@ -1420,6 +1421,13 @@
       "meta_key": "pruned_below_id",
       "table": "dashboard_meta"
     }
+  },
+  "session_deletion": {
+    "endpoint": "POST /dashboard/sessions/delete",
+    "request": { "keys": ["claude-code:session-a", "codex:session-b"] },
+    "max_request_bytes": 1048576,
+    "response": { "ok": true },
+    "description": "Provide a non-empty array of non-blank session keys. One transaction deletes the selected sessions, event histories and seen markers. Duplicate and missing keys succeed. Transition IDs remain available to sync cursors. Invalid requests return 400 and oversized bodies return 413."
   },
   "event_history": {
     "endpoint": "GET /dashboard/events",
