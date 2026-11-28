@@ -18,8 +18,7 @@
 #   1. ~/.claude/settings.json에 SessionStart/UserPromptSubmit/Notification/PostToolUse/
 #      Stop/SessionEnd 다섯(+하트비트 하나) hook 등록을 jq로 멱등 병합한다.
 #      (같은 command면 그대로 두고, 옛 경로로 등록된 낡은 항목은 지운다 - 중복 전송 방지.)
-#   2. ~/.codex/config.toml에 codex-hooks.toml 내용을 마커 블록으로 멱등 삽입한다.
-#      (마커가 이미 있으면 그 사이만 갈아 끼운다 - 마커 밖 사용자 설정은 손대지 않는다.)
+#   2. Codex hooks.json에 훅을 병합하고 이전 설치기가 등록한 config.toml 블록을 이관한다.
 #   3. ~/.config/devin/config.json (JSONC)에 Devin hook 등록을 추가한다.
 #      (JSONC 파싱으로 주석 보존, 기존 hooks 보존.)
 #   4. ~/.gemini/config/hooks.json에 Antigravity CLI용 my-dashboard 번들 하나를 멱등으로 넣는다.
@@ -34,7 +33,7 @@
 # 사용법:
 #   bash hooks/install.sh --dry-run           # 무엇이 바뀔지만 보여주고 아무 것도 쓰지 않는다(기본값)
 #   bash hooks/install.sh --claude            # ~/.claude/settings.json만 실제로 쓴다
-#   bash hooks/install.sh --codex             # ~/.codex/config.toml만 실제로 쓴다
+#   bash hooks/install.sh --codex             # Codex 훅만 등록한다
 #   bash hooks/install.sh --devin             # ~/.config/devin/config.json만 실제로 쓴다
 #   bash hooks/install.sh --antigravity       # ~/.gemini/config/hooks.json만 실제로 쓴다
 #   bash hooks/install.sh --opencode          # ~/.config/opencode/plugins/my-dashboard.js만 실제로 쓴다
@@ -49,10 +48,9 @@ command -v python3 >/dev/null 2>&1 || { echo "python3 is required for safe hook 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK_SCRIPT="$SCRIPT_DIR/agent-event-hook.sh"
 NOTIFY_SCRIPT="$SCRIPT_DIR/codex-notify.sh"
-CODEX_HOOKS_TOML="$SCRIPT_DIR/codex-hooks.toml"
 
 CLAUDE_SETTINGS="${MY_DASHBOARD_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-CODEX_CONFIG="${MY_DASHBOARD_CODEX_CONFIG:-$HOME/.codex/config.toml}"
+CODEX_CONFIG="${MY_DASHBOARD_CODEX_CONFIG:-${CODEX_HOME:-$HOME/.codex}/config.toml}"
 DEVIN_CONFIG="${MY_DASHBOARD_DEVIN_CONFIG:-$HOME/.config/devin/config.json}"
 ANTIGRAVITY_HOOKS="${MY_DASHBOARD_ANTIGRAVITY_HOOKS:-$HOME/.gemini/config/hooks.json}"
 # hooks.json의 최상위 키 하나가 번들 하나다. 정본: contracts/dashboard-protocol.v1.json의
@@ -64,9 +62,6 @@ ANTIGRAVITY_BUNDLE_KEY="my-dashboard"
 OPENCODE_PLUGIN_MODULE="$SCRIPT_DIR/opencode-plugin.mjs"
 OPENCODE_PLUGIN_DIR="${MY_DASHBOARD_OPENCODE_PLUGIN_DIR:-${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/plugins}"
 OPENCODE_PLUGIN_FILE="$OPENCODE_PLUGIN_DIR/my-dashboard.js"
-
-MARKER_BEGIN="# BEGIN my-dashboard hooks (managed by hooks/install.sh — do not edit between markers by hand)"
-MARKER_END="# END my-dashboard hooks"
 
 DO_CLAUDE=0
 DO_CODEX=0
@@ -195,79 +190,11 @@ install_claude() {
   echo "$CLAUDE_SETTINGS 갱신 완료."
 }
 
-# ---------- Codex: ~/.codex/config.toml ----------
+# ---------- Codex ----------
 
 install_codex() {
-  echo "== Codex: $CODEX_CONFIG =="
-  mkdir -p "$(dirname "$CODEX_CONFIG")"
-  [ -f "$CODEX_CONFIG" ] || : > "$CODEX_CONFIG"
-
-  if [ ! -f "$CODEX_HOOKS_TOML" ]; then
-    echo "$CODEX_HOOKS_TOML 이 없다." >&2
-    return 1
-  fi
-
-  # codex-hooks.toml에서 마커 사이에 넣을 실제 hooks 블록만 뽑는다(주석 설명은 뺀다).
-  local block
-  block="$(awk '/^\[\[hooks\./{p=1} p{print}' "$CODEX_HOOKS_TOML")"
-  if [ -z "$block" ]; then
-    echo "$CODEX_HOOKS_TOML 에서 [[hooks. 블록을 찾지 못했다." >&2
-    return 1
-  fi
-
-  # Serialize each managed command from the actual installation path. JSON basic
-  # strings are also valid TOML strings; shlex quotes shell metacharacters safely.
-  block="$(HOOK_SCRIPT="$HOOK_SCRIPT" HOOK_BLOCK="$block" python3 - <<'CODEX_PY'
-import json, os, re, shlex
-command = shlex.quote(os.environ['HOOK_SCRIPT']) + ' codex'
-text, count = re.subn(r'^command\s*=.*$', lambda _: 'command = ' + json.dumps(command),
-                      os.environ['HOOK_BLOCK'], flags=re.MULTILINE)
-if not count:
-    raise SystemExit('No managed Codex hook commands found')
-print(text)
-CODEX_PY
-)"
-
-  local new_section
-  new_section="$MARKER_BEGIN
-$block
-$MARKER_END"
-
-  local current
-  current="$(cat "$CODEX_CONFIG")"
-
-  local updated
-  if printf '%s' "$current" | grep -qF "$MARKER_BEGIN"; then
-    # 기존 마커 블록만 통째로 교체한다(마커 밖은 그대로).
-    # new_section은 여러 줄 값이라 awk -v로 넘기면 macOS 기본 /usr/bin/awk(BWK awk)가
-    # "newline in string"으로 거부한다(POSIX awk -v는 값에 리터럴 개행을 못 담는다).
-    # 환경변수 + ENVIRON으로 우회한다 - begin/end는 한 줄 값이라 -v 그대로 둬도 된다.
-    updated="$(printf '%s\n' "$current" | REPL="$new_section" awk -v begin="$MARKER_BEGIN" -v end="$MARKER_END" '
-      $0 == begin { print ENVIRON["REPL"]; skip=1; next }
-      $0 == end { if (skip) { skip=0; next } }
-      skip { next }
-      { print }
-    ')"
-  else
-    updated="$current
-
-$new_section"
-  fi
-
-  if [ "$updated" = "$current" ]; then
-    echo "변경 없음 (이미 최신 블록이 등록돼 있음)."
-    return 0
-  fi
-
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "--dry-run: 아래 블록이 마커 사이에 들어갈 예정 (실제로 쓰지 않음)"
-    echo "$new_section"
-    return 0
-  fi
-
-  backup_file "$CODEX_CONFIG"
-  printf '%s\n' "$updated" > "$CODEX_CONFIG"
-  echo "$CODEX_CONFIG 갱신 완료. Codex TUI에서 /hooks로 신뢰(trust) 처리를 잊지 말 것."
+  echo "== Codex: $CODEX_CONFIG, $(dirname "$CODEX_CONFIG")/hooks.json =="
+  python3 "$SCRIPT_DIR/install-codex.py" "$CODEX_CONFIG" "$HOOK_SCRIPT" "$DRY_RUN"
 }
 
 # ---------- Devin: ~/.config/devin/config.json (JSONC) ----------
@@ -554,8 +481,8 @@ print_notify_hint() {
   echo "  notify = [\"bash\", \"$NOTIFY_SCRIPT\"]"
 }
 
-if [ "$DO_CLAUDE" -eq 1 ]; then install_claude; fi
 if [ "$DO_CODEX" -eq 1 ]; then install_codex; print_notify_hint; fi
+if [ "$DO_CLAUDE" -eq 1 ]; then install_claude; fi
 if [ "$DO_DEVIN" -eq 1 ]; then install_devin; fi
 if [ "$DO_ANTIGRAVITY" -eq 1 ]; then install_antigravity; fi
 if [ "$DO_OPENCODE" -eq 1 ]; then install_opencode; fi

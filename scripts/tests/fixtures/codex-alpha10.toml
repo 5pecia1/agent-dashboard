@@ -1,0 +1,65 @@
+
+
+# BEGIN my-dashboard hooks (managed by hooks/install.sh — do not edit between markers by hand)
+[[hooks.SessionStart]]
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+[[hooks.PermissionRequest]]
+
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+# F: request_user_input(Plan 모드 질문 등)의 PreToolUse만 잡아 agent-event-hook.sh가
+# UserInputRequest 합성 이벤트로 바꿔 보내게 한다(waiting_input 진입, 스로틀 없음).
+# matcher의 정확한 문법(정규식인지 정확일치인지, OR가 되는지)이 공식 문서에 없어서
+# 한 매처에 두 이름을 몰아넣는 대신 도구 이름 하나당 매처 그룹을 하나씩 따로 둔다 -
+# 이러면 matcher가 단순 정확일치만 지원해도, 정규식으로 해석돼도 둘 다 안전하게 동작한다.
+# (동기 request_user_input과 비동기 request_user_input_async 둘 다 Plan 모드에서 실제로
+# 관측된 도구 이름이다 - agent-event-hook.sh 쪽에서 tool_name을 정규화해 한 번 더 확인한다.)
+[[hooks.PreToolUse]]
+matcher = "request_user_input"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+[[hooks.PreToolUse]]
+matcher = "request_user_input_async"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+# 하트비트: 도구 호출마다 오지만 hook 쪽(agent-event-hook.sh)이 세션당 60초에 한 번만
+# 실제로 전송한다(server의 stalled watchdog 입력). 이게 빠지면 PostToolUse가 서버에
+# 한 번도 안 잡혀 "멈춘 듯"(stalled) 판정을 오래 못 미룬다. matcher를 일부러 생략해
+# "무슨 도구든" 매번 부르게 한다 - request_user_input(동기)의 해소(UserInputResolved)
+# 판별도 agent-event-hook.sh가 이 무매처 PostToolUse 안에서 tool_name을 보고 처리한다.
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+
+[[hooks.SessionEnd]]
+
+[[hooks.SessionEnd.hooks]]
+type = "command"
+command = "/previous/home/.local/share/my-dashboard/hooks/agent-event-hook.sh codex"
+# END my-dashboard hooks

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,48 @@ class ConnectionError(Exception):
         self.code = code
         self.status = status
         super().__init__(code)
+
+
+def codex_registered(config):
+    default_data = Path.home() / '.local/share'
+    data = Path(os.environ.get('XDG_DATA_HOME') or default_data)
+    directories = {Path(__file__).absolute().parent, data / 'my-dashboard/hooks',
+                   default_data / 'my-dashboard/hooks'}
+
+    def local_script(arg, name):
+        if not isinstance(arg, str):
+            return False
+        if arg.startswith('$HOME/'):
+            arg = str(Path.home() / arg[6:])
+        return Path(arg) in {directory / name for directory in directories}
+
+    for path in (config.with_name('hooks.json'), config):
+        if not path.is_file():
+            continue
+        try:
+            if path == config:
+                try:
+                    import tomllib
+                except ImportError:
+                    import tomli as tomllib
+                values = tomllib.loads(path.read_text(encoding='utf-8'))
+                notify = values.get('notify', [])
+                if isinstance(notify, list) and any(local_script(arg, 'codex-notify.sh') for arg in notify):
+                    return True
+            else:
+                values = json.loads(path.read_text(encoding='utf-8'))
+            for groups in values.get('hooks', {}).values():
+                if not isinstance(groups, list):
+                    continue
+                for group in groups:
+                    for hook in group.get('hooks', []):
+                        command = shlex.split(hook.get('command') or '')
+                        if (hook.get('type') == 'command' and len(command) == 2 and
+                                local_script(command[0], 'agent-event-hook.sh') and command[1] == 'codex'):
+                            return True
+        except (AttributeError, ImportError, OSError, TypeError, ValueError):
+            continue
+    return False
 
 
 def origin(value):
@@ -297,10 +340,12 @@ class DeviceAuth:
                 queued = sum(bool(line.strip()) for line in stream)
         if state == 'connected' and not value.get('last_sent_at'):
             state = 'waiting_event'
+        codex_home = Path(os.environ.get('CODEX_HOME') or Path.home() / '.codex')
+        codex_config = Path(os.environ.get('MY_DASHBOARD_CODEX_CONFIG') or codex_home / 'config.toml')
         registrations = [Path.home() / name for name in (
-            '.claude/settings.json', '.codex/config.toml', '.config/devin/config.json',
+            '.claude/settings.json', '.config/devin/config.json',
             '.gemini/config/hooks.json', '.config/opencode/plugins/my-dashboard.js')]
-        registered = False
+        registered = codex_registered(codex_config)
         for path in registrations:
             if path.exists():
                 text = '\n'.join(line for line in path.read_text().splitlines()

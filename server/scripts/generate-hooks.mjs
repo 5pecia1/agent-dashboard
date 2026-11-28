@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const hookNames = ['agent-event-hook.sh', 'codex-hooks.toml', 'codex-notify.sh', 'device-auth.py', 'herdr-context.py', 'install.sh', 'opencode-plugin.mjs', 'send-generic.sh', 'setup.sh', 'test-hooks.sh', 'transport.sh'];
+export const hookNames = ['agent-event-hook.sh', 'codex-hooks.toml', 'codex-notify.sh', 'device-auth.py', 'herdr-context.py', 'install-codex.py', 'install.sh', 'opencode-plugin.mjs', 'send-generic.sh', 'setup.sh', 'test-hooks.sh', 'transport.sh'];
 export async function generateHooks() {
   const files = {};
   const sha256 = {};

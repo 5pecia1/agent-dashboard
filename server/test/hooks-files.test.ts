@@ -15,6 +15,7 @@ import expectedSetup from "../../hooks/setup.sh?raw";
 import expectedAgentEventHook from "../../hooks/agent-event-hook.sh?raw";
 import expectedCodexNotify from "../../hooks/codex-notify.sh?raw";
 import expectedCodexHooksToml from "../../hooks/codex-hooks.toml?raw";
+import expectedCodexInstaller from "../../hooks/install-codex.py?raw";
 import expectedInstall from "../../hooks/install.sh?raw";
 import expectedSendGeneric from "../../hooks/send-generic.sh?raw";
 import expectedTestHooks from "../../hooks/test-hooks.sh?raw";
@@ -75,6 +76,7 @@ describe("GET /hooks/files/:name", () => {
     ["codex-notify.sh", expectedCodexNotify],
     ["codex-hooks.toml", expectedCodexHooksToml],
     ["install.sh", expectedInstall],
+    ["install-codex.py", expectedCodexInstaller],
     ["send-generic.sh", expectedSendGeneric],
     ["test-hooks.sh", expectedTestHooks],
     ["herdr-context.py", expectedHerdrContext],
