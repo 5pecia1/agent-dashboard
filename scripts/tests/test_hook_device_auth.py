@@ -82,7 +82,7 @@ class DeviceConnectionTests(unittest.TestCase):
         self.server = f'http://127.0.0.1:{self.http.server_port}'
         self.environment = dict(os.environ, HOME=str(self.home), MY_DASHBOARD_URL=self.server,
                                 MY_DASHBOARD_AUTH='device', MY_DASHBOARD_INCLUDE_CONTENT='1')
-        for name in ('MY_DASHBOARD_ENV','MY_DASHBOARD_STATE_DIR','MY_DASHBOARD_TOKEN'):
+        for name in ('MY_DASHBOARD_ENV','MY_DASHBOARD_STATE_DIR','MY_DASHBOARD_TOKEN','CODEX_HOME','MY_DASHBOARD_CODEX_CONFIG'):
             self.environment.pop(name, None)
         self.connection = auth.DeviceAuth(self.server, self.home / '.config/my-dashboard',
                                          self.home / '.local/state/my-dashboard')
@@ -189,7 +189,50 @@ class DeviceConnectionTests(unittest.TestCase):
         self.assertIn(b'# keep my comment', original)
         self.assertEqual(settings.stat().st_mode & 0o777, 0o600)
         self.assertTrue((self.home / '.local/share/my-dashboard/hooks/transport.sh').is_file())
-        self.assertIn('agent-event-hook.sh', (self.home / '.codex/config.toml').read_text())
+        self.assertIn('agent-event-hook.sh', (self.home / '.codex/hooks.json').read_text())
+
+    def test_downloaded_setup_rejects_codex_conflict_before_changing_an_installation(self):
+        hook = self.home / '.local/share/my-dashboard/hooks/install.sh'
+        hook.parent.mkdir(parents=True)
+        hook.write_text('old installed script')
+        config = self.home / '.codex/config.toml'
+        config.parent.mkdir()
+        config.write_text('[[hooks.Stop]]\n')
+        settings = self.connection.config / 'env'
+        settings.write_text('# existing settings\n')
+        script = (ROOT / 'hooks/setup.sh').read_text().replace('__MY_DASHBOARD_ORIGIN__', self.server)
+        result = subprocess.run(['bash', '-s', '--', '--device-auth'], input=script, env=dict(
+            self.environment, XDG_DATA_HOME=str(self.home / '.local/share')), capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('move custom Codex TOML hook events', result.stderr)
+        self.assertEqual(settings.read_text(), '# existing settings\n')
+        self.assertEqual(hook.read_text(), 'old installed script')
+        self.assertEqual(set(hook.parent.iterdir()), {hook})
+        self.assertFalse((config.parent / 'hooks.json').exists())
+
+    def test_status_recognizes_codex_json_and_legacy_toml_at_configured_paths(self):
+        layer = self.home / 'codex layer'
+        layer.mkdir()
+        config = layer / 'config.toml'
+        hooks = layer / 'hooks.json'
+        self.environment['MY_DASHBOARD_CODEX_CONFIG'] = str(config)
+        marker = 'agent-event-hook.sh'
+        def status():
+            return json.loads(self.helper('status').stdout)['state']
+        config.write_text(f'[hooks.state."{marker}"]\ntrusted_hash = "fixture"\n')
+        hooks.write_text(json.dumps({'note': marker, 'hooks': {}}))
+        self.assertEqual(status(), 'missing_hooks')
+        hooks.write_text(json.dumps({'hooks': {'Stop': [{'hooks': [
+            {'type': 'command', 'command': f'/example/{marker} codex'}]}]}}))
+        self.assertEqual(status(), 'missing_hooks')  # another integration's namesake script
+        script = self.home / '.local/share/my-dashboard/hooks' / marker
+        hooks.write_text(json.dumps({'hooks': {'Stop': [{'hooks': [
+            {'type': 'command', 'command': f'{script} codex'}]}]}}))
+        self.assertNotEqual(status(), 'missing_hooks')
+        hooks.unlink()
+        legacy = (ROOT / 'scripts/tests/fixtures/codex-alpha10.toml').read_text()
+        config.write_text(legacy.replace('/previous/home', str(self.home)))
+        self.assertNotEqual(status(), 'missing_hooks')
 
     def test_status_failure_cannot_turn_an_accepted_event_into_a_retry(self):
         with auth.lock(self.connection.state / 'collection-status.lock', time.monotonic() + 1):

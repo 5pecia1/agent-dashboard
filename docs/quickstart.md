@@ -75,7 +75,7 @@ For local development, upgrades, or custom origins, use the `README.md` inside t
 
 ## Connect agent hooks
 
-On each machine running Claude Code, Codex, Devin, Antigravity CLI, or OpenCode, ensure `curl`, `jq`, and `python3` are installed. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
+On each machine running Claude Code, Codex, Devin, Antigravity CLI, or OpenCode, ensure `curl`, `jq`, and `python3` are installed. Codex registration needs Python 3.11 or later, or the `tomli` module. Replace `https://YOUR_SERVER` below with the Worker origin you deployed:
 
 ```sh
 curl -fsSL https://YOUR_SERVER/setup.sh | bash

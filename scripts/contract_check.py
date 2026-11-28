@@ -55,6 +55,7 @@ HOOKS_DIST_FILES = [
     "device-auth.py",
     "codex-hooks.toml",
     "herdr-context.py",
+    "install-codex.py",
     "install.sh",
     "opencode-plugin.mjs",
     "send-generic.sh",

@@ -5,7 +5,7 @@
 #   curl -fsSL <서버 origin>/setup.sh | MY_DASHBOARD_TOKEN=... bash  # 비대화형
 #   curl -fsSL <서버 origin>/setup.sh | bash -s -- --dry-run         # 미리보기(아무것도 안 씀)
 #
-# 재실행 = 업데이트다: 훅 파일 8종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+# 재실행 = 업데이트다: 훅 파일을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 # ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 # 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 #
@@ -40,7 +40,7 @@ Agent Dashboard 원클릭 부트스트랩. repo를 clone하지 않고도 새 기
   --dry-run   실제로 아무것도 쓰지 않고 무엇을 할지만 보여준다.
   -h, --help  이 도움말을 출력한다.
 
-재실행 = 업데이트다: 훅 파일 8종을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
+재실행 = 업데이트다: 훅 파일을 서버에서 다시 받아 덮어쓰고 install.sh를 다시 돌린다.
 ~/.config/my-dashboard/env는 이미 있으면 값은 건드리지 않는다(hook 키 MY_DASHBOARD_TOKEN 누락 시 별칭 한 줄만 보강). 서버를 재배포한 뒤 각
 기계에서 버전 스큐를 없애는 방법도 이 한 줄을 다시 실행하는 것으로 동일하다.
 HELP_EOF
@@ -97,10 +97,10 @@ HOOKS_DIR="$DATA_HOME/my-dashboard/hooks"
 CONFIG_DIR="$HOME/.config/my-dashboard"
 CONFIG_FILE="$CONFIG_DIR/env"
 
-# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 8종만 GET /hooks/files/<name>로 받는다.
+# setup.sh 자신은 이미 실행 중이라 내려받지 않는다 - 나머지 파일만 GET /hooks/files/<name>로 받는다.
 # opencode-plugin.mjs는 OpenCode가 import하는 ES 모듈이라 실행 권한이 필요 없다.
 EXECUTABLE_FILES="agent-event-hook.sh codex-notify.sh install.sh send-generic.sh test-hooks.sh"
-NON_EXECUTABLE_FILES="transport.sh device-auth.py codex-hooks.toml herdr-context.py opencode-plugin.mjs"
+NON_EXECUTABLE_FILES="transport.sh device-auth.py install-codex.py codex-hooks.toml herdr-context.py opencode-plugin.mjs"
 ALL_FILES="$NON_EXECUTABLE_FILES $EXECUTABLE_FILES"
 
 log "== my-dashboard hooks 설치/갱신: $ORIGIN =="
@@ -126,14 +126,24 @@ fi
 
 # ---------- (b) 훅 파일 다운로드 (재실행 시 덮어써 갱신) ----------
 
-mkdir -p "$HOOKS_DIR"
+# Validate both Codex files with the matching release before updating installed
+# assets, credentials, or other agent registrations. The installer validates again
+# while holding its write lock when it applies the plan.
+STAGED_HOOKS="$(mktemp -d)"
+trap 'rm -rf "$STAGED_HOOKS"' EXIT
 for f in $ALL_FILES; do
   log "다운로드: $f"
-  if ! run_child curl --disable -fsSL --connect-timeout 5 --max-time 20 "$ORIGIN/hooks/files/$f" -o "$HOOKS_DIR/$f.download"; then
+  if ! run_child curl --disable -fsSL --connect-timeout 5 --max-time 20 "$ORIGIN/hooks/files/$f" -o "$STAGED_HOOKS/$f"; then
     log "다운로드 실패: $ORIGIN/hooks/files/$f"
-    rm -f "$HOOKS_DIR/$f.download"
     exit 1
   fi
+done
+CODEX_CONFIG="${MY_DASHBOARD_CODEX_CONFIG:-${CODEX_HOME:-$HOME/.codex}/config.toml}"
+python3 "$STAGED_HOOKS/install-codex.py" "$CODEX_CONFIG" "$HOOKS_DIR/agent-event-hook.sh" 1
+
+mkdir -p "$HOOKS_DIR"
+for f in $ALL_FILES; do
+  cp "$STAGED_HOOKS/$f" "$HOOKS_DIR/$f.download"
   # 실행 파일은 실행 권한을 먼저 주고 나서 제자리로 옮긴다(mv는 원자적 교체다). 옮긴 뒤에 chmod하면
   # 다음 파일을 받는 동안 hook이 실행 불가 상태로 놓여, 그 사이에 실행되는 hook이 exit 126으로
   # 실패하거나(antigravity는 조용히 폴백 응답으로 대신) 이벤트가 사라진다.

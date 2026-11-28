@@ -7,7 +7,6 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,7 +34,7 @@ class HookInstallTests(unittest.TestCase):
             root = Path(temporary)
             install = root / "custom data $literal's directory"
             install.mkdir()
-            for name in ('install.sh', 'codex-hooks.toml'):
+            for name in ('install.sh', 'install-codex.py', 'codex-hooks.toml'):
                 shutil.copy2(ROOT / 'hooks' / name, install / name)
             (install / 'agent-event-hook.sh').write_text('#!/bin/sh\nprintf "%s" "$1" > "$HOOK_CALL_RESULT"\n')
             (install / 'agent-event-hook.sh').chmod(0o755)
@@ -44,7 +43,7 @@ class HookInstallTests(unittest.TestCase):
             for _ in range(2):
                 subprocess.run(['bash', str(install / 'install.sh'), '--claude', '--codex', '--devin', '--antigravity',
                                 '--opencode'], env=environment, capture_output=True, check=True, timeout=20)
-            codex = tomllib.loads((root / '.codex/config.toml').read_text())
+            codex = json.loads((root / '.codex/hooks.json').read_text())
             commands = []
             for groups in codex['hooks'].values():
                 for group in groups:
@@ -514,7 +513,7 @@ class AntigravityInstallTests(unittest.TestCase):
     # ---------- flag dispatch ----------
 
     def test_대상_플래그는_서로의_파일을_건드리지_않는다(self):
-        others = [self.root / 'claude/settings.json', self.root / 'codex/config.toml',
+        others = [self.root / 'claude/settings.json', self.root / 'codex/hooks.json',
                   self.root / 'devin/config.json', self.root / 'opencode/plugins/my-dashboard.js']
         self.assertEqual(self.install('--antigravity').returncode, 0)
         self.assertTrue(self.hooks_json.exists())
@@ -530,7 +529,7 @@ class AntigravityInstallTests(unittest.TestCase):
     def test_다섯_대상을_한_번에_쓴다(self):
         result = self.install('--claude', '--codex', '--devin', '--antigravity', '--opencode')
         self.assertEqual(result.returncode, 0, result.stderr)
-        for path in (self.root / 'claude/settings.json', self.root / 'codex/config.toml',
+        for path in (self.root / 'claude/settings.json', self.root / 'codex/hooks.json',
                      self.root / 'devin/config.json', self.hooks_json,
                      self.root / 'opencode/plugins/my-dashboard.js'):
             self.assertTrue(path.exists(), path)
@@ -813,5 +812,5 @@ class OpenCodeInstallTests(unittest.TestCase):
 
     def test_opencode_플래그는_다른_대상의_파일을_만들지_않는다(self):
         self.assertEqual(self.install('--opencode').returncode, 0)
-        for path in ('claude/settings.json', 'codex/config.toml', 'devin/config.json', 'gemini/hooks.json'):
+        for path in ('claude/settings.json', 'codex/config.toml', 'codex/hooks.json', 'devin/config.json', 'gemini/hooks.json'):
             self.assertFalse((self.root / path).exists(), path)

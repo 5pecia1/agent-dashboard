@@ -72,6 +72,10 @@ class InstallerTests(unittest.TestCase):
                     self.send_response(200)
                     self.end_headers()
                     self.wfile.write(INSTALL_STUB)
+                elif self.path in ('/hooks/files/install-codex.py', '/hooks/files/codex-hooks.toml'):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write((ROOT / 'hooks' / self.path.rsplit('/', 1)[1]).read_bytes())
                 elif self.path.startswith('/hooks/files/'):
                     # Installer registration behavior has separate real-install tests.
                     self.send_response(200)
